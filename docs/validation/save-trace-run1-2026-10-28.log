@@ -1,0 +1,30 @@
+20:40:01.415 witcher2_enginefix loaded (image base 0x00400000)
+20:40:01.415 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+20:40:01.415 distance config: experimental=1 visibility=3.00x shadow=3.00x
+20:40:01.415 diagnostics: save_trace=1
+20:40:01.415 presets: startup=extreme, cycle modifiers=1 VK=79 (session only)
+20:40:02.929 osd: window ready (font 34 px)
+20:40:02.929 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
+20:40:02.929 osd: Graphics: extreme  (LOD only)
+20:40:02.933 lod enforced: mesh=8.000 foliage=5.000
+20:40:02.934 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=3.00x shadow=3.00x
+20:40:02.934 osd: Graphics: extreme  (4/4)
+20:40:02.934 save-trace: hooked kernel32.dll!CreateFileW
+20:40:02.934 save-trace: hooked kernel32.dll!DeleteFileW
+20:40:02.934 save-trace: hooked kernel32.dll!CopyFileW
+20:40:02.934 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileW
+20:40:02.934 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+20:40:02.934 save-trace: ISteamRemoteStorage 11810BE8 FileWrite hooked
+20:40:02.934 save-trace: engine not readable
+20:40:02.934 save-trace: capture flags pending=0 queued=0
+20:40:18.474 input: CreateDevice hook installed
+20:40:18.475 input: keyboard state filter installed
+20:40:33.215 distance stats: mesh=801895 shadow=338037 baseline_reject=103424 admitted=87512 (3.00x/3.00x)
+20:40:37.845 save-trace: Steam FileWrite "ManualSave_0010.sav" 376908 bytes -> 1
+20:40:37.845 save-trace: engine cloud=1 provider=0EE8E704 state=1 pending=0 queued=0
+20:40:37.870 save-trace: D3DXSaveSurfaceToFileInMemory source 640x360 format=22 pool=3 msaa=0 (GetDesc 00000000)
+20:40:37.872 save-trace: D3DXSaveSurfaceToFileInMemory fmt=0 -> 00000000, 921656 bytes
+20:40:38.265 distance stats: mesh=571265 shadow=314487 baseline_reject=96156 admitted=83969 (3.00x/3.00x)
+20:40:43.317 distance stats: mesh=795700 shadow=349775 baseline_reject=113274 admitted=97348 (3.00x/3.00x)
+20:40:44.388 input: CreateDevice hook installed
+20:40:44.388 input: keyboard state filter installed

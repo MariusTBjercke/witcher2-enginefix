@@ -1,0 +1,11 @@
+.expr /s masm
+.exr -1
+.ecxr
+r
+k 20
+u @eip L8
+.printf "W2DUMP engine=%p cloud=%u viewport=%ux%u\n", dwo(0x01404950), by(dwo(0x01404950)+0x234), dwo(0x0237e990), dwo(0x0237e994)
+dd @edi L14
+dd @esp L18
+dd 0x01626788 L8
+q

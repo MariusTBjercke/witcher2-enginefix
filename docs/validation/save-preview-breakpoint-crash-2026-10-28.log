@@ -1,0 +1,146 @@
+Opened log file '<repo>\docs\validation\save-preview-breakpoint-crash-2026-10-28.log'
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.032 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.7705 X86
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [%USERPROFILE%\AppData\Local\CrashDumps\witcher2.exe.7288.dmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             <repo>\build
+Symbol search path is: <repo>\build
+Executable search path is: 
+Windows 10 Version 26300 MP (20 procs) Free x86 compatible
+Product: WinNt, suite: SingleUserTS Personal
+Edition build lab: 26100.1.amd64fre.ge_release.240331-1435
+Debug session time: Wed Oct 28 20:11:23.000 2026 (UTC + 1:00)
+System Uptime: 2 days 6:04:41.339
+Process Uptime: 0 days 0:02:21.000
+.NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\atlmfc.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\ObjectiveC.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\concurrency.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\cpp_rest.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\stl.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Data.Json.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Media.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\windows.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\winrt.natvis'
+...............................................................
+................................................................
+...
+Loading unloaded module list
+............
+This dump file has an exception of interest stored in it.
+The stored exception information can be accessed via .ecxr.
+For analysis of this file, run !analyze -v
+*** WARNING: Unable to verify checksum for witcher2.exe
+eax=00000000 ebx=0a854000 ecx=0a854000 edx=00000000 esi=0ea03120 edi=09f92710
+eip=009b6bc5 esp=001ad37c ebp=001afbe4 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+witcher2+0x5b6bc5:
+009b6bc5 cc              int     3
+0:000> .expr /s masm
+Current expression evaluator: MASM - Microsoft Assembler expressions
+0:000> .exr -1
+ExceptionAddress: 009b6bc5 (witcher2+0x005b6bc5)
+   ExceptionCode: 4000001f (WOW64 breakpoint)
+  ExceptionFlags: 00000000
+NumberParameters: 1
+   Parameter[0]: 00000000
+0:000> .ecxr
+eax=00000000 ebx=0a854000 ecx=0a854000 edx=00000000 esi=0ea03120 edi=09f92710
+eip=009b6bc5 esp=001ad37c ebp=001afbe4 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+witcher2+0x5b6bc5:
+009b6bc5 cc              int     3
+0:000> r
+Last set context:
+eax=00000000 ebx=0a854000 ecx=0a854000 edx=00000000 esi=0ea03120 edi=09f92710
+eip=009b6bc5 esp=001ad37c ebp=001afbe4 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+witcher2+0x5b6bc5:
+009b6bc5 cc              int     3
+0:000> k 20
+ChildEBP RetAddr      
+WARNING: Stack unwind information not available. Following frames may be wrong.
+001afbe4 00aa6db6     witcher2+0x5b6bc5
+001afc2c 00ac9139     witcher2+0x6a6db6
+001afd34 00690077     witcher2+0x6c9139
+001afd50 00690077     witcher2+0x290077
+001afd70 778817c2     witcher2+0x290077
+001afe00 778544b2     ntdll!RtlQueryQosForWobTicket+0xc92
+001afe5c 77885f9e     ntdll!RtlReAllocateHeap+0x82
+001afe64 77841719     ntdll!RtlNumberOfSetBitsUlongPtr+0xbee
+001afe74 771135fb     ntdll!RtlLeaveCriticalSection+0xb9
+001aff74 77105d49     kernel32!FlsGetValue+0x1b
+001aff84 7785c75b     kernel32!BaseThreadInitThunk+0x19
+001affdc 7785c6e1     ntdll!RtlInitializeExceptionChain+0x6b
+001affec 00000000     ntdll!RtlGetAppContainerNamedObjectPath+0x231
+0:000> u @eip L8
+witcher2+0x5b6bc5:
+009b6bc5 cc              int     3
+009b6bc6 50              push    eax
+009b6bc7 49              dec     ecx
+009b6bc8 40              inc     eax
+009b6bc9 01538d          add     dword ptr [ebx-73h],edx
+009b6bcc 5f              pop     edi
+009b6bcd 40              inc     eax
+009b6bce 832300          and     dword ptr [ebx],0
+0:000> .printf "W2DUMP engine=%p cloud=%u viewport=%ux%u\n", dwo(0x01404950), by(dwo(0x01404950)+0x234), dwo(0x0237e990), dwo(0x0237e994)
+W2DUMP engine=0a854000 cloud=Memory access error at '), dwo(0x0237e990), dwo(0x0237e994)'
+0:000> dd @edi L14
+09f92710  ???????? ???????? ???????? ????????
+09f92720  ???????? ???????? ???????? ????????
+09f92730  ???????? ???????? ???????? ????????
+09f92740  ???????? ???????? ???????? ????????
+09f92750  ???????? ???????? ???????? ????????
+0:000> dd @esp L18
+001ad37c  009b6561 00000029 0ea03120 00000000
+001ad38c  77800052 00000027 77809bd7 3c648261
+001ad39c  001ad3b0 00000000 00000000 00000001
+001ad3ac  00000020 00000000 00000010 00000010
+001ad3bc  00000002 ffffffff 00000020 0000001b
+001ad3cc  001ad8b0 00000000 77809bd8 00000001
+0:000> dd 0x01626788 L8
+01626788  15943340 00000001 00010101 00000010
+01626798  77870c01 00004000 00000f00 00000870
+0:000> q
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\winrt.natvis'

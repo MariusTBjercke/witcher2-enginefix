@@ -1,0 +1,2 @@
+.printf "W2PREVIEW ATTACH CANARY pid=%x\n", @$tpid
+qd

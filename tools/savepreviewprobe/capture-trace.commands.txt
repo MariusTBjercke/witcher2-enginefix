@@ -1,0 +1,23 @@
+$$ DISABLED after observed STATUS_WX86_BREAKPOINT crash at first live breakpoint.
+.echo W2PREVIEW LIVE TRACE DISABLED - detaching without installing breakpoints.
+qd
+$$ Historical commands below are unreachable and preserved for incident review.
+$$ Steam 3.5.0.26 unpacked image only. Addresses verified in Ghidra.
+$$ Logging breakpoints automatically resume. No register/value edits.
+$$ Signature mismatch detaches without placing breakpoints.
+.expr /s masm
+.if (dwo(0x0053cef0) != 0x81ec8b55) { .echo W2PREVIEW SIGNATURE MISMATCH - detaching; qd }
+.printf "W2PREVIEW ATTACHED engine=%p cloud=%u viewport=%ux%u\n", dwo(0x01404950), by(dwo(0x01404950)+0x234), dwo(0x0237e990), dwo(0x0237e994)
+bp 0x009b6bc5 ".printf \"W2PREVIEW BUFFER_CAPTURE thread=%x manager=%p\\n\", @$tid, @edi; gc"
+bp 0x009b747e ".printf \"W2PREVIEW FILE_CAPTURE_REQUEST thread=%x cloud=%u\\n\", @$tid, by(dwo(0x01404950)+0x234); gc"
+bp 0x0053cef0 ".printf \"W2PREVIEW CAPTURE thread=%x destination=%p width=%u height=%u format=%u memory=%u outsize=%p\\n\", @$tid, @ecx, dwo(@esp+4), @edx, dwo(@esp+8), by(@esp+0xc), dwo(@esp+0x10); .if (by(@esp+0xc)==0) { .printf \"W2PREVIEW PATH=%mu\\n\", @ecx }; gc"
+bp 0x0053cf78 ".printf \"W2PREVIEW SYSTEMMEM hr=%08x width=%u height=%u surface=%p\\n\", @eax, dwo(@ebp-0xc0), dwo(@ebp-0xbc), dwo(@ebp-0x2c); gc"
+bp 0x0053d153 ".printf \"W2PREVIEW READBACK hr=%08x\\n\", @eax; gc"
+bp 0x0053d193 ".printf \"W2PREVIEW SCRATCH hr=%08x\\n\", @eax; gc"
+bp 0x0053d1e3 ".printf \"W2PREVIEW LOCK_SOURCE hr=%08x pitch=%u bits=%p\\n\", @eax, dwo(@ebp-0x98), dwo(@ebp-0x94); gc"
+bp 0x0053d22a ".printf \"W2PREVIEW LOCK_TARGET hr=%08x pitch=%u bits=%p\\n\", @eax, dwo(@ebp-0x90), dwo(@ebp-0x8c); gc"
+bp 0x0053d4be ".printf \"W2PREVIEW ENCODE_MEMORY hr=%08x\\n\", @eax; gc"
+bp 0x0053d582 ".printf \"W2PREVIEW ENCODE_FILE hr=%08x last_error=%u\\n\", @eax, dwo(@$teb+0x34); gc"
+bp 0x009b733a ".printf \"W2PREVIEW CALLBACK pending=%u transfer=%u cloud=%u path=%mu\\n\", by(0x0160d0ed), by(0x0160d0ee), by(dwo(0x01404950)+0x234), dwo(@esp+4); gc"
+.echo W2PREVIEW READY - load a save and create a NEW manual save, then exit the game.
+g

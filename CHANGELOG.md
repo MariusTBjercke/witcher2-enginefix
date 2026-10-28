@@ -1,0 +1,12 @@
+# Changelog
+
+## 0.1.0
+
+First public release, for The Witcher 2: Assassins of Kings - Enhanced Edition 3.5.0.26 (Steam).
+
+- Save previews: new saves (manual saves and QuickSave) get their screenshot in the Load menu again instead of a purple/blue gradient. The save tick (`009B63DE`) queues an in-memory 640x360 capture and saves in the same frame; the capture finishes about a frame later, after `009B7149` already found no image. The DLL keeps that finished BMP and writes it as `<save>_640x360.bmp` through the game's own Steam storage interface. If the game wrote the image itself, nothing is added. `[saves] fix_thumbnails=0` turns it off. The Load menu also reloads previews that were rewritten during the session (QuickSave, reused AutoSave slots); it kept one picture per file name until a restart (`00B28657`), so a new QuickSave showed the previous one. Existing saves keep their missing previews.
+- Graphics presets: Ctrl+F10 cycles baseline / high / ultra / extreme, each setting mesh LOD distance, foliage distance, the mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. `[presets] default` picks the startup level (extreme).
+- Mesh visibility and mesh-shadow distance: two fingerprinted renderer hooks (RVA `0x005BB09F`, `0x005BB465`) scale the game's hard cutoffs; they install only when the exact game code is found.
+- LOD values held: `MeshDistanceScale` and `FoliageDistanceScale` stay at the preset values when the options menu rewrites them, and the gameplay LOD downscale flags are kept off.
+- Ctrl/Alt+F9/F10 no longer reach the game, so the mod's hotkeys never trigger a quick load; plain F9 is unchanged.
+- Diagnostics: `[diagnostics] save_trace=1` logs the save-preview path (Steam writes, screenshot encoding, preview file calls).

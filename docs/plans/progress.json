@@ -1,0 +1,104 @@
+{
+  "updated": "2026-10-28T21:10:00+01:00",
+  "owner": "dsh",
+  "items": [
+    {
+      "id": "save-previews",
+      "title": "Restore missing save-thumbnail BMP sidecars",
+      "status": "done",
+      "owner": "unassigned",
+      "files": [
+        "docs/fixes/save-previews.md",
+        "src/enginefix.c",
+        "dist-files/witcher2_enginefix.ini"
+      ],
+      "verify": "Read the handoff summary and retained evidence first. Any future fix requires a human NEW manual save with a matching readable 640x360 BMP and visible menu preview, with existing saves preserved. The retired live-CDB workflow must not be run.",
+      "evidence": "docs/fixes/save-previews.md#confirmed-in-game-2026-10-28-2056 - save trace showed the in-memory capture finishing ~25 ms after the save checked it (race); [saves] fix_thumbnails writes it late. Owner confirmed ManualSave_0011 shows its preview."
+    },
+    {
+      "id": "hotkeys-ctrl-verify",
+      "title": "Confirm Ctrl+F9 / Ctrl+F10 work in game and do not trigger quick load",
+      "status": "done",
+      "files": [
+        "<game>/bin/witcher2_enginefix.ini",
+        "src/enginefix.c"
+      ],
+      "verify": "Launch the game, press Ctrl+F9: OSD shows 'Mesh LOD ...' and no save is loaded. Plain F9 still quick-loads.",
+      "evidence": "docs/fixes/quality-audit-2026-10-28.md#in-game-follow-up-1425 — owner confirms Ctrl+F9/F10 work as expected; runtime log records both cycles and enforcement. Plain F9 was not separately reported."
+    },
+    {
+      "id": "shadow-distance",
+      "title": "Test experimental mesh visibility and shadow-caster distance controls",
+      "status": "done",
+      "files": [
+        "docs/fixes/render-distance-experiment.md",
+        "src/enginefix.c",
+        "src/distance_patch.h",
+        "tools/distanceprobe/probe.c"
+      ],
+      "verify": "tools/distanceprobe/build-and-run.bat; then human launch and compare Ctrl+Shift+F9/F10 factors at the tent, holding LOD fixed.",
+      "evidence": "docs/fixes/npc-streaming-sun-shadows.md — owner confirms both shifted controls work and substantially improve shadows/objects; runtime telemetry confirms actual new mesh admissions. 27 native and 9 handler checks also pass. Remaining NPC disappearance is separate."
+    },
+    {
+      "id": "graphics-presets",
+      "title": "Combine the four working controls into named startup/live presets",
+      "status": "implemented-awaiting-game-test",
+      "files": [
+        "src/enginefix.c",
+        "dist-files/witcher2_enginefix.ini",
+        "tools/distanceprobe/presets.c",
+        "docs/fixes/graphics-presets.md"
+      ],
+      "verify": "tools/distanceprobe/build-and-run.bat; build.bat; then human startup and Ctrl+F10 cycle baseline/high/ultra/extreme, restart returns to ini default.",
+      "evidence": "docs/validation/graphics-presets-2026-10-28.md — 21 preset + 27 native + 9 legacy checks pass; independent review no blockers. DLL/ini installed with matching hashes. Human interface check pending. Further NPC/sun work deferred by owner."
+    },
+    {
+      "id": "character-cull",
+      "title": "Verify which cutoff removes the tent NPC and whether the experimental all-mesh multiplier helps",
+      "status": "deferred",
+      "files": [
+        "docs/fixes/npc-streaming-sun-shadows.md",
+        "src/enginefix.c"
+      ],
+      "verify": "Deferred by owner 2026-10-28. If requested later: observe one disappearing NPC's community stub state/radius and distinguish streaming from renderer culling before any consumer multiplier.",
+      "evidence": "docs/fixes/npc-streaming-sun-shadows.md preserves mapped functions, globals, save-radius overrides and uncertainty; no NPC streaming fix implemented."
+    },
+    {
+      "id": "sun-shadow-quality",
+      "title": "Audit 1024-per-cascade atlas coordinates, stabilization and filtering before a 2048 quality experiment",
+      "status": "deferred",
+      "files": [
+        "docs/fixes/npc-streaming-sun-shadows.md"
+      ],
+      "verify": "Deferred by owner 2026-10-28. If requested later: match allocation, three viewports, texel alignment, filtering and bias before a same-camera quality/frame-time comparison. No resize implemented."
+    },
+    {
+      "id": "mouse-smoothing",
+      "title": "Decide with the owner whether MouseSmoothness/Smoothness should be 0",
+      "status": "pending-decision",
+      "files": [
+        "<user>/Documents/Witcher 2/Config/User.ini"
+      ],
+      "verify": "Subjective: owner reports the mouse feels direct."
+    },
+    {
+      "id": "frame-pacing",
+      "title": "Measure VSync=1 without the DXVK cap against the current cap=72",
+      "status": "pending",
+      "files": [
+        "<game>/bin/dxvk.conf",
+        "<user>/Documents/Witcher 2/Config/User.ini"
+      ],
+      "verify": "DXVK stops logging the built-in-limiter warning; owner reports no judder."
+    },
+    {
+      "id": "menu-buttons",
+      "title": "Continue on main menu / exit from pause menu",
+      "status": "deferred",
+      "files": [
+        "docs/fixes/roadmap-shadows-characters-menus.md"
+      ],
+      "verify": "n/a while deferred — W1's Lua hook does not port; TW2 menus are compiled scripts in base_scripts.dzip"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+CreateDevice                           HRESULT=00000000
+GetBackBuffer                          HRESULT=00000000
+GetDesc                                HRESULT=00000000
+source=3840x2160 format=22 samples=0
+Clear known test color                 HRESULT=00000000
+CreateOffscreenPlainSurface SYSTEMMEM  HRESULT=00000000
+GetRenderTargetData                    HRESULT=00000000
+CreateOffscreenPlainSurface SCRATCH    HRESULT=00000000
+LockRect source (game flags)           HRESULT=00000000
+LockRect target (game flags)           HRESULT=00000000
+UnlockRect source                      HRESULT=00000000
+UnlockRect target                      HRESULT=00000000
+downsample pixel mismatches=0 / 230400
+D3DXSaveSurfaceToFileInMemory BMP      HRESULT=00000000
+encoded BMP: size=921656 magic=BM
+D3DXSaveSurfaceToFileW BMP             HRESULT=00000000

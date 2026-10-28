@@ -1,0 +1,2 @@
+bp @$exentry ".printf \"W2PREVIEW CANARY entry=%p stack=%p first=%08x\\n\", @eip, @esp, dwo(@eip); bc *; qd"
+g

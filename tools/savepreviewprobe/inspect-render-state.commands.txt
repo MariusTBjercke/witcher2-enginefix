@@ -1,0 +1,8 @@
+.expr /s masm
+dd 0x0237e990 L2
+dd 0x0162679c L1
+dd 0x01f3662c L10
+dd 0x01f36868 L10
+dd 0x01626868 L10
+db 0x0053cef0 L10
+q

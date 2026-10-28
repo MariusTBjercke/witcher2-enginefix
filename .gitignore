@@ -1,0 +1,30 @@
+# Build output and release zips
+build/
+dist/
+*.obj
+*.exe
+*.dll
+*.lib
+*.exp
+*.pdb
+
+# Game binaries and third-party tools: never commit (see AGENTS.md, Research setup)
+tools/ghidra-inputs/
+tools/steamless/
+
+# Runtime logs, dumps and save data (validation logs are kept on purpose)
+*.log
+!docs/validation/*.log
+*.dmp
+*.sav
+*.bmp
+
+# Editors / OS
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Local notes
+docs/local/

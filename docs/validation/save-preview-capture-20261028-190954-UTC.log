@@ -1,0 +1,227 @@
+Opened log file '<repo>\docs\validation\save-preview-capture-20261028-190954-UTC.log'
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.032 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.7705 X86
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+*** wait with pending attach
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\atlmfc.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\ObjectiveC.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\concurrency.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\cpp_rest.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\stl.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Data.Json.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Media.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\windows.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\winrt.natvis'
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             <repo>\build
+Symbol search path is: <repo>\build
+Executable search path is: 
+ModLoad: 00400000 029b0000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\witcher2.EXE
+ModLoad: 777f0000 779b0000   C:\windows\SYSTEM32\ntdll.dll
+ModLoad: 770f0000 771e0000   C:\windows\System32\KERNEL32.DLL
+ModLoad: 76730000 76a09000   C:\windows\System32\KERNELBASE.dll
+ModLoad: 75180000 7522f000   C:\windows\SYSTEM32\apphelp.dll
+ModLoad: 71ed0000 72162000   C:\windows\SYSTEM32\AcLayers.DLL
+ModLoad: 77020000 770e7000   C:\windows\System32\msvcrt.dll
+ModLoad: 76f00000 76f22000   C:\windows\System32\GDI32.dll
+ModLoad: 76700000 7671c000   C:\windows\System32\win32u.dll
+ModLoad: 76f30000 7701b000   C:\windows\System32\gdi32full.dll
+ModLoad: 75690000 75715000   C:\windows\System32\msvcp_win.dll
+ModLoad: 76a10000 76b20000   C:\windows\System32\ucrtbase.dll
+ModLoad: 76bf0000 76ddd000   C:\windows\System32\USER32.dll
+ModLoad: 76630000 766ec000   C:\windows\System32\RPCRT4.dll
+ModLoad: 77440000 77465000   C:\windows\System32\IMM32.DLL
+ModLoad: 77570000 775f5000   C:\windows\System32\ADVAPI32.dll
+ModLoad: 754e0000 75565000   C:\windows\System32\sechost.dll
+ModLoad: 75720000 75d8b000   C:\windows\System32\SHELL32.dll
+ModLoad: 77280000 773d7000   C:\windows\System32\ole32.dll
+ModLoad: 10000000 10113000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\fmodex.dll
+ModLoad: 75f20000 761b8000   C:\windows\System32\combase.dll
+ModLoad: 6fba0000 6fbca000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\DINPUT8.dll
+ModLoad: 5f4e0000 5f8a8000   C:\windows\SYSTEM32\d3dx9_39.dll
+ModLoad: 6fb70000 6fb96000   C:\windows\SYSTEM32\XINPUT1_3.dll
+ModLoad: 6fb40000 6fb5c000   C:\windows\SYSTEM32\AVIFIL32.dll
+ModLoad: 6faf0000 6fb3d000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\w1import.dll
+ModLoad: 62f60000 62f94000   C:\windows\SYSTEM32\WINMM.dll
+ModLoad: 3b400000 3b41f000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\steam_api.dll
+ModLoad: 75170000 75178000   C:\windows\SYSTEM32\WSOCK32.dll
+ModLoad: 6f900000 6fae8000   C:\windows\SYSTEM32\dbghelp.dll
+ModLoad: 77470000 774da000   C:\windows\System32\WS2_32.dll
+ModLoad: 75430000 754d0000   C:\windows\System32\OLEAUT32.dll
+ModLoad: 72200000 7221a000   C:\windows\SYSTEM32\MSACM32.dll
+ModLoad: 5d220000 5d9a0000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\d3d9.dll
+ModLoad: 6f8d0000 6f8f4000   C:\windows\SYSTEM32\MSVFW32.dll
+ModLoad: 761c0000 76611000   C:\windows\System32\SETUPAPI.dll
+ModLoad: 6f830000 6f8c1000   C:\windows\WinSxS\x86_microsoft.windows.common-controls_6595b64144ccf1df_5.82.26100.8521_none_cf9e08b68ea73d80\COMCTL32.dll
+ModLoad: 72a60000 72a96000   C:\windows\SYSTEM32\dxcore.dll
+ModLoad: 03420000 03474000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\fmod_event_net.dll
+ModLoad: 04ba0000 04beb000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\fmod_event.dll
+ModLoad: 77270000 77276000   C:\windows\System32\psapi.dll
+ModLoad: 750b0000 750b8000   C:\windows\SYSTEM32\version.dll
+ModLoad: 73dc0000 73e14000   C:\windows\SYSTEM32\MSWSOCK.dll
+ModLoad: 73bb0000 73bcc000   C:\windows\SYSTEM32\bcrypt.dll
+ModLoad: 77660000 77735000   C:\windows\System32\shcore.dll
+ModLoad: 76df0000 76e6a000   C:\windows\System32\bcryptprimitives.dll
+ModLoad: 740c0000 747de000   C:\windows\SYSTEM32\windows.storage.dll
+ModLoad: 77600000 77652000   C:\windows\System32\shlwapi.dll
+ModLoad: 73e30000 73e42000   C:\windows\system32\napinsp.dll
+ModLoad: 72ff0000 730fd000   C:\windows\SYSTEM32\DNSAPI.dll
+ModLoad: 73e20000 73e2a000   C:\windows\SYSTEM32\DSPARSE.dll
+ModLoad: 73d90000 73db6000   C:\windows\SYSTEM32\IPHLPAPI.DLL
+ModLoad: 76620000 76627000   C:\windows\System32\NSI.dll
+ModLoad: 73d70000 73d7e000   C:\windows\System32\winrnr.dll
+ModLoad: 73d40000 73d5e000   C:\windows\system32\nlansp_c.dll
+ModLoad: 72fd0000 72fe2000   C:\windows\system32\wshbth.dll
+ModLoad: 5a150000 5b62a000   C:\Program Files (x86)\Steam\steamclient.dll
+ModLoad: 752a0000 753af000   C:\windows\System32\CRYPT32.dll
+ModLoad: 774e0000 774fb000   C:\windows\System32\imagehlp.dll
+ModLoad: 5d180000 5d218000   C:\Program Files (x86)\Steam\vstdlib_s.dll
+ModLoad: 5d0e0000 5d17e000   C:\Program Files (x86)\Steam\tier0_s.dll
+ModLoad: 69180000 6918a000   C:\windows\SYSTEM32\Secur32.dll
+ModLoad: 73650000 73690000   C:\windows\SYSTEM32\cfgmgr32.DLL
+ModLoad: 736d0000 736fc000   C:\windows\SYSTEM32\SSPICLI.DLL
+ModLoad: 5cfd0000 5d0d9000   C:\Program Files (x86)\Steam\steam.dll
+ModLoad: 5f4a0000 5f4d0000   C:\windows\SYSTEM32\dbgcore.DLL
+ModLoad: 5cfa0000 5cfc1000   C:\Program Files (x86)\Steam\CSERHelper.dll
+ModLoad: 59fc0000 5a14c000   C:\Program Files (x86)\Steam\gameoverlayrenderer.dll
+ModLoad: 73ef0000 73f6e000   C:\windows\system32\uxtheme.dll
+ModLoad: 75570000 75687000   C:\windows\System32\MSCTF.dll
+ModLoad: 5c760000 5c84c000   C:\windows\SYSTEM32\TextShaping.dll
+ModLoad: 72340000 724bc000   C:\windows\SYSTEM32\vulkan-1.dll
+ModLoad: 72230000 72339000   C:\windows\system32\dxgi.dll
+ModLoad: 689f0000 68a45000   C:\windows\SYSTEM32\powrprof.dll
+ModLoad: 689d0000 689df000   C:\windows\SYSTEM32\UMPDC.dll
+ModLoad: 721e0000 721f7000   C:\windows\SYSTEM32\windows.staterepositorycore.dll
+ModLoad: 60340000 6038e000   C:\windows\SYSTEM32\directxdatabasehelper.dll
+ModLoad: 750c0000 750d5000   C:\windows\SYSTEM32\kernel.appcore.dll
+ModLoad: 585e0000 59fb7000   C:\windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_da865124972e1f80\nvoglv32.dll
+ModLoad: 68ab0000 68ad1000   C:\windows\SYSTEM32\WTSAPI32.dll
+ModLoad: 747f0000 747fe000   C:\windows\SYSTEM32\msasn1.dll
+ModLoad: 68740000 6876b000   C:\windows\SYSTEM32\cryptnet.dll
+ModLoad: 73b40000 73b4a000   C:\windows\SYSTEM32\cryptbase.dll
+ModLoad: 73fd0000 74034000   C:\windows\SYSTEM32\wldp.dll
+ModLoad: 68610000 6873b000   C:\windows\SYSTEM32\drvstore.dll
+ModLoad: 734e0000 73505000   C:\windows\SYSTEM32\devobj.dll
+ModLoad: 73e50000 73e79000   C:\windows\SYSTEM32\ntmarta.dll
+ModLoad: 77200000 77268000   C:\windows\System32\WINTRUST.dll
+ModLoad: 73b90000 73ba4000   C:\windows\System32\CRYPTSP.dll
+ModLoad: 73b50000 73b82000   C:\windows\system32\rsaenh.dll
+ModLoad: 630c0000 68604000   C:\windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_da865124972e1f80\nvgpucomp32.dll
+ModLoad: 76e70000 76ef9000   C:\windows\System32\clbcatq.dll
+ModLoad: 724c0000 725b9000   C:\Windows\System32\WinTypes.dll
+ModLoad: 721b0000 721dd000   C:\windows\SYSTEM32\rometadata.dll
+ModLoad: 71e40000 71ec6000   C:\Program Files (x86)\Steam\VkLayer_steam_fossilize.dll
+ModLoad: 71de0000 71e3a000   C:\Program Files (x86)\Steam\SteamOverlayVulkanLayer.dll
+ModLoad: 72220000 7222a000   C:\Program Files (x86)\RivaTuner Statistics Server\Vulkan\RTSSVkLayer32.dll
+ModLoad: 72190000 721ad000   C:\windows\SYSTEM32\VCRUNTIME140.dll
+ModLoad: 71d40000 71dd6000   C:\windows\SYSTEM32\MSVCP140.dll
+ModLoad: 71d00000 71d3e000   C:\ProgramData\obs-studio-hook\graphics-hook32.dll
+ModLoad: 5ffa0000 600d9000   C:\windows\system32\nvspcap.dll
+ModLoad: 736a0000 736be000   C:\windows\SYSTEM32\profapi.dll
+ModLoad: 689a0000 689c5000   C:\windows\SYSTEM32\dwmapi.dll
+ModLoad: 71c70000 71cf8000   C:\windows\System32\MMDevApi.dll
+ModLoad: 71c40000 71c65000   C:\windows\SYSTEM32\winmmbase.dll
+ModLoad: 71bf0000 71c30000   C:\windows\SYSTEM32\wdmaud.drv
+ModLoad: 71bc0000 71bde000   C:\windows\SYSTEM32\wdmaud2.drv
+ModLoad: 72180000 72189000   C:\windows\SYSTEM32\AVRT.dll
+ModLoad: 71a40000 71bb3000   C:\windows\SYSTEM32\AUDIOSES.DLL
+ModLoad: 72170000 7217b000   C:\windows\SYSTEM32\msacm32.drv
+ModLoad: 71a30000 71a38000   C:\windows\SYSTEM32\midimap.dll
+ModLoad: 71a10000 71a20000   C:\windows\SYSTEM32\resourcepolicyclient.dll
+ModLoad: 719a0000 71a08000   C:\windows\SYSTEM32\nvapi.dll
+ModLoad: 580d0000 585e0000   C:\windows\system32\DriverStore\FileRepository\nv_dispi.inf_amd64_da865124972e1f80\nvapi_impl.dll
+ModLoad: 5fd40000 5fe42000   C:\windows\SYSTEM32\textinputframework.dll
+ModLoad: 718b0000 71990000   C:\windows\SYSTEM32\CoreMessaging.dll
+ModLoad: 71610000 718a5000   C:\windows\SYSTEM32\CoreUIComponents.dll
+ModLoad: 715b0000 71609000   C:\windows\system32\Oleacc.dll
+ModLoad: 71530000 715a2000   C:\Windows\System32\DispBroker.dll
+ModLoad: 6fc60000 6fd43000   C:\windows\SYSTEM32\opengl32.dll
+ModLoad: 6fbe0000 6fc56000   C:\windows\SYSTEM32\GLU32.dll
+ModLoad: 5fe50000 5ff91000   C:\windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_da865124972e1f80\nvppe.dll
+ModLoad: 68a50000 68aa0000   C:\windows\SYSTEM32\WINSTA.dll
+ModLoad: 6bce0000 6bdf1000   C:\Windows\System32\Windows.UI.dll
+ModLoad: 714f0000 71528000   C:\windows\system32\dinput8.dll
+ModLoad: 57f50000 580c4000   C:\windows\SYSTEM32\inputhost.dll
+ModLoad: 714e0000 714eb000   C:\windows\SYSTEM32\HID.DLL
+ModLoad: 6f810000 6f825000   C:\windows\SYSTEM32\xinput1_4.dll
+ModLoad: 5cf60000 5cf96000   C:\Windows\System32\deviceaccess.dll
+(1c78.8e1c): Break instruction exception - code 80000003 (first chance)
+eax=00286000 ebx=00000000 ecx=778beed0 edx=778beed0 esi=778beed0 edi=778beed0
+eip=7786a4c0 esp=4f1bff48 ebp=4f1bff74 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+ntdll!DbgBreakPoint:
+7786a4c0 cc              int     3
+0:050> $$ Steam 3.5.0.26 unpacked image only. Addresses verified in Ghidra.
+0:050> $$ Logging breakpoints automatically resume. No register/value edits.
+0:050> $$ Signature mismatch detaches without placing breakpoints.
+0:050> .expr /s masm
+Current expression evaluator: MASM - Microsoft Assembler expressions
+0:050> .if (dwo(0x0053cef0) != 0x81ec8b55) { .echo W2PREVIEW SIGNATURE MISMATCH - detaching; qd }
+0:050> .printf "W2PREVIEW ATTACHED engine=%p cloud=%u viewport=%ux%u\n", dwo(0x01404950), by(dwo(0x01404950)+0x234), dwo(0x0237e990), dwo(0x0237e994)
+W2PREVIEW ATTACHED engine=0a854000 cloud=1 viewport=3840x2160
+0:050> bp 0x009b6bc5 ".printf \"W2PREVIEW BUFFER_CAPTURE thread=%x manager=%p\\n\", @$tid, @edi; gc"
+0:050> bp 0x009b747e ".printf \"W2PREVIEW FILE_CAPTURE_REQUEST thread=%x cloud=%u\\n\", @$tid, by(dwo(0x01404950)+0x234); gc"
+0:050> bp 0x0053cef0 ".printf \"W2PREVIEW CAPTURE thread=%x destination=%p width=%u height=%u format=%u memory=%u outsize=%p\\n\", @$tid, @ecx, dwo(@esp+4), @edx, dwo(@esp+8), by(@esp+0xc), dwo(@esp+0x10); .if (by(@esp+0xc)==0) { .printf \"W2PREVIEW PATH=%mu\\n\", @ecx }; gc"
+0:050> bp 0x0053cf78 ".printf \"W2PREVIEW SYSTEMMEM hr=%08x width=%u height=%u surface=%p\\n\", @eax, dwo(@ebp-0xc0), dwo(@ebp-0xbc), dwo(@ebp-0x2c); gc"
+0:050> bp 0x0053d153 ".printf \"W2PREVIEW READBACK hr=%08x\\n\", @eax; gc"
+0:050> bp 0x0053d193 ".printf \"W2PREVIEW SCRATCH hr=%08x\\n\", @eax; gc"
+0:050> bp 0x0053d1e3 ".printf \"W2PREVIEW LOCK_SOURCE hr=%08x pitch=%u bits=%p\\n\", @eax, dwo(@ebp-0x98), dwo(@ebp-0x94); gc"
+0:050> bp 0x0053d22a ".printf \"W2PREVIEW LOCK_TARGET hr=%08x pitch=%u bits=%p\\n\", @eax, dwo(@ebp-0x90), dwo(@ebp-0x8c); gc"
+0:050> bp 0x0053d4be ".printf \"W2PREVIEW ENCODE_MEMORY hr=%08x\\n\", @eax; gc"
+0:050> bp 0x0053d582 ".printf \"W2PREVIEW ENCODE_FILE hr=%08x last_error=%u\\n\", @eax, dwo(@$teb+0x34); gc"
+0:050> bp 0x009b733a ".printf \"W2PREVIEW CALLBACK pending=%u transfer=%u cloud=%u path=%mu\\n\", by(0x0160d0ed), by(0x0160d0ee), by(dwo(0x01404950)+0x234), dwo(@esp+4); gc"
+0:050> .echo W2PREVIEW READY - load a save and create a NEW manual save, then exit the game.
+W2PREVIEW READY - load a save and create a NEW manual save, then exit the game.
+0:050> g
+Canceling textures streaming 
+Texture streaming canceled in 0.00s
+Error: GFxLoader failed to open 'D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\globals\gui\loadingscreens\01_mgla.swf'
+GFxLoader failed to open "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\globals\gui\loadingscreens\01_mgla.swf"
+Flushing texture streaming
+TextureFlush: 0 not used textures evicted in 0.00s
+TextureFlush: 81 textures to stream
+TextureFlush: started streaming of 81 textures with 298.67MB of data
+TextureFlush: finished prestreaming of textures in 0.24s
+Flushing texture streaming
+TextureFlush: 5 not used textures evicted in 0.00s
+TextureFlush: 76 textures to stream
+TextureFlush: started streaming of 0 textures with 0.00MB of data
+TextureFlush: finished prestreaming of textures in 0.00s
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\winrt.natvis'
