@@ -16,7 +16,7 @@ What it does:
   distance together, shown on screen. Starts at extreme.
 - The LOD values stay put when the options menu rewrites them.
 - Ctrl/Alt+F9/F10 never trigger a quick load. Plain F9 still quick-loads.
-- Interior maps: temples, inns, Loredo's house and 22 other interiors had a
+- Interior maps: 25 interiors (temples, inns, Loredo's house, towers) had a
   black map screen (M) with one huge pin, because the game has no big map for
   them. Loose files under CookedPC\globals\ give each one an upscaled copy of
   its own minimap, so the map shows and zooms the right way.
