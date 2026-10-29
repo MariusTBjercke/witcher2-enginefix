@@ -1,6 +1,6 @@
 # Witcher 2 Engine Fix
 
-Draw-distance and save-preview fixes for **The Witcher 2: Assassins of Kings - Enhanced Edition**. A small `dinput8.dll` that the game loads by itself and that adjusts specific engine values and bugs in memory while the game runs. `witcher2.exe` and your saves are never modified.
+Draw-distance, save-preview and interior-map fixes for **The Witcher 2: Assassins of Kings - Enhanced Edition**. A small `dinput8.dll` that the game loads by itself and that adjusts specific engine values and bugs in memory while the game runs. `witcher2.exe` and your saves are never modified.
 
 Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-enginefix) for The Witcher 1, built the same way.
 
@@ -11,9 +11,10 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Missing save previews** | New saves showed a purple/blue gradient instead of a screenshot in the Load menu. The game asks for the screenshot and saves in the same frame, and the finished image arrives about a frame too late, so the game drops it. The mod writes that image next to the save under the name the game expects, and makes the menu reload a QuickSave's picture right away instead of after a restart. Old saves cannot get their picture back. | on |
 | **Graphics presets** | One hotkey, **Ctrl+F10**, cycles baseline / high / ultra / extreme. Each level sets mesh LOD distance, foliage distance, the hard mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. Starts at `extreme`; the hotkey lasts until you quit. | on (extreme) |
 | **LOD values that stick** | The game's `MeshDistanceScale`/`FoliageDistanceScale` are held at the preset values, also after the options menu rewrites them, and the two "gameplay LOD downscale" flags are kept off. | on |
+| **Black map in interiors** | In temples, inns, Loredo's house and 22 other interiors the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
 | **Ctrl+F9/F10 do not quick-load** | F9 (quick load) and F10 cannot be rebound in this game. While Ctrl or Alt is held, the mod hides F9/F10 from the game, so the mod's hotkeys never trigger a quick load. Plain F9 still quick-loads. | on |
 
-Each part can be switched off in `witcher2_enginefix.ini`. Details, addresses and how each part was verified are in [`docs/fixes/`](docs/fixes/).
+Each DLL part can be switched off in `witcher2_enginefix.ini`; the interior maps are removed by deleting their files (see below). Details, addresses and how each part was verified are in [`docs/fixes/`](docs/fixes/).
 
 ### Preset values
 
@@ -34,18 +35,20 @@ The higher levels cost GPU time. They do not change how far away the game spawns
 ## Installation
 
 1. Download `Witcher2EngineFix-<version>.zip` from [Releases](https://github.com/MariusTBjercke/witcher2-enginefix/releases).
-2. Extract it into the game folder, so that `dinput8.dll` ends up next to `witcher2.exe` in `bin\`, for example
+2. Extract it into the game folder (the one that holds `bin\` and `CookedPC\`), so that `dinput8.dll` ends up next to `witcher2.exe` in `bin\`, for example
    `...\steamapps\common\the witcher 2\bin\dinput8.dll`
 3. Start the game as usual (through Steam and the launcher).
 
-To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.1.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
+To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.2.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
 
 | File | Purpose |
 |---|---|
 | `bin\dinput8.dll` | The engine fix. The game loads it automatically and it forwards everything else to Windows' own `dinput8.dll` |
 | `bin\witcher2_enginefix.ini` | Settings |
+| `CookedPC\globals\map_scales.csv` | The game's map table with the missing interior maps filled in |
+| `CookedPC\globals\gui\maps\*_2048x2048.dds` | 25 upscaled interior maps (new names, nothing of the game's is replaced) |
 
-**Uninstall:** delete `bin\dinput8.dll` and `bin\witcher2_enginefix.ini`.
+**Uninstall:** delete `bin\dinput8.dll`, `bin\witcher2_enginefix.ini`, `CookedPC\globals\map_scales.csv` and the `*_2048x2048.dds` files the zip put in `CookedPC\globals\gui\maps\` (the game's own maps live inside `pack0.dzip`, not in that folder).
 
 ## Configuration
 
@@ -68,6 +71,7 @@ The ini file itself documents every key, including the legacy separate hotkeys (
 
 - **DXVK**: works with and without it. The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen.
 - **Other `dinput8.dll` mods**: only one `dinput8.dll` can sit in `bin\`. This mod loads the system `dinput8.dll` itself.
+- **Other map mods**: a mod that ships its own `CookedPC\globals\map_scales.csv` conflicts with the interior maps; whichever was copied last wins. UI mods that replace `ui_nav.swf` (A Better UI, HD UI upscales) are fine.
 - **Steam Cloud**: no effect on the fix; saves and previews are written through the game's own Steam storage interface.
 
 ## Building from source
@@ -78,9 +82,10 @@ Needs Visual Studio 2022 or newer with the **Desktop development with C++** work
 build.bat
 ```
 
-This produces `build\dinput8.dll`. If Visual Studio is not in the default location, set `VCVARS` to the full path of `vcvars32.bat` first. To build the release zip:
+This produces `build\dinput8.dll`. If Visual Studio is not in the default location, set `VCVARS` to the full path of `vcvars32.bat` first. To build the release zip, first generate the interior maps from your own copy of the game (Python 3 with Pillow 11.2 or newer; the files are game assets and are not in this repository):
 
 ```powershell
+python tools\build-interior-maps.py "<game>\CookedPC\pack0.dzip"
 powershell -ExecutionPolicy Bypass -File tools\package-release.ps1
 ```
 

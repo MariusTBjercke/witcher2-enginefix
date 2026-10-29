@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Interior maps: the map screen (M) no longer shows a black local map with one huge pin in temples, inns, Loredo's house and 22 other interiors. The game's `globals\map_scales.csv` has no big map for these areas, so the panel loaded an empty image name. The zip now ships a filled-in `map_scales.csv` and 2048x2048 upscales of each area's own minimap as loose files under `CookedPC\globals\`. Upscaled because the map panel's zoom runs backwards on images smaller than the panel. Data only; the DLL is unchanged apart from its version. Generated from the game's own `pack0.dzip` by `tools\build-interior-maps.py`. See `docs/fixes/interior-maps.md`.
+
 ## 0.1.0
 
 First public release, for The Witcher 2: Assassins of Kings - Enhanced Edition 3.5.0.26 (Steam).

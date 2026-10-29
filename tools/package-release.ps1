@@ -1,6 +1,6 @@
 # Builds dist\Witcher2EngineFix-<version>.zip, laid out to extract straight into the game folder
 # (bin\dinput8.dll, bin\witcher2_enginefix.ini, README_Witcher2EngineFix.txt,
-# LICENSE_Witcher2EngineFix.txt). Runs build.bat first unless -NoBuild. Entries use "/" separators so
+# LICENSE_Witcher2EngineFix.txt, CookedPC\globals\... interior maps). Runs build.bat first unless -NoBuild. Entries use "/" separators so
 # the zip also extracts correctly outside Windows (PowerShell 5.1's ZipFile writes "\").
 param([string]$Version = "", [switch]$NoBuild)
 
@@ -27,6 +27,16 @@ $sources = [ordered]@{
     "LICENSE_Witcher2EngineFix.txt" = "LICENSE"
     "bin/dinput8.dll"               = "build\dinput8.dll"
     "bin/witcher2_enginefix.ini"    = "dist-files\witcher2_enginefix.ini"
+}
+
+# Interior maps are generated from the game's own pack0.dzip by tools\build-interior-maps.py
+# (game assets, never committed). Refuse to package without them.
+$maps = Join-Path $root "build\interior-maps"
+if (-not (Test-Path (Join-Path $maps "CookedPC\globals\map_scales.csv"))) {
+    throw "build\interior-maps is missing: run python tools\build-interior-maps.py `"<game>\CookedPC\pack0.dzip`" first"
+}
+foreach ($f in Get-ChildItem $maps -Recurse -File | Sort-Object FullName) {
+    $sources[$f.FullName.Substring($maps.Length + 1).Replace('\', '/')] = $f.FullName.Substring($root.Length + 1)
 }
 
 $dist = Join-Path $root "dist"

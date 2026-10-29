@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-28T21:10:00+01:00",
+  "updated": "2026-10-29T23:00:00+01:00",
   "owner": "dsh",
   "items": [
     {
@@ -99,6 +99,18 @@
         "docs/fixes/roadmap-shadows-characters-menus.md"
       ],
       "verify": "n/a while deferred — W1's Lua hook does not port; TW2 menus are compiled scripts in base_scripts.dzip"
+    },
+    {
+      "id": "interior-maps",
+      "title": "Black map screen in interiors without a big map (map_scales.csv)",
+      "status": "done",
+      "files": [
+        "docs/fixes/interior-maps.md",
+        "tools/build-interior-maps.py",
+        "tools/package-release.ps1"
+      ],
+      "verify": "In an affected interior (e.g. Temple) press M: map visible, pins in place, slider zooms in when moved inward.",
+      "evidence": "docs/fixes/interior-maps.md#verification - owner confirmed in the Temple area 2026-10-29; generator output byte-identical to the tested files."
     }
   ]
 }
