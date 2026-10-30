@@ -252,3 +252,33 @@ An opt-in experiment now scales their squared thresholds at VA 009BB09F and
 NPC's disappearance. Scope is all mesh proxies, not verified character-only.
 Exact bytes, native thread barrier, 27-check probe, new Ctrl+Shift+F9/F10 controls
 and rollback are in [render-distance-experiment](fixes/render-distance-experiment.md).
+
+## 9. Game data formats used by the script patches (2026-10-30)
+
+* **DZIP** (`*.dzip`): Gibbed.RED layout. 32-byte header (`DZIP`, version 2, count, `gbbd`,
+  entry table offset, entry table hash), entries of 64 KiB LZF blocks behind an int32 block
+  offset table, entry table at the end. The header hash is FNV-1a 64 prime with seed
+  `0xFFFFFFFF` over each entry's name bytes, name length, FILETIME, sizes and offset; it matches
+  vanilla and Mersey `base_scripts.dzip` and `elf_flotsam.dzip`. Rewriting one entry and keeping
+  the others' compressed bytes is enough for the game (`tools/script-patches/ScriptPatches.ps1`).
+* **Scripts are compiled from `CookedPC\base_scripts.dzip` at every start.**
+  `compiledscripts.w2scripts` dates from the install and lacks Mersey's identifiers, yet Mersey
+  works; our patched archives compiled in game. A compile error stops the game with
+  "Script compilation error ... guishop.ws[375]: parse error ...".
+* **WitcherScript keywords** (UTF-16 strings next to `virtual_parent`, unpacked file offset
+  `0xA781EC`): abstract array bool break brix byte case class cleanup const continue def default
+  defaults delete do editable else enter entry enum event exec extends final float for function
+  if import in inlined int latent local name new NULL optional out parent private public quest
+  return saved savepoint state storyscene string struct super switch this timer var
+  virtual_parent void while, plus theGame theHud thePlayer theCamera theServer theSound. Never
+  name a variable `entry` or `state`.
+* **`StrChar( i : int )`** (native `008E5A0A`) returns a one-character string from a UTF-16
+  unit (clamped to >= 0x20): the safe way to put non-ASCII text in script.
+* **`.w2strings`** (version 201): uint32 version, uint16 key hi, key table (plain names in
+  lower case, e.g. `menucontinue`, uint32 index ^ magic), uint16 key lo, uint32 hash ^ magic,
+  then texts: uint32 index ^ magic, length-prefixed UTF-16 XORed per unit with
+  `((len + 1) * key) & 0xFFFF`, key = `(magic >> 8) & 0xFFFF` rotated left by one per unit.
+  Magic per file key from Gibbed.RED's table; `tr0` is not in it (its 16-bit text key can be
+  found by trying all). Decoder: `tools/script-patches/check_texts.py`. Languages with full
+  texts here: EN PL DE FR ES IT RU CZ HU TR JP ZH (Traditional); `br_user`/`kr_user` hold English
+  placeholders. `theGame.GetGameLanguageName( audio, text )` returns these codes.

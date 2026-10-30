@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Skip intro: `[startup] skip_intro=1` (off by default) starts at the main menu without the logo videos and the intro movie. The startup movies come from `globals\video_start.csv`; the game only finishes that sequence after at least one movie, so an empty table leaves a black screen until a key is pressed (which is why intro-removal mods keep one logo). The DLL instead presses "skip" for each startup movie once it has played 300 ms, through the game's own Esc path (`009A1F2E`), from a wrapped tick (`00ECAF78`) armed only by the startup list build (`009B588F`). A short black moment remains. See `docs/fixes/skip-intro.md`.
+- Optional script patches, off until `Witcher2EngineFix_Optional\ScriptPatches\Install.bat` is run (it asks for each, and patches the files the game actually uses: `base_scripts.dzip` also when Project Mersey replaced it, the trade/storage screens also when an HD UI mod replaced them; originals in its `backup\`, `Uninstall.bat` restores them):
+  - Shop book marker: the A Better UI "already read" overlay on merchant and storage books only meant "you carry a copy". It now also shows for books read before (the game's `<item>_Examined` fact) and for books whose bestiary knowledge and journal entries are all known already. The list shows `Read` / `Nothing new` / `Unread` after the item type and the tooltip lists what is still new. Texts in 12 languages, every character checked against the game's own texts. See `docs/fixes/shop-book-read-marker.md`.
+  - Continue: a Continue button at the top of the main menu loads the newest save (the game's own `menuContinue` label).
+  - Quit in the pause menu: the game's Quit button with a confirmation, next to "Exit to main menu". See `docs/fixes/menu-buttons.md`.
+- Tools: `tools\script-patches\check_texts.py` decodes the game's `.w2strings` and checks the book marker's translations against them. `docs/research.md` section 9 documents the DZIP and `.w2strings` formats and the script compiler's keywords.
+
 ## 0.3.0
 
 - Save list memory leak: every time the Load/Save menu built its list, the game read each save's preview picture from Steam (~0.9 MB) and, when the menu already held that picture, dropped it without freeing it. With 60 saves every menu open cost ~50 MB for the rest of the session; with a few hundred saves it is a few hundred MB per open in a 32-bit game, a likely cause of the crashes players report once saves pile up. The DLL now frees that copy with the game's own destructor (list builder `009A49B9`, AddImage early return `00B2867F`). Confirmed in game: repeat opens 0-1 MB instead of ~50 MB. No save is deleted and the number of saves is not limited. `[saves] fix_list_leak=0` turns it off. See `docs/fixes/save-bloat.md`.

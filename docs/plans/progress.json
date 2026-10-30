@@ -94,11 +94,15 @@
     {
       "id": "menu-buttons",
       "title": "Continue on main menu / exit from pause menu",
-      "status": "deferred",
+      "status": "done",
       "files": [
-        "docs/fixes/roadmap-shadows-characters-menus.md"
+        "docs/fixes/menu-buttons.md",
+        "docs/fixes/roadmap-shadows-characters-menus.md",
+        "tools/script-patches/ScriptPatches.ps1",
+        "tools/script-patches/check_texts.py"
       ],
-      "verify": "n/a while deferred — W1's Lua hook does not port; TW2 menus are compiled scripts in base_scripts.dzip"
+      "verify": "Pause menu QUIT: the confirmation reacts to hover without a first click (menu closes first); No brings the pause menu back; Yes quits. Continue unchanged (confirmed).",
+      "evidence": "docs/fixes/menu-buttons.md - Continue and pause-menu Quit confirmed by the owner 2026-10-30; no witcher2.exe fault afterwards. The later focus change (menu closes before the confirmation) is shipped in 0.4.0 but not separately reported on."
     },
     {
       "id": "interior-maps",
@@ -125,6 +129,34 @@
       ],
       "verify": "Start test with fix_list_leak=1 and savelist_trace=1: open the Load menu twice from the main menu and twice in game; builds 2+ log 'leaked streams freed 60' and commit grows ~0 MB per open (was ~50 MB with 60 saves).",
       "evidence": "docs/fixes/save-bloat.md#confirmed-in-game-run-2-2026-10-30-1247 - leak fix confirmed: repeat Load-menu opens 0-1 MB instead of ~50 MB with 60 saves. Open: ~1 s per build not in Steam reads; ~1.7 MB per new preview held for the session."
+    },
+    {
+      "id": "shop-book-read-marker",
+      "title": "Shop book marker: read, carried or nothing new, with list status and tooltip",
+      "status": "done",
+      "files": [
+        "docs/fixes/shop-book-read-marker.md",
+        "tools/script-patches/ScriptPatches.ps1",
+        "tools/script-patches/Install.bat",
+        "tools/script-patches/Uninstall.bat",
+        "tools/package-release.ps1",
+        "docs/README.txt",
+        "tools/script-patches/check_texts.py"
+      ],
+      "verify": "Version 2 installed on the owner's machine: game reaches the main menu; at a bookseller a read book shows '/ READ', an unread book whose knowledge and journal entries are all known shows '/ NOTHING NEW' plus the overlay, an unread book with new content shows '/ UNREAD' without overlay and its tooltip lists what is new.",
+      "evidence": "docs/fixes/shop-book-read-marker.md - version 1 (read or carried) confirmed in game 2026-10-30. Version 2 dry run: hash valid, generated Collect has 21 knowledge + 58 journal calls (Mersey), uninstall byte-identical; installed, in-game result pending. Texts in 12 languages (W2EF_Text, StrChar), every character checked against the game's own texts by check_texts.py; localized build installed, in-game check of a non-English language pending."
+    },
+    {
+      "id": "skip-intro",
+      "title": "Skip the logo videos and the intro movie ([startup] skip_intro)",
+      "status": "done",
+      "files": [
+        "docs/fixes/skip-intro.md",
+        "src/enginefix.c",
+        "dist-files/witcher2_enginefix.ini"
+      ],
+      "verify": "skip_intro=1: main menu without logo/intro and without a black wait; log shows 'movie list call hooked' and 'startup movie(s) skipped'.",
+      "evidence": "docs/fixes/skip-intro.md#confirmed-in-game-2026-10-31 - owner: starts at the main menu after a short black moment. First DLL attempt (index = count) crashed silently; the Esc-path version works."
     }
   ]
 }

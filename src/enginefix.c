@@ -30,7 +30,7 @@
 #include <wchar.h>
 #include "distance_patch.h"
 
-#define ENGINEFIX_VERSION   "0.3.0"   // keep in sync with CHANGELOG.md
+#define ENGINEFIX_VERSION   "0.4.0"   // keep in sync with CHANGELOG.md
 #define IMAGE_BASE          0x00400000u
 #define RVA_SETTINGS        0x02180E28u   // 0x02580E28 - IMAGE_BASE
 #define OFF_MESH_DOWNSCALE  0x34
@@ -101,6 +101,7 @@ static int cfg_save_trace;      // [diagnostics] save_trace: log the save-thumbn
 static int cfg_save_thumbs = 1; // [saves] fix_thumbnails: write the late save preview
 static int cfg_savelist_trace;  // [diagnostics] savelist_trace: time/memory of the save list
 static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the save list leaks
+static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos before the main menu
 
 // ---- logging ------------------------------------------------------------
 
@@ -294,6 +295,7 @@ static void load_config(void)
     cfg_save_thumbs = ini_int("saves", "fix_thumbnails", 1);
     cfg_savelist_trace = ini_int("diagnostics", "savelist_trace", 0);
     cfg_list_leak = ini_int("saves", "fix_list_leak", 1);
+    cfg_skip_intro = ini_int("startup", "skip_intro", 0);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -1170,11 +1172,11 @@ static void savelist_run(void* panel, const char* who)
 static void __stdcall savelist_startup(void* panel) { savelist_run(panel, "startup"); }
 static void __stdcall savelist_menu(void* panel)    { savelist_run(panel, "menu"); }
 
-// Swap one verified `call 009A49B9` for a call to `hook`. The rel32 lies inside one
-// cache line at both sites, so the locked exchange is seen whole by the game thread.
-static int patch_call(uintptr_t at, void* hook)
+// Swap one verified `call target` for a call to `hook`. The rel32 lies inside one
+// cache line at every site used, so the locked exchange is seen whole by the game thread.
+static int patch_call(uintptr_t at, uintptr_t target, void* hook)
 {
-    LONG want = (LONG)(VA_SAVELIST - (at + 5)), mine = (LONG)((uintptr_t)hook - (at + 5));
+    LONG want = (LONG)(target - (at + 5)), mine = (LONG)((uintptr_t)hook - (at + 5));
     DWORD old = 0, tmp = 0;
     if (!range_readable((void*)at, 5) || *(unsigned char*)at != 0xE8) return 0;
     if (*(LONG*)(at + 1) == mine) return 1;
@@ -1204,11 +1206,125 @@ static void savelist_install(void)
             logf_("savelist: registry lookup or stream destructor not recognised - leak fix off");
     }
     if (!g_leakFixOn && !cfg_savelist_trace) return;
-    a = patch_call(VA_SAVELIST_CALL_A, (void*)savelist_startup);
-    b = patch_call(VA_SAVELIST_CALL_B, (void*)savelist_menu);
+    a = patch_call(VA_SAVELIST_CALL_A, VA_SAVELIST, (void*)savelist_startup);
+    b = patch_call(VA_SAVELIST_CALL_B, VA_SAVELIST, (void*)savelist_menu);
     logf_("savelist: startup call %s, menu call %s; leak fix=%d trace=%d",
           a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_leakFixOn, cfg_savelist_trace);
     if (cfg_savelist_trace) log_mem("at install");
+}
+
+// ---- skip the startup videos ---------------------------------------------
+// [startup] skip_intro=1: start at the main menu, without the logos and the intro movie,
+// by doing what Esc does on each startup movie. See docs/fixes/skip-intro.md.
+// 009B581C (game start, once) builds the movie list from globals\video_start.csv with
+// 009A2190 (EAX = player object; list +0x9C, count +0xA0) and ticks the player 10 times.
+// The player's tick 009A211D (vtable 00ECAF04 + 0x74) plays entry [+0xB0] while no movie
+// plays (+0xAD == 0) and, after the last one, sets +0xAC and calls "movies done". Esc or a
+// mouse/pad button (009A1FC6) and the Flash "MovieStopped" event (009A1F92) both end the
+// current movie through 009A1F2E (ESI = player). Calling "done" from the build itself
+// crashed the game silently (2026-10-30: it ran inside 009B581C's ticks, before the GUI).
+// So the build call at 009B588F only arms the skip; the wrapped tick calls 009A1F2E once
+// a startup movie has played for STARTVIDEO_MIN_MS of real time, until +0xAC is set.
+#define VA_STARTVIDEO_LIST  0x009A2190u   // builds the startup list, EAX = player object
+#define VA_STARTVIDEO_CALL  0x009B588Fu   // E8 rel32 in 009B581C (after mov eax,esi)
+#define VA_STARTVIDEO_TICK  0x009A211Du   // thiscall void Tick(float), ret 4
+#define VA_STARTVIDEO_STOP  0x009A1F2Eu   // ends the current movie, ESI = player
+#define VA_STARTVIDEO_VSLOT 0x00ECAF78u   // player vtable 00ECAF04 + 0x74 = Tick
+#define STARTVIDEO_MIN_MS   300
+#define STARTVIDEO_MAX_MS   60000          // give up if the sequence never finishes
+
+typedef void (__fastcall *StartTick_t)(void* self, void* edx, float dt);
+
+static void* volatile g_skipPlayer;        // set by the build hook, cleared when done
+static DWORD g_skipArmedAt, g_skipPlayAt;
+static volatile LONG g_skipStops, g_skipDone;
+
+static void __stdcall startvideo_after(void* player)
+{
+    g_skipArmedAt = GetTickCount();
+    g_skipPlayAt = 0;
+    InterlockedExchangePointer((void* volatile*)&g_skipPlayer, player);
+    logf_("startup: movie list built (%lu entries), skip armed", *(DWORD*)((unsigned char*)player + 0xA0));
+}
+
+// Same convention as 009A2190 (object in EAX, no stack arguments, plain ret).
+__declspec(naked) static void startvideo_build_hook(void)
+{
+    __asm {
+        push eax                       ; player object, also the argument below
+        mov ecx, VA_STARTVIDEO_LIST
+        call ecx
+        call startvideo_after          ; stdcall, pops the object
+        ret
+    }
+}
+
+#pragma warning(push)
+#pragma warning(disable: 4100)   // player is read by the asm
+__declspec(naked) static void __stdcall startvideo_stop(void* player)
+{
+    __asm {
+        push esi
+        mov esi, [esp + 8]
+        mov eax, VA_STARTVIDEO_STOP
+        call eax
+        pop esi
+        ret 4
+    }
+}
+#pragma warning(pop)
+
+static void __fastcall startvideo_tick(void* self, void* edx, float dt)
+{
+    unsigned char* p = (unsigned char*)self;
+    ((StartTick_t)(uintptr_t)VA_STARTVIDEO_TICK)(self, edx, dt);
+    if (self != g_skipPlayer) return;
+    if (p[0xAC] || GetTickCount() - g_skipArmedAt > STARTVIDEO_MAX_MS) {
+        g_skipPlayer = NULL;
+        InterlockedExchange(&g_skipDone, p[0xAC] ? 1 : 2);
+        return;
+    }
+    if (!p[0xAD]) { g_skipPlayAt = 0; return; }
+    if (!g_skipPlayAt) { g_skipPlayAt = GetTickCount(); return; }
+    if (GetTickCount() - g_skipPlayAt < STARTVIDEO_MIN_MS) return;
+    g_skipPlayAt = 0;
+    InterlockedIncrement(&g_skipStops);
+    logf_("startup: stopping startup movie %lu of %lu", *(DWORD*)(p + 0xB0), *(DWORD*)(p + 0xA0));
+    startvideo_stop(self);
+}
+
+// The code is SteamStub-encrypted until the stub has run, and 009B581C runs a few
+// seconds later, so poll closely from DllMain's thread start instead of the worker's
+// 1.5 s delay.
+static DWORD WINAPI startvideo_thread(LPVOID param)
+{
+    DWORD t0 = GetTickCount(), old = 0, tmp = 0;
+    (void)param;
+    while (g_running && GetTickCount() - t0 < 120000) {
+        if (code_matches(VA_STARTVIDEO_CALL - 2, "8b c6 e8 fc c8 fe ff")) {
+            if (!code_matches(VA_STARTVIDEO_LIST, "55 8b ec 83 e4 f8 83 ec 34 53 56 05 9c 00 00 00") ||
+                !code_matches(VA_STARTVIDEO_TICK + 0x1F, "8b 86 b0 00 00 00 8b 8e a0 00 00 00 3b c1 72 1b") ||
+                !code_matches(VA_STARTVIDEO_STOP, "55 8b ec 83 e4 f8 83 ec 10 53 33 db 57 68 1c 38") ||
+                read_ptr((void*)(uintptr_t)VA_STARTVIDEO_VSLOT) != (void*)(uintptr_t)VA_STARTVIDEO_TICK) {
+                logf_("startup: movie code not recognised - skip_intro off");
+                return 0;
+            }
+            if (!VirtualProtect((void*)(uintptr_t)VA_STARTVIDEO_VSLOT, 4, PAGE_READWRITE, &old)) {
+                logf_("startup: movie tick slot not writable - skip_intro off");
+                return 0;
+            }
+            InterlockedExchangePointer((void* volatile*)(uintptr_t)VA_STARTVIDEO_VSLOT, (void*)startvideo_tick);
+            VirtualProtect((void*)(uintptr_t)VA_STARTVIDEO_VSLOT, 4, old, &tmp);
+            if (patch_call(VA_STARTVIDEO_CALL, VA_STARTVIDEO_LIST, (void*)startvideo_build_hook))
+                logf_("startup: movie list and tick hooked after %lu ms", GetTickCount() - t0);
+            else
+                logf_("startup: movie list call could not be patched - skip_intro off");
+            return 0;
+        }
+        Sleep(1);
+    }
+    logf_("startup: movie list call never appeared - skip_intro off");
+    return 0;
 }
 
 // Replace one import slot only if it still holds the expected export.
@@ -1308,6 +1424,12 @@ static DWORD WINAPI worker(LPVOID param)
     }
     osd_init();
     while (g_running) {
+        static int skip_logged;
+        if (!skip_logged && g_skipDone) {
+            skip_logged = 1;
+            logf_("startup: %ld startup movie(s) stopped, %s", g_skipStops,
+                  g_skipDone == 1 ? "main menu reached" : "gave up after 60 s");
+        }
         osd_pump();
         apply_lod();
         if (cfg_hotkeys) poll_hotkeys();
@@ -1466,6 +1588,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("distance config: experimental=%d visibility=%.2fx shadow=%.2fx",
               cfg_distance, cfg_visibility, cfg_shadow_range);
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
+        logf_("startup: skip_intro=%d", cfg_skip_intro);
         if (cfg_preset_mode)
             logf_("presets: startup=%s, cycle modifiers=%d VK=%02X (session only)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
@@ -1473,6 +1596,10 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             g_running = 1;
             HANDLE h = CreateThread(NULL, 0, worker, NULL, 0, NULL);
             if (h) CloseHandle(h); else logf_("CreateThread failed");
+            if (cfg_skip_intro) {
+                h = CreateThread(NULL, 0, startvideo_thread, NULL, 0, NULL);
+                if (h) CloseHandle(h); else logf_("startup: CreateThread failed - skip_intro off");
+            }
         }
     }
     else if (reason == DLL_PROCESS_DETACH) {

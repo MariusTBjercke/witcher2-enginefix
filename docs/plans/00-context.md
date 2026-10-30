@@ -34,10 +34,22 @@ RTX 5070 Ti (16 GB), Intel Core Ultra 7 265KF, 64 GB RAM, 3840x2160 @ 74 Hz.
 * Extreme Vegetation Rendering Distance — 300 meshes
 * Witcher 2 HD UI AI Upscale — 3 899 files under `globals\gui`
 * Intro logo removal — `globals\video_start.csv`
+* No Heartbeat for Cat Potion (Nexus 691) — **replaces** `sounds\gui_global.fsb`
+  (1 545 216 → 1 432 352 bytes), the cat-potion heartbeat cut out of the FMOD bank.
+  No other mod touches `sounds\`, and the file is independent of `base_scripts.dzip`,
+  so it does not interact with anything else installed.
+
+* `bin\witcher2_enginefix.ini` has `[startup] skip_intro=1` (owner's choice; shipped default 0).
+* Our own opt-in ScriptPatches, all three features (BookMarker, Continue, PauseQuit;
+  installed 2026-10-30 for in-game tests) — patch the Mersey `base_scripts.dzip` and the
+  HD UI `ui_trade.swf`/`ui_storage.swf` in place; originals in
+  `<game>\Witcher2EngineFix_Optional\ScriptPatches\backup\`, `Uninstall.bat` there restores
+  them. See `docs/fixes/menu-buttons.md`, `docs/fixes/shop-book-read-marker.md`.
 
 Backups and a precise revert path: `<game>\_backup_premods\`
-(`added_files.txt`, `restore-original.ps1`). Steam's *Verify integrity* restores the
-one replaced file that has no local backup (`globals\video_start.csv`).
+(`added_files.txt`, `restore-original.ps1`, and `replaced\` which mirrors the game
+folder for every official file a mod overwrote). Steam's *Verify integrity* restores
+the one replaced file that has no local backup (`globals\video_start.csv`).
 
 **This DLL** — `<game>\bin\dinput8.dll` + `witcher2_enginefix.ini`, log at
 `<game>\bin\witcher2_enginefix.log`.

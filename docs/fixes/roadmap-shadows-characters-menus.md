@@ -67,6 +67,26 @@ So the options are:
 | Script edit via REDkit | unpack/patch `base_scripts.dzip` with the official editor, add the button in the menu script, repack | REDkit version must match 3.5.0.26; touches the modded `base_scripts.dzip` we already replaced |
 | Native GUI hook in the DLL | find the menu panel construction, inject a control, rewire the layout | large RE effort, high regression risk on a UI that was never meant to be extended |
 
+**Update 2026-10-30: a script path exists after all**, now implemented, see
+`docs/fixes/menu-buttons.md`. The script patcher
+(`docs/fixes/shop-book-read-marker.md`) can rewrite one entry of the installed
+`base_scripts.dzip` in place, and the game compiles that archive at startup. Both menus are
+`CGuiMainMenu` (`game\gui\guimainmenu.ws`, `ui_mainmenu.swf`), filled from script:
+`FillMainMenu` / `FillMainInGame` call `InsertMenuButton( items, id, text, description )`,
+clicks go to `InputMainMenu` / `InputMainInGame` by button id (`EMenuButtons`). So:
+
+* Continue: `saves` (`array< SGuiGameSaveInfo >`) is already filled when the main menu opens:
+  `009A515C` calls the list builder `009A49B9` and then treats `saves[0]` as the newest save
+  (it picks the menu background from its world). A button before New Game whose handler does
+  what `InputLoadGame( 0 )` does (`ClosePanel(); theGame.ResetTutorialSettings(); LoadGame( 0 );`,
+  refusing a dead-player save) needs no extra list build. The save's `displayName` can be the
+  button description. No localized "Continue" key known yet.
+* Exit from the pause menu: `MM_BTN_QUIT` / `QuitApplication()` exist but are only offered by
+  `FillMainMenu`; `FillMainInGame` ends with "Exit current game" (`theGame.ExitGame()`). Adding
+  the Quit button there reuses the localized `menuQuit` text. Whether `QuitApplication()` with
+  a world loaded shuts down cleanly is unknown (see the W1 precedent below); fallback: exit to
+  the main menu first and quit when it opens.
+
 **Important precedent from W1:** quitting with an area loaded crashed the engine during
 shutdown (`CAurObject` destructor dispatching a `Dying` event into a dead script
 system). W1 shipped the pause-menu exit anyway, but it is the reason the game itself
