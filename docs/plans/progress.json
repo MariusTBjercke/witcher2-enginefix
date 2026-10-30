@@ -102,7 +102,7 @@
         "tools/script-patches/check_texts.py"
       ],
       "verify": "Pause menu QUIT: the confirmation reacts to hover without a first click (menu closes first); No brings the pause menu back; Yes quits. Continue unchanged (confirmed).",
-      "evidence": "docs/fixes/menu-buttons.md - Continue and pause-menu Quit confirmed by the owner 2026-10-30; no witcher2.exe fault afterwards. The later focus change (menu closes before the confirmation) is shipped in 0.4.0 but not separately reported on."
+      "evidence": "docs/fixes/menu-buttons.md - Continue and pause-menu Quit confirmed 2026-10-30; no witcher2.exe fault afterwards. Known issue (2026-10-31): the Quit confirmation still needs one click before it reacts to hover; left for now."
     },
     {
       "id": "interior-maps",

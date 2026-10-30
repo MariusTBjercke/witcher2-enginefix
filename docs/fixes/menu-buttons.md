@@ -83,7 +83,11 @@ button says "to the main menu" in every language, so the two buttons cannot be c
   `hud.swf` (`setConfirmationBox` on `theHud.m_hud.AS_hud`) and only reacted to hover after one
   click (owner, 2026-10-30). Now `W2EF_ConfirmQuit` calls `ClosePanel()` first, like the game's
   own boxes that open over the HUD, and No calls `theHud.ShowMainMenu()` to bring the pause
-  menu back. Shipped in 0.4.0; not separately reported on in game.
+  menu back. Shipped in 0.4.0; owner tested 2026-10-31: **still needs one click** before the
+  box reacts to hover. Known issue, left for now (minor). Likely cause: the menu's close (and
+  its `EnableInput`) lands a frame after the box opened and turns the HUD's mouse input off
+  again. A fix would open the box one frame later, which needs a timer on an entity (e.g. a
+  player timer, i.e. patching `player.ws` too) and some in-game iterations.
 * Risk carried over from W1: there, quitting with an area loaded crashed during shutdown (an
   invisible fault, but it filled the Event Log). Whether `QuitApplication()` with a world loaded
   is clean in TW2 is part of the in-game test: after quitting this way, Windows Event Log
