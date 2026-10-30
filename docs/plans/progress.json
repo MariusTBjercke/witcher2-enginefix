@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-29T23:00:00+01:00",
+  "updated": "2026-10-30T12:55:00+01:00",
   "owner": "dsh",
   "items": [
     {
@@ -111,6 +111,20 @@
       ],
       "verify": "In an affected interior (e.g. Temple) press M: map visible, pins in place, slider zooms in when moved inward.",
       "evidence": "docs/fixes/interior-maps.md#verification - owner confirmed in the Temple area 2026-10-29; generator output byte-identical to the tested files."
+    },
+    {
+      "id": "save-bloat",
+      "title": "Many saves: save-list cost and resident previews (no save limit)",
+      "status": "in_progress",
+      "owner": "unassigned",
+      "files": [
+        "docs/fixes/save-bloat.md",
+        "src/enginefix.c",
+        "dist-files/witcher2_enginefix.ini",
+        "tools/savelisttest/"
+      ],
+      "verify": "Start test with fix_list_leak=1 and savelist_trace=1: open the Load menu twice from the main menu and twice in game; builds 2+ log 'leaked streams freed 60' and commit grows ~0 MB per open (was ~50 MB with 60 saves).",
+      "evidence": "docs/fixes/save-bloat.md#confirmed-in-game-run-2-2026-10-30-1247 - leak fix confirmed: repeat Load-menu opens 0-1 MB instead of ~50 MB with 60 saves. Open: ~1 s per build not in Steam reads; ~1.7 MB per new preview held for the session."
     }
   ]
 }

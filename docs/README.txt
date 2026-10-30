@@ -11,6 +11,8 @@ never modified.
 What it does:
 - Save previews: new saves show their screenshot in the Load menu again
   instead of a purple/blue gradient. Old saves cannot get their picture back.
+- Save list leak: every Load/Save menu open leaked ~0.9 MB per save until
+  you quit (hundreds of MB with many saves). Fixed; no save is deleted.
 - Graphics presets: Ctrl+F10 cycles baseline / high / ultra / extreme. Each
   level sets mesh LOD, foliage distance, mesh visibility and mesh-shadow
   distance together, shown on screen. Starts at extreme.
@@ -26,11 +28,12 @@ Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
   ...\steamapps\common\the witcher 2\bin\dinput8.dll
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix 0.2.0 loaded".
+"witcher2_enginefix 0.3.0 loaded".
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
   [saves]   fix_thumbnails=1     0 turns the save-preview fix off
+  [saves]   fix_list_leak=1      0 turns the save-list leak fix off
   [general] enabled=1            0 turns everything off
 
 Uninstall: delete bin\dinput8.dll, bin\witcher2_enginefix.ini,

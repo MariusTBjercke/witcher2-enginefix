@@ -1,0 +1,41 @@
+12:37:04.415 witcher2_enginefix 0.2.0 loaded (image base 0x00400000)
+12:37:04.415 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+12:37:04.415 distance config: experimental=1 visibility=3.00x shadow=3.00x
+12:37:04.415 saves: fix_thumbnails=1 save_trace=0
+12:37:04.415 presets: startup=extreme, cycle modifiers=1 VK=79 (session only)
+12:37:05.935 osd: window ready (font 34 px)
+12:37:05.936 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
+12:37:05.936 osd: Graphics: extreme  (LOD only)
+12:37:05.940 lod enforced: mesh=8.000 foliage=5.000
+12:37:05.941 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=3.00x shadow=3.00x
+12:37:05.941 osd: Graphics: extreme  (4/4)
+12:37:05.941 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+12:37:05.941 thumbnail: menu image registry hooked (QuickSave preview refresh)
+12:37:05.941 savelist: trace on, startup call hooked, menu call hooked
+12:37:05.945 savelist: at install private=209 MB commit=377 reserve=100 free=3618 largest_free=2046 MB, previews held=0
+12:37:05.945 saves: ISteamRemoteStorage 117D0BE8 FileWrite hooked; thumbnail fix=1
+12:37:22.202 input: CreateDevice hook installed
+12:37:22.204 input: keyboard state filter installed
+12:37:34.100 savelist: build 1 (startup) 4547 ms; Steam reads 60 .sav + 60 other, 89 MB in 173 ms; previews 60 (60 new, 60 held this session)
+12:37:34.100 savelist:   private 879 -> 979 MB, commit 1232 -> 1332 MB, largest free 2044 -> 2044 MB
+12:37:56.188 savelist: build 2 (menu) 1187 ms; Steam reads 60 .sav + 60 other, 89 MB in 185 ms; previews 60 (0 new, 60 held this session)
+12:37:56.188 savelist:   private 1021 -> 1071 MB, commit 1386 -> 1436 MB, largest free 2044 -> 2044 MB
+12:38:04.177 savelist: build 3 (menu) 1125 ms; Steam reads 60 .sav + 60 other, 89 MB in 170 ms; previews 60 (0 new, 60 held this session)
+12:38:04.177 savelist:   private 1055 -> 1105 MB, commit 1426 -> 1476 MB, largest free 2044 -> 2044 MB
+12:38:05.997 savelist: periodic private=1105 MB commit=1479 reserve=277 free=2339 largest_free=2044 MB, previews held=60
+12:38:16.579 distance stats: mesh=128754 shadow=99444 baseline_reject=18846 admitted=18068 (3.00x/3.00x)
+12:38:21.627 distance stats: mesh=504023 shadow=386617 baseline_reject=90299 admitted=82406 (3.00x/3.00x)
+12:38:26.680 distance stats: mesh=400196 shadow=284403 baseline_reject=71619 admitted=64951 (3.00x/3.00x)
+12:38:27.044 savelist: build 4 (menu) 1156 ms; Steam reads 60 .sav + 60 other, 89 MB in 185 ms; previews 60 (0 new, 60 held this session)
+12:38:27.044 savelist:   private 1560 -> 1610 MB, commit 1915 -> 1965 MB, largest free 1800 -> 1800 MB
+12:38:31.733 distance stats: mesh=500544 shadow=357139 baseline_reject=89401 admitted=81026 (3.00x/3.00x)
+12:38:36.786 distance stats: mesh=362705 shadow=291208 baseline_reject=58184 admitted=51660 (3.00x/3.00x)
+12:38:37.186 savelist: build 5 (menu) 1156 ms; Steam reads 60 .sav + 60 other, 89 MB in 218 ms; previews 60 (0 new, 60 held this session)
+12:38:37.186 savelist:   private 1611 -> 1661 MB, commit 1981 -> 2031 MB, largest free 1800 -> 1771 MB
+12:38:41.839 distance stats: mesh=439678 shadow=354562 baseline_reject=68670 admitted=61168 (3.00x/3.00x)
+12:38:45.023 input: CreateDevice hook installed
+12:38:45.024 input: keyboard state filter installed
+12:38:46.890 distance stats: mesh=183080 shadow=140184 baseline_reject=23075 admitted=22717 (3.00x/3.00x)
+12:38:47.342 savelist: build 6 (startup) 1172 ms; Steam reads 60 .sav + 60 other, 89 MB in 217 ms; previews 60 (0 new, 60 held this session)
+12:38:47.342 savelist:   private 1426 -> 1476 MB, commit 1778 -> 1828 MB, largest free 1771 -> 1771 MB
+12:38:49.027 unloaded

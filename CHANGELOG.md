@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- Save list memory leak: every time the Load/Save menu built its list, the game read each save's preview picture from Steam (~0.9 MB) and, when the menu already held that picture, dropped it without freeing it. With 60 saves every menu open cost ~50 MB for the rest of the session; with a few hundred saves it is a few hundred MB per open in a 32-bit game, a likely cause of the crashes players report once saves pile up. The DLL now frees that copy with the game's own destructor (list builder `009A49B9`, AddImage early return `00B2867F`). Confirmed in game: repeat opens 0-1 MB instead of ~50 MB. No save is deleted and the number of saves is not limited. `[saves] fix_list_leak=0` turns it off. See `docs/fixes/save-bloat.md`.
+- Diagnostics: `[diagnostics] savelist_trace=1` logs each save-list build (time, Steam reads, previews, process memory before/after) and a memory line every 60 s.
+
 ## 0.2.0
 
 - Interior maps: the map screen (M) no longer shows a black local map with one huge pin in 25 interior map entries: temples, inns, Loredo's house, towers and other houses. The game's `globals\map_scales.csv` has no big map for these areas, so the panel loaded an empty image name. The zip now ships a filled-in `map_scales.csv` and 2048x2048 upscales of each area's own minimap as loose files under `CookedPC\globals\`. Upscaled because the map panel's zoom runs backwards on images smaller than the panel. Data only; the DLL is unchanged apart from its version. Generated from the game's own `pack0.dzip` by `tools\build-interior-maps.py`. See `docs/fixes/interior-maps.md`.

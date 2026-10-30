@@ -19,6 +19,8 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#define PSAPI_VERSION 2   // GetProcessMemoryInfo from kernel32 (K32...), no psapi.lib
+#include <psapi.h>
 #include <objbase.h>   // LPUNKNOWN / REFIID for the DirectInput8Create signature
 #include <stdio.h>
 #include <stdarg.h>
@@ -28,7 +30,7 @@
 #include <wchar.h>
 #include "distance_patch.h"
 
-#define ENGINEFIX_VERSION   "0.2.0"   // keep in sync with CHANGELOG.md
+#define ENGINEFIX_VERSION   "0.3.0"   // keep in sync with CHANGELOG.md
 #define IMAGE_BASE          0x00400000u
 #define RVA_SETTINGS        0x02180E28u   // 0x02580E28 - IMAGE_BASE
 #define OFF_MESH_DOWNSCALE  0x34
@@ -97,6 +99,8 @@ static int cfg_preset_mode, g_preset = PRESET_COUNT - 1;
 static int cfg_vk_preset = VK_F10, cfg_mod_preset = EF_MOD_CTRL;
 static int cfg_save_trace;      // [diagnostics] save_trace: log the save-thumbnail path
 static int cfg_save_thumbs = 1; // [saves] fix_thumbnails: write the late save preview
+static int cfg_savelist_trace;  // [diagnostics] savelist_trace: time/memory of the save list
+static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the save list leaks
 
 // ---- logging ------------------------------------------------------------
 
@@ -288,6 +292,8 @@ static void load_config(void)
 
     cfg_save_trace = ini_int("diagnostics", "save_trace", 0);
     cfg_save_thumbs = ini_int("saves", "fix_thumbnails", 1);
+    cfg_savelist_trace = ini_int("diagnostics", "savelist_trace", 0);
+    cfg_list_leak = ini_int("saves", "fix_list_leak", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -766,12 +772,52 @@ static void thumb_capture(const void* data, DWORD size)
 #define VA_IMAGE_KEY       0x00B30E9Fu   // stdcall key = ImageKey(String* name)
 #define STALE_MAX          32
 
+// The save list leak ([saves] fix_list_leak=1). For every save 009A49B9 opens the
+// preview through Steam (whole BMP in memory, reader vtable 00F02C2C) and passes the
+// stream to AddImage, then overwrites the pointer (EDI, 009A4B51..4BD8). AddImage only
+// takes the stream when the name is new; for a name it already holds it returns at
+// 00B2867F and the ~0.9 MB stream is never freed. Measured: +50 MB per menu open with
+// 60 saves and no new previews. Inside the list builder we do the same lookup first
+// and, when the name is held, delete the stream with its own destructor (slot 0, 1).
+#define VA_MAP_FIND        0x004A4A03u   // bool Find(EAX = map, key*, out*), ret 8
+#define VA_STEAM_STREAM    0x00F02C2Cu   // vtable of the provider's read stream (0052ADFF)
+#define VA_STREAM_DTOR     0x0052AFAAu   // its scalar deleting destructor, slot 0
+
 typedef void (__fastcall *AddImage_t)(void* self, void* edx, void* name, void* stream);
 typedef void (__fastcall *RemoveImage_t)(void* self, void* edx, unsigned key);
 typedef unsigned (__stdcall *ImageKey_t)(void* name);
 
 static AddImage_t g_origAddImage;
 static wchar_t    g_stale[STALE_MAX][64];   // previews rewritten since the menu last read them
+
+// Save-list counters ([diagnostics] savelist_trace), filled by the hooks while the list
+// builder 009A49B9 runs on the game thread. See "save list trace" below.
+#define SEEN_MAX 4096
+static volatile LONG g_listDepth;
+static LONG     g_listImages, g_listNewImages, g_listReadsSav, g_listReadsOther, g_listFreed;
+static LONG     g_freedTotal;
+static int      g_leakFixOn;    // set once the lookup and the destructor are recognised
+static LONGLONG g_listBytes;
+static DWORD    g_listReadMs;
+static unsigned g_seen[SEEN_MAX];   // name hashes AddImage has seen this session
+static int      g_seenCount;
+
+static unsigned name_hash(const wchar_t* s)
+{
+    unsigned h = 2166136261u;   // FNV-1a, case-folded
+    for (; *s; s++) h = (h ^ (unsigned)towlower(*s)) * 16777619u;
+    return h ? h : 1;
+}
+
+static void savelist_note_image(const wchar_t* text)
+{
+    unsigned h = name_hash(text);
+    int i;
+    g_listImages++;
+    for (i = 0; i < g_seenCount; i++) if (g_seen[i] == h) return;
+    if (g_seenCount < SEEN_MAX) g_seen[g_seenCount++] = h;
+    g_listNewImages++;
+}
 
 static void thumb_mark_stale(const char* bmp)
 {
@@ -784,6 +830,28 @@ static void thumb_mark_stale(const char* bmp)
     wcscpy_s(g_stale[next], 64, wide);
     next = (next + 1) % STALE_MAX;
     LeaveCriticalSection(&g_thumbLock);
+}
+
+// AddImage's own check (00B28663..2867F): key from the name, Find in the map at +4.
+static int registry_holds(void* self, void* name)
+{
+    unsigned key, slot = 0;
+    unsigned char found = 0;
+    void* map = (char*)self + 4;
+    uintptr_t find = VA_MAP_FIND;
+    __try {
+        key = ((ImageKey_t)(uintptr_t)VA_IMAGE_KEY)(name);
+        __asm {
+            lea  ecx, slot
+            push ecx
+            lea  ecx, key
+            push ecx
+            mov  eax, map
+            call find
+            mov  found, al
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { found = 0; }
+    return found != 0;
 }
 
 static void __fastcall hook_AddImage(void* self, void* edx, void* name, void* stream)
@@ -800,11 +868,21 @@ static void __fastcall hook_AddImage(void* self, void* edx, void* name, void* st
             } __except (EXCEPTION_EXECUTE_HANDLER) { stale = 0; break; }
         }
         LeaveCriticalSection(&g_thumbLock);
+        if (g_listDepth) __try { savelist_note_image(text); } __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
     if (stale) {
         unsigned key = ((ImageKey_t)(uintptr_t)VA_IMAGE_KEY)(name);
         ((RemoveImage_t)(uintptr_t)VA_IMAGES_REMOVE)(self, NULL, key);
         logf_("thumbnail: menu reloads %ls", text);
+    }
+    if (g_leakFixOn && g_listDepth && stream && !stale && registry_holds(self, name)) {
+        __try {
+            if (*(void**)stream == (void*)(uintptr_t)VA_STEAM_STREAM) {
+                ((void (__fastcall*)(void*, void*, int))(uintptr_t)VA_STREAM_DTOR)(stream, NULL, 1);
+                g_listFreed++; g_freedTotal++;
+                return;   // the original would return here too, without the stream
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
     g_origAddImage(self, edx, name, stream);
 }
@@ -831,7 +909,7 @@ static void hook_image_registry(void)
         !code_matches(VA_IMAGES_ADD, "55 8b ec 51 53 56 57 ff 75 08 8b d9") ||
         !code_matches(VA_IMAGES_REMOVE, "55 8b ec 83 ec 10 83 65 fc 00 56 8d") ||
         !code_matches(VA_IMAGE_KEY, "55 8b ec 83 ec 18 53 56 57 33 db 68")) {
-        logf_("thumbnail: menu image registry not recognised - QuickSave preview refresh off");
+        logf_("thumbnail: menu image registry not recognised - QuickSave preview refresh and list leak fix off");
         return;
     }
     if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return;
@@ -994,6 +1072,145 @@ static void thumb_tick(void)
     free(data);
 }
 
+// ---- save list trace ----------------------------------------------------
+// [diagnostics] savelist_trace=1: measure what building the save list costs, without
+// changing it. 009A49B9 builds the list at game start (009A515C, call 009A5175) and
+// whenever the GUI asks for it (009A5245, call 009A524F). Per save it reads the whole
+// .sav through Steam (GetFileSize + FileRead, slot 1, via 0052ADFF) and hands the
+// preview BMP to the image registry, which keeps it for the session (AddImage, see
+// above). Both call sites are redirected to a wrapper that logs time, Steam reads,
+// previews added (new this session or already held) and process memory before/after.
+// A memory line is also logged every 60 s. See docs/fixes/save-bloat.md.
+#define VA_SAVELIST        0x009A49B9u   // stdcall void BuildSaveList(panel)
+#define VA_SAVELIST_CALL_A 0x009A5175u   // E8 rel32, startup / main menu
+#define VA_SAVELIST_CALL_B 0x009A524Fu   // E8 rel32, GUI request
+
+// ISteamRemoteStorage004 slot 1, thiscall: int32 FileRead(const char*, void*, int32).
+// Shape from 0052AEB6..AECA: ECX = interface, three pushes, callee cleans.
+typedef int (__fastcall *FileRead_t)(void* self, void* edx, const char* name, void* data, int size);
+typedef void (__stdcall *SaveList_t)(void* panel);
+
+static FileRead_t g_origFileRead;
+
+static int __fastcall hook_FileRead(void* self, void* edx, const char* name, void* data, int size)
+{
+    DWORD t0 = g_listDepth ? GetTickCount() : 0;
+    int got = g_origFileRead(self, edx, name, data, size);
+    if (g_listDepth) {
+        g_listReadMs += GetTickCount() - t0;
+        if (got > 0) g_listBytes += got;
+        if (name && ends_with(name, ".sav")) g_listReadsSav++; else g_listReadsOther++;
+    }
+    return got;
+}
+
+typedef struct mem_view { DWORD private_mb, commit_mb, reserve_mb, free_mb, largest_free_mb; } mem_view;
+
+// Private bytes plus a walk of the 32-bit address space: an image that cannot be
+// allocated fails on the largest free block, not on the total.
+static void mem_snapshot(mem_view* m)
+{
+    PROCESS_MEMORY_COUNTERS_EX pmc;
+    MEMORY_BASIC_INFORMATION mbi;
+    SIZE_T commit = 0, reserve = 0, freeb = 0, largest = 0;
+    uintptr_t at = 0x10000;
+    memset(m, 0, sizeof *m);
+    pmc.cb = sizeof pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof pmc))
+        m->private_mb = (DWORD)(pmc.PrivateUsage >> 20);
+    while (VirtualQuery((void*)at, &mbi, sizeof mbi) == sizeof mbi) {
+        if (mbi.State == MEM_COMMIT) commit += mbi.RegionSize;
+        else if (mbi.State == MEM_RESERVE) reserve += mbi.RegionSize;
+        else { freeb += mbi.RegionSize; if (mbi.RegionSize > largest) largest = mbi.RegionSize; }
+        if ((uintptr_t)mbi.BaseAddress + mbi.RegionSize <= at) break;
+        at = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
+    }
+    m->commit_mb = (DWORD)(commit >> 20);
+    m->reserve_mb = (DWORD)(reserve >> 20);
+    m->free_mb = (DWORD)(freeb >> 20);
+    m->largest_free_mb = (DWORD)(largest >> 20);
+}
+
+static void log_mem(const char* what)
+{
+    mem_view m;
+    mem_snapshot(&m);
+    logf_("savelist: %s private=%lu MB commit=%lu reserve=%lu free=%lu largest_free=%lu MB, previews held=%d",
+          what, m.private_mb, m.commit_mb, m.reserve_mb, m.free_mb, m.largest_free_mb, g_seenCount);
+}
+
+static void savelist_run(void* panel, const char* who)
+{
+    static int builds;
+    mem_view a, b;
+    DWORD t0;
+    if (!cfg_savelist_trace) {
+        InterlockedIncrement(&g_listDepth);
+        ((SaveList_t)(uintptr_t)VA_SAVELIST)(panel);
+        InterlockedDecrement(&g_listDepth);
+        return;
+    }
+    mem_snapshot(&a);
+    g_listImages = g_listNewImages = g_listReadsSav = g_listReadsOther = g_listFreed = 0;
+    g_listBytes = 0; g_listReadMs = 0;
+    t0 = GetTickCount();
+    InterlockedIncrement(&g_listDepth);
+    ((SaveList_t)(uintptr_t)VA_SAVELIST)(panel);
+    InterlockedDecrement(&g_listDepth);
+    t0 = GetTickCount() - t0;
+    mem_snapshot(&b);
+    logf_("savelist: build %d (%s) %lu ms; Steam reads %ld .sav + %ld other, %lu MB in %lu ms; "
+          "previews %ld (%ld new, %d held this session), leaked streams freed %ld",
+          ++builds, who, t0, g_listReadsSav, g_listReadsOther, (DWORD)(g_listBytes >> 20), g_listReadMs,
+          g_listImages, g_listNewImages, g_seenCount, g_listFreed);
+    logf_("savelist:   private %lu -> %lu MB, commit %lu -> %lu MB, largest free %lu -> %lu MB",
+          a.private_mb, b.private_mb, a.commit_mb, b.commit_mb, a.largest_free_mb, b.largest_free_mb);
+}
+
+static void __stdcall savelist_startup(void* panel) { savelist_run(panel, "startup"); }
+static void __stdcall savelist_menu(void* panel)    { savelist_run(panel, "menu"); }
+
+// Swap one verified `call 009A49B9` for a call to `hook`. The rel32 lies inside one
+// cache line at both sites, so the locked exchange is seen whole by the game thread.
+static int patch_call(uintptr_t at, void* hook)
+{
+    LONG want = (LONG)(VA_SAVELIST - (at + 5)), mine = (LONG)((uintptr_t)hook - (at + 5));
+    DWORD old = 0, tmp = 0;
+    if (!range_readable((void*)at, 5) || *(unsigned char*)at != 0xE8) return 0;
+    if (*(LONG*)(at + 1) == mine) return 1;
+    if (*(LONG*)(at + 1) != want) return 0;
+    if (!VirtualProtect((void*)at, 5, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    InterlockedCompareExchange((volatile LONG*)(at + 1), mine, want);
+    VirtualProtect((void*)at, 5, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), (void*)at, 5);
+    return *(LONG*)(at + 1) == mine;
+}
+
+// Needs the image registry hook (g_origAddImage) for the leak fix.
+static void savelist_install(void)
+{
+    int a, b;
+    if (!code_matches(VA_SAVELIST, "55 8b ec 83 e4 f8 81 ec ec 01 00 00")) {
+        logf_("savelist: list builder not recognised - leak fix and trace off");
+        return;
+    }
+    if (cfg_list_leak) {
+        if (g_origAddImage &&
+            code_matches(VA_MAP_FIND, "55 8b ec 83 ec 0c 56 ff 75 08 8b f0") &&
+            code_matches(VA_STREAM_DTOR, "55 8b ec 56 8b f1 8b 4e 20 c7 06 2c 2c f0 00") &&
+            read_ptr((void*)(uintptr_t)VA_STEAM_STREAM) == (void*)(uintptr_t)VA_STREAM_DTOR)
+            g_leakFixOn = 1;
+        else
+            logf_("savelist: registry lookup or stream destructor not recognised - leak fix off");
+    }
+    if (!g_leakFixOn && !cfg_savelist_trace) return;
+    a = patch_call(VA_SAVELIST_CALL_A, (void*)savelist_startup);
+    b = patch_call(VA_SAVELIST_CALL_B, (void*)savelist_menu);
+    logf_("savelist: startup call %s, menu call %s; leak fix=%d trace=%d",
+          a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_leakFixOn, cfg_savelist_trace);
+    if (cfg_savelist_trace) log_mem("at install");
+}
+
 // Replace one import slot only if it still holds the expected export.
 static int patch_iat(uintptr_t slot, const char* dll, const char* fn, void* hook, void** orig)
 {
@@ -1019,7 +1236,8 @@ static void save_tick(void)
 {
     static int iat_done, steam_done, steam_tries;
     static unsigned char last_pending = 0xFE, last_queued = 0xFE;
-    if (!cfg_save_trace && !cfg_save_thumbs) return;
+    static DWORD mem_tick;
+    if (!cfg_save_trace && !cfg_save_thumbs && !cfg_savelist_trace && !cfg_list_leak) return;
     if (!iat_done) {
         HMODULE pinned;
         iat_done = 1;
@@ -1027,7 +1245,7 @@ static void save_tick(void)
         if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
                                 (LPCSTR)(uintptr_t)hook_CreateFileW, &pinned)) {
             logf_("saves: could not pin module - thumbnail fix and trace disabled");
-            cfg_save_trace = cfg_save_thumbs = 0;
+            cfg_save_trace = cfg_save_thumbs = cfg_savelist_trace = cfg_list_leak = 0;
             return;
         }
         if (cfg_save_trace) {
@@ -1041,7 +1259,8 @@ static void save_tick(void)
             logf_("thumbnail: capture import not found - fix disabled");
             cfg_save_thumbs = 0;
         }
-        if (cfg_save_thumbs) hook_image_registry();
+        if (cfg_save_thumbs || cfg_savelist_trace || cfg_list_leak) hook_image_registry();
+        if (cfg_savelist_trace || cfg_list_leak) { savelist_install(); mem_tick = GetTickCount(); }
     }
     if (!steam_done && steam_tries < 600) {
         HMODULE api = GetModuleHandleA("steam_api.dll");
@@ -1052,6 +1271,8 @@ static void save_tick(void)
             if (rs) g_remoteStorage = rs;
             if (rs && patch_vtable(rs, 0, (void*)hook_FileWrite, (void**)&g_origFileWrite)) {
                 steam_done = 1;
+                if (cfg_savelist_trace && !patch_vtable(rs, 1, (void*)hook_FileRead, (void**)&g_origFileRead))
+                    logf_("savelist: FileRead not hooked");
                 logf_("saves: ISteamRemoteStorage %08X FileWrite hooked; thumbnail fix=%d",
                       (unsigned)(uintptr_t)rs, cfg_save_thumbs);
                 if (cfg_save_trace) log_engine_storage();
@@ -1063,6 +1284,11 @@ static void save_tick(void)
             logf_("saves: ISteamRemoteStorage never became available - thumbnail fix inactive");
     }
     thumb_tick();
+    if (cfg_savelist_trace && GetTickCount() - mem_tick >= 60000) {
+        mem_tick = GetTickCount();
+        log_mem("periodic");
+        if (g_freedTotal) logf_("savelist: leaked preview streams freed so far: %ld", g_freedTotal);
+    }
     if (!cfg_save_trace) return;
     unsigned char pending = read_u8(VA_CAPTURE_PENDING), queued = read_u8(VA_CAPTURE_QUEUED);
     if (pending != last_pending || queued != last_queued) {

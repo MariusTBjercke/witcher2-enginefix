@@ -9,6 +9,7 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | | What you notice | Default |
 |---|---|---|
 | **Missing save previews** | New saves showed a purple/blue gradient instead of a screenshot in the Load menu. The game asks for the screenshot and saves in the same frame, and the finished image arrives about a frame too late, so the game drops it. The mod writes that image next to the save under the name the game expects, and makes the menu reload a QuickSave's picture right away instead of after a restart. Old saves cannot get their picture back. | on |
+| **Save list memory leak** | Each time the Load/Save menu built its list, the game read every save's preview again and leaked it when the menu already had that picture: ~0.9 MB per save per menu open, kept until you quit. With many saves that adds up to hundreds of MB and is a likely cause of crashes once saves pile up. The mod frees it. Nothing is deleted and saves are not limited. | on |
 | **Graphics presets** | One hotkey, **Ctrl+F10**, cycles baseline / high / ultra / extreme. Each level sets mesh LOD distance, foliage distance, the hard mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. Starts at `extreme`; the hotkey lasts until you quit. | on (extreme) |
 | **LOD values that stick** | The game's `MeshDistanceScale`/`FoliageDistanceScale` are held at the preset values, also after the options menu rewrites them, and the two "gameplay LOD downscale" flags are kept off. | on |
 | **Black map in interiors** | In 25 interior map entries (temples, inns, Loredo's house, towers and other houses) the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
@@ -39,7 +40,7 @@ The higher levels cost GPU time. They do not change how far away the game spawns
    `...\steamapps\common\the witcher 2\bin\dinput8.dll`
 3. Start the game as usual (through Steam and the launcher).
 
-To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.2.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
+To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.3.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
 
 | File | Purpose |
 |---|---|
@@ -62,8 +63,10 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[presets] cycle` | Ctrl+F10 | Hotkey that cycles the levels (F9/F10 with Ctrl or Alt) |
 | `[preset.<name>]` | see table | Your own values per level |
 | `[saves] fix_thumbnails` | 1 | 0 turns the save-preview fix off |
+| `[saves] fix_list_leak` | 1 | 0 turns the save-list leak fix off |
 | `[osd] enabled`, `size`, `ms` | 1, 34, 2500 | On-screen readout; 34 px suits 4K, 22 px 1080p |
 | `[diagnostics] save_trace` | 0 | 1 logs the save-preview path (Steam writes, screenshot encoding) |
+| `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
 
 The ini file itself documents every key, including the legacy separate hotkeys (`[presets] enabled=0`).
 
