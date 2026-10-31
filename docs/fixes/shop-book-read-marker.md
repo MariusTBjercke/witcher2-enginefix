@@ -3,8 +3,10 @@
 Status: opt-in patch implemented 2026-10-30, now the `BookMarker` feature of
 `tools/script-patches/ScriptPatches.ps1` (the tool is described in `docs/fixes/menu-buttons.md`). Version 1
 (read or carried) confirmed in game the same day; version 2 (also "nothing new", list status
-and tooltip, see *Version 2*) installed for its in-game test. Script and Scaleform changes,
-not DLL code. Target: Steam Enhanced Edition 3.5.0.26.
+and tooltip, see *Version 2*) installed for its in-game test. Version 3 (2026-10-31) moves the
+logic out of the shop into the shared item fill, so every item list and the loot window get the
+same marker (*Version 3*). Script and Scaleform changes, not DLL code. Target: Steam Enhanced
+Edition 3.5.0.26.
 
 ## Symptom
 
@@ -252,6 +254,101 @@ Version 2 in-game test: the game reaches the main menu (the new script compiled)
 earlier shows `/ READ`; an unread monster book for a monster already at 3/3 with its bestiary
 entry shows `/ NOTHING NEW` and the overlay; an unread book with new content shows `/ UNREAD`,
 no overlay, and the tooltip lists what is new.
+
+## Version 3: every item list and the loot window
+
+Version 1 and 2 only reached the shop and storage screens because the marking was a call in
+`CGuiShopNew.FillShop`. The overlay itself is a property of the item object (`_alreadyRead`),
+read by the Scaleform list row renderer, so any screen that puts a book into a list can have it.
+
+What the UI actually does (all verified against the game's own files):
+
+| Movie | `_alreadyRead` renderer | Tooltip (`DescFull`) | Filled by |
+|---|---|---|---|
+| `ui_inventory.swf` | yes (`_mcAlreadyReadIconOverlay`, `alreadyread_64x64.dds`, `alreadyread_15x15.dds`) | yes, imports `ctooltip.swf` | `CGuiInventory.FillInventory` |
+| `ui_trade.swf`, `ui_storage.swf` | yes | yes | `CGuiShopNew.FillShop` (player and merchant side) |
+| `ui_craft.swf`, `ui_elixirs.swf` | yes | yes | `CGuiCraft`, `CGuiElixirs` |
+| `clist.swf`, `clistinfo.swf` (A Better UI, from `abetterui.dzip`) | yes, the shared list component | - | imported by the panels |
+| `ui_loot.swf` | **no** | **no**, imports only `xfontlib.swf` | `CContainer.FillLootWindow` |
+
+All four panels above fill their rows through one function, `CGuiUtils.FillItemObject` in
+`game\gui\guiutils.ws` (`theHud.m_utils`). It sets `Desc` (the type text under the name),
+`DescFull` (the tooltip), `Mask` and the rest. That makes it the one place where the marker
+belongs:
+
+* **Script.** After the statement that assembles `DescFull`, every item gets
+  `W2EF_MarkItem( inventory, itemId, AS_item, custom );`. The helpers (`W2EF_Text`,
+  `W2EFBookGrants`, `W2EF_BookStatus`, `W2EF_MarkItem`, `W2EF_LootName`, `W2EF_LootIcon`) moved
+  from `guishop.ws` to the end of `guiutils.ws` as file-level functions, which the game's own
+  scripts do across files (`FlashValueFromString` in `engine\flashinstance.ws` is called from
+  `container_class.ws`). `W2EFBookGrants.Status( isRead )` is now the single classification:
+  1 read, 2 unread but nothing it gives is new, 3 unread with something new.
+* **Context.** `FillItemObject` already had an unused `optional custom : name` (it only tests
+  `'alchemy'` and `'schematic'`). The merchant/storage side of `FillShop` now passes
+  `'merchant'`, so carrying a copy keeps marking the item there; everywhere else (the player's
+  own inventory, the trade screen's player side, crafting, alchemy, elixirs, the character
+  screen) the marker means *read* or *nothing new*, which is what a player wants in their own
+  bag. `guishop.ws` therefore keeps only that one changed line and no helpers.
+* **Loot window.** `ui_loot.swf` has eight fixed rows (`Item1..Item8` with `Name`, `RName`,
+  `Quant`, `Icon`, `ID`, `Glow`) and no tooltip of any kind, so there the status goes after the
+  name (` / Read`, ` / Nothing new`, ` / Unread`) and the same `alreadyread_15x15.dds` image the
+  lists use is put in front of the icon. The icon is not drawn by the movie: `FillLootWindow`
+  builds it as an HTML string (`"<img src='img://globals/gui/icons/items/...'>"`) and the row
+  shows that field as HTML, so a second `<img>` needs no SWF change. Both loops of
+  `FillLootWindow` push the display name and the icon, so the patcher rewrites both statements
+  (four lines in all).
+
+Coverage after version 3:
+
+| View | Overlay | Status in the row | Tooltip |
+|---|---|---|---|
+| Inventory (books Geralt carries) | read, or nothing new | yes | yes, with what is new |
+| Trade screen, player's list | read, or nothing new | yes | yes |
+| Trade screen / storage, merchant side | read, nothing new, or carried | yes | yes |
+| Craft, alchemy, elixirs, character | only if such a list held a book (none does) | - | - |
+| Loot window | read, or nothing new | yes | none (the window has none) |
+| Journal, book reader | untouched | - | - |
+
+Known limits, on purpose: the loot window has no hover tooltip to fill, so the "what is new"
+detail exists only in the panels that have one; and the marker call sits in the
+`if ( ! itemTags.Contains('NoDescription') )` branch next to the tooltip, so a book tagged
+`NoDescription` would keep no marker (books always have a tooltip text; no such book is known).
+
+**Tool.** `tools/script-patches/ScriptPatches.ps1` grew one edit mode: `Where = "Replace"`
+replaces whole lines that match the anchor (exactly `Count` of them), still inside their
+indentation and with BEGIN/END markers, which is used for the merchant call and the four loot
+lines. BookMarker now edits `guiutils.ws` (the call plus the helper block), `guishop.ws` (the
+context argument) and `container_class.ws` (the loot rows); the SWF no-op patch on
+`ui_trade.swf`/`ui_storage.swf` is unchanged and still needed, otherwise `CompareInventories`
+overwrites the merchant side's flag after every buy/sell. Install/Check/Uninstall now look at
+all four entries.
+
+### Dry run, 2026-10-31
+
+Two scratch game folders: the pre-mod vanilla `base_scripts.dzip` from `_backup_premods`, and
+the owner's Mersey archive with the HD UI loose `ui_trade.swf`/`ui_storage.swf` from the
+install's `backup\`. In both: Check -> Install -> Install -> Check, `-Features All` ->
+`-Features BookMarker`, then Uninstall. Independent Python checks on the produced archive:
+header hash valid, entry count/names unchanged, only `guiutils.ws`, `guishop.ws` and
+`container_class.ws` differ, the helper block is 684/685 lines with no non-ASCII, braces
+balanced, `__COLLECT_BODY__`/`__TEXT_FUNCTION__` substituted, no `thePlayer.AddJournalEntry`/
+`MaxKnowledgeAccumulator` left, and every declared name compared against the compiler's keyword
+list (this is how the `state` local was caught and renamed to `markState` before shipping).
+Uninstall restored `base_scripts.dzip` and both loose swfs byte-identically; in the vanilla
+folder the two created loose swfs were removed.
+
+### In-game test
+
+1. Close the game, run `Install.bat` (or `ScriptPatches.ps1 -Action Install -Features BookMarker`,
+   `All` to keep Continue/Quit).
+2. Start the game; the main menu must appear normally (a script compile error stops it there).
+3. Inventory (I): a read book shows the tick and `/ READ`; an unread book with new content shows
+   `/ UNREAD` and its tooltip lists what is new; a book with nothing new shows `/ NOTHING NEW`.
+4. Hover a book in the inventory: the tooltip ends with the status paragraph.
+5. A merchant and the storage chest: behaviour unchanged from version 2.
+6. Loot a corpse or container with books: rows show the tick and `/ READ`, `/ NOTHING NEW` or
+   `/ UNREAD` after the name. Look at the row layout: if the tick does not fit in front of the
+   30x30 icon, `W2EF_LootIcon` is the one line to change (append it after the icon instead).
 
 ## Languages
 

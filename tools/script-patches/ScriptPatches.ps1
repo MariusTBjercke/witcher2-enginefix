@@ -1,15 +1,18 @@
 # Optional script patches for The Witcher 2 EE, each one chosen separately:
-#   BookMarker  shop/storage: the "already read" overlay also for books Geralt has read or whose
-#               knowledge and journal entries he already has; books get Read / Nothing new /
-#               Unread in the list and a tooltip listing what is new, in 12 languages ($BookTexts).
+#   BookMarker  every item list: the "already read" overlay for books Geralt has read or whose
+#               knowledge and journal entries he already has (a merchant or the storage chest also
+#               marks a carried copy); books get Read / Nothing new / Unread in the list and a
+#               tooltip listing what is new, in 12 languages ($BookTexts). The loot window has no
+#               tooltip, so there the same status goes after the name and a tick into the icon.
 #               docs/fixes/shop-book-read-marker.md
 #   Continue    main menu: "Continue" at the top loads the newest save
 #   PauseQuit   pause menu: "Quit" (with confirmation) next to "Exit current game"
 #               docs/fixes/menu-buttons.md
 #
 # Patches the files the game actually uses, whatever mod they come from:
-#   CookedPC\base_scripts.dzip       game\gui\guishop.ws, game\gui\guimainmenu.ws: blocks
-#                                    inserted next to anchor lines, marked
+#   CookedPC\base_scripts.dzip       game\gui\guiutils.ws, game\gui\guishop.ws,
+#                                    game\gui\guimainmenu.ws, game\gameplay\container_class.ws:
+#                                    blocks inserted next to anchor lines, marked
 #                                    //===witcher2-enginefix=== BEGIN/END <feature>
 #   CookedPC\globals\gui\ui_trade.swf, ui_storage.swf (BookMarker only)
 #                                    CompareInventories no longer overwrites _alreadyRead on the
@@ -164,7 +167,9 @@ public static class Dzip
     }
 
     // Appends the new data for the given entries where the old table was and writes a fresh
-    // table + header. Every other entry keeps its original compressed bytes.
+    // table + header. Every other entry keeps its original compressed bytes. A replaced entry
+    // gets the current FILETIME, so the game cannot mistake it for a file it already compiled
+    // (the game ships compiledscripts.w2scripts next to the archive).
     public static byte[] ReplaceEntries(byte[] b, string[] names, byte[][] datas)
     {
         long tableOffset;
@@ -234,14 +239,15 @@ public static class Swf
 }
 '@
 
-# Appended to guishop.ws by BookMarker. __COLLECT_BODY__ is CGuiInventory.AddBookKnowledge from the
+# Appended to guiutils.ws by BookMarker. __COLLECT_BODY__ is CGuiInventory.AddBookKnowledge from the
 # same archive with its two reward calls redirected to the counters below, so the list of what
 # each book gives (and its conditions) always matches the installed scripts.
 $BookHelpers = @'
-// Merchant/storage books and schematics: _alreadyRead (the A Better UI overlay) when the book
-// was read (<item>_Examined, set by CGuiInventory.ExamineItem), Geralt carries one, or
-// everything the book gives is already known. Books also get a short status after their type
-// in the list and a few lines in the tooltip.
+// Books anywhere in the UI: _alreadyRead (the A Better UI overlay) when the book was read
+// (<item>_Examined, set by CGuiInventory.ExamineItem) or when nothing it gives is new; a
+// merchant's or the storage chest's list also marks a carried copy. Books get a short status
+// after their type in the list and a few lines in the tooltip. The loot window (ui_loot.swf)
+// has no tooltip, so there the status goes after the name and a tick into the icon.
 __TEXT_FUNCTION__
 
 class W2EFBookGrants
@@ -250,6 +256,20 @@ class W2EFBookGrants
     var m_new : int;
     var m_lines : string;
     var m_lastId : string;
+
+    // 1 read, 2 unread but everything it gives is already known, 3 unread with something new.
+    function Status( isRead : bool ) : int
+    {
+        if ( isRead )
+        {
+            return 1;
+        }
+        if ( m_total > 0 && m_new == 0 )
+        {
+            return 2;
+        }
+        return 3;
+    }
 
     // One tooltip line per reward: new ones in the game's tooltip orange.
     function AddLine( isNew : bool, text : string )
@@ -341,56 +361,72 @@ class W2EFBookGrants
 __COLLECT_BODY__
 }
 
-function W2EF_MarkShopItem( merchantInventory, playerInventory : CInventoryComponent, itemId : SItemUniqueId, AS_item : int )
+// 0 not a book, 1 read, 2 nothing new, 3 unread with something new. Books only.
+function W2EF_BookStatus( inventory : CInventoryComponent, itemId : SItemUniqueId ) : int
 {
     var itemName : name;
-    var isBook, isRead, isOwned, nothingNew : bool;
+    var grants : W2EFBookGrants;
+
+    if ( ! inventory.ItemHasTag( itemId, 'SortTypeBook' ) )
+    {
+        return 0;
+    }
+    itemName = inventory.GetItemName( itemId );
+    grants = new W2EFBookGrants in theHud;
+    grants.Collect( itemName );
+    return grants.Status( FactsDoesExist( NameToString( itemName ) + "_Examined" ) );
+}
+
+// One call at the end of CGuiUtils.FillItemObject, so every panel that lists items (inventory,
+// shop, storage, trade, craft, alchemy, ...) gets this for free. context is 'merchant' for a
+// merchant's or the storage chest's list, where carrying a copy also marks the item; everywhere
+// else only having read the book or gaining nothing from it does.
+function W2EF_MarkItem( inventory : CInventoryComponent, itemId : SItemUniqueId, AS_item : int, context : name )
+{
+    var itemName : name;
+    var isBook, isRead, isOwned : bool;
     var grants : W2EFBookGrants;
     var itemDesc, itemDescFull, label, status : string;
+    var markState : int;
 
-    isBook = merchantInventory.ItemHasTag( itemId, 'SortTypeBook' );
-    if ( !isBook && !merchantInventory.ItemHasTag( itemId, 'SortTypeSchematic' ) )
+    isBook = inventory.ItemHasTag( itemId, 'SortTypeBook' );
+    isOwned = false;
+    if ( ! isBook && ! inventory.ItemHasTag( itemId, 'SortTypeSchematic' ) )
     {
         return;
     }
-    itemName = merchantInventory.GetItemName( itemId );
-    isOwned = playerInventory.GetItemQuantityByName( itemName ) > 0;
-    if ( !isBook )
+    itemName = inventory.GetItemName( itemId );
+    if ( context == 'merchant' )
     {
-        theHud.SetBool( "_alreadyRead", isOwned, AS_item );
+        isOwned = thePlayer.GetInventory().GetItemQuantityByName( itemName ) > 0;
+    }
+    if ( ! isBook )
+    {
+        // Schematics are never "read"; a merchant or the chest only tells you whether you carry one.
+        if ( isOwned )
+        {
+            theHud.SetBool( "_alreadyRead", true, AS_item );
+        }
         return;
     }
 
     isRead = FactsDoesExist( NameToString( itemName ) + "_Examined" );
     grants = new W2EFBookGrants in theHud;
     grants.Collect( itemName );
-    nothingNew = grants.m_total > 0 && grants.m_new == 0;
-    theHud.SetBool( "_alreadyRead", isRead || isOwned || nothingNew, AS_item );
+    markState = grants.Status( isRead );
+    theHud.SetBool( "_alreadyRead", markState != 3 || isOwned, AS_item );
 
-    if ( isRead )
+    label = W2EF_Text( markState );
+    status = W2EF_Text( 3 + markState );
+    if ( markState == 3 && grants.m_total > 0 )
     {
-        label = W2EF_Text( 1 );
-        status = W2EF_Text( 4 );
-    }
-    else if ( nothingNew )
-    {
-        label = W2EF_Text( 2 );
-        status = W2EF_Text( 5 );
-    }
-    else
-    {
-        label = W2EF_Text( 3 );
-        status = W2EF_Text( 6 );
-        if ( grants.m_total > 0 )
-        {
-            status += W2EF_Text( 7 );
-        }
+        status += W2EF_Text( 7 );
     }
     if ( grants.m_total == 0 )
     {
         status += "<br>" + W2EF_Text( 8 );
     }
-    else if ( !isRead )
+    else if ( markState != 1 )
     {
         status += grants.m_lines;
     }
@@ -405,7 +441,41 @@ function W2EF_MarkShopItem( merchantInventory, playerInventory : CInventoryCompo
         theHud.SetString( "Desc", itemDesc + " / " + label, AS_item );
     }
     theHud.GetString( "DescFull", itemDescFull, AS_item );
-    theHud.SetString( "DescFull", itemDescFull + "<br><br>" + status, AS_item );
+    if ( itemDescFull == "" )
+    {
+        theHud.SetString( "DescFull", status, AS_item );
+    }
+    else
+    {
+        theHud.SetString( "DescFull", itemDescFull + "<br><br>" + status, AS_item );
+    }
+}
+
+// Loot window (ui_loot.swf): eight fixed rows with a name, a quantity and an icon that the
+// script builds as HTML, and no tooltip of any kind. The status therefore goes after the name
+// and the same overlay image the item lists use goes in front of the icon.
+function W2EF_LootName( inventory : CInventoryComponent, itemId : SItemUniqueId, text : string ) : string
+{
+    var markState : int;
+
+    markState = W2EF_BookStatus( inventory, itemId );
+    if ( markState == 0 )
+    {
+        return text;
+    }
+    return text + " / " + W2EF_Text( markState );
+}
+
+function W2EF_LootIcon( inventory : CInventoryComponent, itemId : SItemUniqueId, icon : string ) : string
+{
+    var markState : int;
+
+    markState = W2EF_BookStatus( inventory, itemId );
+    if ( markState == 0 || markState == 3 )
+    {
+        return icon;
+    }
+    return "<img src='img://globals/gui/icons/tooltip/alreadyread_15x15.dds' width='15' height='15'>" + icon;
 }
 '@
 
@@ -630,6 +700,8 @@ $Marker = "//===witcher2-enginefix==="
 $ShopEntry = "game\gui\guishop.ws"
 $InventoryEntry = "game\gui\guiinventory.ws"
 $MenuEntry = "game\gui\guimainmenu.ws"
+$UtilsEntry = "game\gui\guiutils.ws"
+$ContainerEntry = "game\gameplay\container_class.ws"
 
 # Main menu: shown when the menu has a save. saves[0] is the newest one (the engine picks the
 # menu background from it, 009A515C); 9001 is a button id outside EMenuButtons.
@@ -720,19 +792,54 @@ class W2EFConfirmQuit extends CGuiConfirmationBox
 $InputMainMenu = "private final function InputMainMenu\( button : int \)"
 $InputMainInGame = "private final function InputMainInGame\( button : int \)"
 
+# The exact statements in the game's scripts that BookMarker rewrites (a mod the tool does not
+# know would have changed them, and then the match fails instead of half-patching).
+# FillItemObject assembles the tooltip in one statement; the marker call goes right after it.
+$FillTooltip = 'theHud.SetString( "DescFull", GetLocStringByKeyExt( "Tooltip" + itemName ) + descFull + "<br>" + fullDescTootlip, AS_item );'
+# The merchant/storage side of FillShop gets a context, so carrying a copy marks the item too.
+$ShopMerchant = "theHud.m_utils.FillItemObject( m_merchantInventory, m_playerStats, itemId, i, AS_item, slotItems ); // TODO: slotItems?"
+$ShopMerchantPatched = "theHud.m_utils.FillItemObject( m_merchantInventory, m_playerStats, itemId, i, AS_item, slotItems, 'merchant' ); // TODO: slotItems?"
+# FillLootWindow pushes the display name and the icon HTML once in its quest-item loop and once
+# in its ordinary loop, so both statements occur twice.
+$LootName = @'
+args.PushBack( FlashValueFromString( GetLocStringByKeyExt( itemName ) ) );
+'@
+$LootNamePatched = @'
+args.PushBack( FlashValueFromString( W2EF_LootName( inventory, itemId, GetLocStringByKeyExt( itemName ) ) ) );
+'@
+$LootIcon = @'
+args.PushBack( FlashValueFromString( "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) ;
+'@
+$LootIconPatched = @'
+args.PushBack( FlashValueFromString( W2EF_LootIcon( inventory, itemId, "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) );
+'@
+$LootName = $LootName.Trim()
+$LootNamePatched = $LootNamePatched.Trim()
+$LootIcon = $LootIcon.Trim()
+$LootIconPatched = $LootIconPatched.Trim()
+
 # Each edit inserts Code next to the single line matching Anchor (regex): Before or After that
 # line, or at the end of the file when Anchor is $null. After + Body: Anchor ends with the "{" of
-# a function and the code goes first in its body. Code is indented with 4 spaces here and gets
-# tabs plus the indentation of the line it lands before (Before, Body) or of the anchor (After).
+# a function and the code goes first in its body. Replace: the anchor must match whole lines and
+# each of them becomes the code (Count lines, or Multiple for any number). Code is indented with
+# 4 spaces here and gets tabs plus the indentation of the line it lands at.
 $FeatureList = [ordered]@{
     BookMarker = @{
-        Title = "Shop book marker: Read / Nothing new / Unread at merchants and storage"
+        Title = "Book marker: Read / Nothing new / Unread in the inventory, shop, trade and loot window"
         Swf   = $true
         Edits = @(
-            @{ Entry = $ShopEntry; Where = "After"
-               Anchor = [regex]::Escape("theHud.m_utils.FillItemObject( m_merchantInventory, m_playerStats, itemId, i, AS_item, slotItems );")
-               Code = "W2EF_MarkShopItem( m_merchantInventory, m_playerInventory, itemId, AS_item );" },
-            @{ Entry = $ShopEntry; Where = "End"; Anchor = $null; Code = "BOOK_HELPERS" }
+            # One call at the end of the shared item fill: every panel that lists items gets it.
+            @{ Entry = $UtilsEntry; Where = "After"; Anchor = [regex]::Escape($FillTooltip)
+               Code = "W2EF_MarkItem( inventory, itemId, AS_item, custom );" },
+            @{ Entry = $UtilsEntry; Where = "End"; Anchor = $null; Code = "BOOK_HELPERS" },
+            # A merchant's or the storage chest's list also marks a book Geralt carries.
+            @{ Entry = $ShopEntry; Where = "Replace"; Anchor = [regex]::Escape($ShopMerchant)
+               Code = $ShopMerchantPatched },
+            # Loot window rows: the status goes after the name and a tick in front of the icon.
+            @{ Entry = $ContainerEntry; Where = "Replace"; Count = 2
+               Anchor = [regex]::Escape($LootName); Code = $LootNamePatched },
+            @{ Entry = $ContainerEntry; Where = "Replace"; Count = 2
+               Anchor = [regex]::Escape($LootIcon); Code = $LootIconPatched }
         )
     }
     Continue = @{
@@ -847,6 +954,8 @@ function ConvertTo-Tabs([string]$code) {
 }
 
 # Inserts one edit, wrapped in BEGIN/END marker lines, into $text.
+# Where Replace: the anchor must match whole lines (as many as Count, or any number when
+# Multiple), and each of those lines is replaced by the code, still inside its indentation.
 function Add-Edit([string]$text, $edit, [string]$feature, [string]$collect) {
     if ($edit.Code -eq "BOOK_HELPERS") {
         $code = (ConvertTo-Tabs $BookHelpers).Replace("__COLLECT_BODY__", "`t" + $collect.TrimEnd()).Replace(
@@ -859,6 +968,32 @@ function Add-Edit([string]$text, $edit, [string]$feature, [string]$collect) {
         $eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
         if (-not $text.EndsWith("`n")) { $text += $eol }
         return $text + $eol + (($lines | ForEach-Object { $_ + $eol }) -join "")
+    }
+
+    if ($edit.Where -eq "Replace") {
+        $hits = [regex]::Matches($text, $edit.Anchor)
+        $want = if ($edit.ContainsKey("Count")) { [int]$edit["Count"] } elseif ($edit["Multiple"]) { -1 } else { 1 }
+        if ($hits.Count -eq 0 -or ($want -ge 0 -and $hits.Count -ne $want)) {
+            throw "anchor '$($edit.Anchor)' found $($hits.Count) times in $($edit.Entry), expected $(if ($want -ge 0) { $want } else { "at least one" })"
+        }
+        $eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+        for ($k = $hits.Count - 1; $k -ge 0; $k--) {
+            $hit = $hits[$k]
+            $lineStart = if ($hit.Index -eq 0) { 0 } else { $text.LastIndexOf("`n", $hit.Index - 1) + 1 }
+            $lineStop = $text.IndexOf("`n", $hit.Index + $hit.Length)
+            $contentEnd = if ($lineStop -lt 0) { $text.Length }
+                          elseif ($lineStop -gt 0 -and $text[$lineStop - 1] -eq "`r") { $lineStop - 1 }
+                          else { $lineStop }
+            $before = $text.Substring($lineStart, $hit.Index - $lineStart)
+            $after = $text.Substring($hit.Index + $hit.Length, $contentEnd - ($hit.Index + $hit.Length))
+            if ($before.Trim() -ne "" -or $after.Trim() -ne "") {
+                throw "anchor '$($edit.Anchor)' does not cover a whole line in $($edit.Entry)"
+            }
+            $indent = [regex]::Match($before, "^[ \t]*").Value
+            $block = ($lines | ForEach-Object { $indent + $_ }) -join $eol
+            $text = $text.Substring(0, $lineStart) + $block + $text.Substring($contentEnd)
+        }
+        return $text
     }
 
     $m = [regex]::Matches($text, $edit.Anchor)
@@ -1005,7 +1140,8 @@ function Get-Target([string]$leaf, [string]$path, [scriptblock]$fromArchive) {
 }
 
 $scripts = Get-Target "base_scripts.dzip" $scriptsPath { throw "base_scripts.dzip missing" }
-foreach ($entry in @($ShopEntry, $MenuEntry)) {
+$patchedEntries = @($UtilsEntry, $ShopEntry, $MenuEntry, $ContainerEntry)
+foreach ($entry in $patchedEntries) {
     if ((Get-EntryText $scripts.Orig $entry).Contains($Marker)) {
         throw "$entry already holds witcher2-enginefix changes from another copy of this tool (BookReadMarker?). Run that copy's Uninstall.bat first."
     }
@@ -1029,9 +1165,8 @@ foreach ($t in $swfs) {
 
 # --- check ----------------------------------------------------------------------------------
 
-$currentShop = if ($scripts.Current) { Get-EntryText $scripts.Current $ShopEntry } else { "" }
-$currentMenu = if ($scripts.Current) { Get-EntryText $scripts.Current $MenuEntry } else { "" }
-$installed = @($FeatureList.Keys | Where-Object { ($currentShop + $currentMenu).Contains("$Marker BEGIN $_") })
+$currentText = if ($scripts.Current) { ($patchedEntries | ForEach-Object { Get-EntryText $scripts.Current $_ }) -join "" } else { "" }
+$installed = @($FeatureList.Keys | Where-Object { $currentText.Contains("$Marker BEGIN $_") })
 
 foreach ($name in $FeatureList.Keys) {
     try { [void](Build-Scripts $scripts.Orig @($name)); $ok = "can be installed" }

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-30T12:55:00+01:00",
+  "updated": "2026-10-31T02:30:00+01:00",
   "owner": "dsh",
   "items": [
     {
@@ -132,8 +132,8 @@
     },
     {
       "id": "shop-book-read-marker",
-      "title": "Shop book marker: read, carried or nothing new, with list status and tooltip",
-      "status": "done",
+      "title": "Book marker in every item list: read, carried or nothing new, with status and tooltip",
+      "status": "implemented-awaiting-game-test",
       "files": [
         "docs/fixes/shop-book-read-marker.md",
         "tools/script-patches/ScriptPatches.ps1",
@@ -141,10 +141,11 @@
         "tools/script-patches/Uninstall.bat",
         "tools/package-release.ps1",
         "docs/README.txt",
-        "tools/script-patches/check_texts.py"
+        "tools/script-patches/check_texts.py",
+        "CHANGELOG.md"
       ],
-      "verify": "Version 2 installed on the owner's machine: game reaches the main menu; at a bookseller a read book shows '/ READ', an unread book whose knowledge and journal entries are all known shows '/ NOTHING NEW' plus the overlay, an unread book with new content shows '/ UNREAD' without overlay and its tooltip lists what is new.",
-      "evidence": "docs/fixes/shop-book-read-marker.md - version 1 (read or carried) confirmed in game 2026-10-30. Version 2 dry run: hash valid, generated Collect has 21 knowledge + 58 journal calls (Mersey), uninstall byte-identical; installed, in-game result pending. Texts in 12 languages (W2EF_Text, StrChar), every character checked against the game's own texts by check_texts.py; localized build installed, in-game check of a non-English language pending."
+      "verify": "Version 3 installed on the owner's machine: the game reaches the main menu; in the inventory (I) a read book shows the tick and '/ READ', an unread book with new content shows '/ UNREAD' and its tooltip lists what is new, one with nothing new shows '/ NOTHING NEW'; a merchant and the storage chest behave as in version 2; a looted container shows the tick and the status after a book's name.",
+      "evidence": "docs/fixes/shop-book-read-marker.md - version 1 (read or carried) confirmed in game 2026-10-30; version 2's shop/storage behaviour was confirmed there too. Version 3 (2026-10-31) moved the marker into CGuiUtils.FillItemObject (with a 'merchant' context argument) and wrapped the loot window's name and icon pushes in container_class.ws. Dry run on the vanilla and the Mersey/HD UI archives: DZIP hash valid, only guiutils.ws/guishop.ws/container_class.ws differ, every declared name checked against the compiler's keywords (caught 'state'), uninstall restores all files byte-identically. In-game result pending. The loot window has no tooltip (ui_loot.swf imports only xfontlib.swf), so there the status goes after the item name. check_texts.py still passes for all 12 languages."
     },
     {
       "id": "skip-intro",

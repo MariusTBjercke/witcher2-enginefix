@@ -28,12 +28,15 @@ What it does:
 
 Optional, off until you run it - script patches:
   Witcher2EngineFix_Optional\ScriptPatches\Install.bat asks for each one:
-  - Shop book marker: at merchants and in the storage chest the "already
-    read" overlay on a book normally only means "you carry a copy". It also
-    shows for books Geralt has read (the game records each book read from the
-    inventory) or whose bestiary knowledge and journal entries he already has.
-    Books get "Read", "Unread" or "Nothing new" after their type in the list,
-    and the tooltip lists what is still new.
+  - Book marker: the "already read" overlay on a book normally only means
+    "you carry a copy". It also shows for books Geralt has read (the game
+    records each book read from the inventory) or whose bestiary knowledge and
+    journal entries he already has. Books get "Read", "Unread" or "Nothing new"
+    after their type, and the tooltip lists what is still new. This works in
+    Geralt's own inventory (with the tooltip), at merchants, in the storage
+    chest, in the trade screen's own list and in the loot window - the loot
+    window has no tooltip, so there the status comes after the item name and
+    the tick goes in front of the icon.
   - Continue: the main menu gets a Continue button that loads the newest save.
   - Quit in the pause menu: quits the game after a confirmation, without
     going back to the main menu first.

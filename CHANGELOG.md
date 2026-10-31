@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Optional script patches, the book marker now covers every item list: the "already read" tick and the `Read` / `Nothing new` / `Unread` status also show in Geralt's own inventory, in the trade screen's player list and in the loot window, and the inventory's item tooltip now ends with the status and, for unread books, what reading them still gives (merchants and the storage chest behave as before). The marking moved from the shop script into the shared item fill that every GUI screen uses, so it follows books wherever the game lists them; the loot window has no tooltip at all, so there the status goes after the item name and the tick in front of the icon. `Witcher2EngineFix_Optional\ScriptPatches\Install.bat` re-applies it (Uninstall still restores the modded originals byte for byte). See `docs/fixes/shop-book-read-marker.md`. The DLL is unchanged apart from its version.
+
 ## 0.4.0
 
 - Skip intro: `[startup] skip_intro=1` (off by default) starts at the main menu without the logo videos and the intro movie. The startup movies come from `globals\video_start.csv`; the game only finishes that sequence after at least one movie, so an empty table leaves a black screen until a key is pressed (which is why intro-removal mods keep one logo). The DLL instead presses "skip" for each startup movie once it has played 300 ms, through the game's own Esc path (`009A1F2E`), from a wrapped tick (`00ECAF78`) armed only by the startup list build (`009B588F`). A short black moment remains. See `docs/fixes/skip-intro.md`.
