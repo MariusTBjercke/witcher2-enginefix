@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include "distance_patch.h"
+#include "sp_hooks.h"
 #include "version.h"
 
 #define IMAGE_BASE          0x00400000u
@@ -103,6 +104,11 @@ static int cfg_savelist_trace;  // [diagnostics] savelist_trace: time/memory of 
 static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the save list leaks
 static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos before the main menu
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
+static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
+static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
+static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
+static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
+static volatile LONG g_scriptRedirects;
 
 // ---- logging ------------------------------------------------------------
 // One lock for whole lines: the worker, the file-trace hooks (called on any game
@@ -304,6 +310,9 @@ static void load_config(void)
     cfg_list_leak = ini_int("saves", "fix_list_leak", 1);
     cfg_skip_intro = ini_int("startup", "skip_intro", 0);
     cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
+    cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
+    cfg_continue = ini_int("scriptpatches", "continue", 1);
+    cfg_pause_quit = ini_int("scriptpatches", "pause_quit", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -1564,11 +1573,49 @@ static HANDLE WINAPI hook_CreateFileA(LPCSTR path, DWORD access, DWORD share,
     return h;
 }
 
+// Absolute form of a path the script redirect might own: only CookedPC paths matter, and the
+// game opens its data with absolute paths (docs/fixes/dll-script-patches.md, Q1).
+static int script_full_path(const wchar_t* path, wchar_t* full)
+{
+    DWORD n;
+
+    full[0] = 0;
+    if (!path || !*path) return 0;
+    if (path[0] == L'\\' || (path[0] && path[1] == L':')) {
+        if (!wcsistr(path, L"cookedpc")) return 0;
+        wcscpy_s(full, MAX_PATH, path);
+        return 1;
+    }
+    n = GetFullPathNameW(path, MAX_PATH, full, NULL);
+    if (!n || n >= MAX_PATH) {
+        full[0] = 0;
+        return 0;
+    }
+    return 1;
+}
+
 static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
                                       LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, HANDLE tmpl)
 {
-    HANDLE h = g_origCreateFileW(path, access, share, sa, disp, flags, tmpl);
-    DWORD err = GetLastError();
+    wchar_t scriptFull[MAX_PATH], scriptCache[MAX_PATH];
+    const wchar_t* use = path;
+    HANDLE h;
+    DWORD err;
+
+    if (g_scriptHooks && script_full_path(path, scriptFull) &&
+        sp_hooks_path(scriptFull, scriptCache, MAX_PATH)) {
+        use = scriptCache;
+        if (InterlockedIncrement(&g_scriptRedirects) <= 8)
+            logf_("script patches: CreateFileW \"%ls\" -> cached copy", path);
+    }
+    h = g_origCreateFileW(use, access, share, sa, disp, flags, tmpl);
+    err = GetLastError();
+    if (use != path && h == INVALID_HANDLE_VALUE) {
+        logf_("script patches: cached copy for \"%ls\" did not open (err %lu) - using the original",
+              path, err);
+        h = g_origCreateFileW(path, access, share, sa, disp, flags, tmpl);
+        err = GetLastError();
+    }
     if (cfg_save_trace && trace_path(path))
         logf_("save-trace: CreateFileW \"%ls\" access=%08lX disp=%lu -> %s (err %lu)",
               path, access, disp, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", err);
@@ -1644,6 +1691,7 @@ static HANDLE WINAPI hook_FindFirstFileW(LPCWSTR pattern, LPWIN32_FIND_DATAW dat
 {
     HANDLE h = g_origFindFirstFileW(pattern, data);
     DWORD err = GetLastError();
+    if (g_scriptHooks && h != INVALID_HANDLE_VALUE && data) sp_hooks_find(pattern, data);
     if (cfg_file_trace && ft_match(pattern)) {
         ft_log("FindFirstFileW \"%ls\" -> %s handle=%08X name=\"%ls\" size=%lld (err %lu)",
                pattern, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", (unsigned)(uintptr_t)h,
@@ -1695,6 +1743,7 @@ static BOOL WINAPI hook_FindNextFileW(HANDLE find, LPWIN32_FIND_DATAW data)
 {
     BOOL ok = g_origFindNextFileW(find, data);
     DWORD err = GetLastError();
+    if (g_scriptHooks && ok && data) sp_hooks_find(NULL, data);
     if (cfg_file_trace && ok && data && ft_match_entry(data->cFileName)) {
         wchar_t pattern[MAX_PATH];
         int known = ft_lookup(find, pattern, NULL);
@@ -1883,6 +1932,51 @@ static DWORD WINAPI filetrace_thread(LPVOID param)
     n = ft_hooked();
     if (n < FT_SLOTS)
         logf_("file-trace: %d/%d slots hooked - the rest are not redirectable", n, FT_SLOTS);
+    return 0;
+}
+
+// Started from DllMain when a [scriptpatches] feature is on: the Task 1 pattern, because the
+// redirect must be in place before the game's first CookedPC access (~235 ms). Only the three
+// slots the redirect needs are patched; save_trace and file_trace patch the same ones through
+// patch_iat, which treats a slot that already holds our hook as done.
+static DWORD WINAPI scripthooks_thread(LPVOID param)
+{
+    DWORD t0 = GetTickCount();
+    HMODULE k32 = NULL, pinned;
+    void* expect = NULL;
+    int n;
+    (void)param;
+
+    for (;;) {
+        if (!k32) k32 = GetModuleHandleA("kernel32.dll");
+        if (k32 && !expect) expect = (void*)GetProcAddress(k32, "CreateFileW");
+        if (expect && ft_slot(IAT_CREATEFILEW) == expect) break;
+        if (!g_running || GetTickCount() - t0 > 120000) {
+            logf_("script patches: CreateFileW slot never held the kernel32 export - off");
+            g_scriptHooks = 0;
+            return 0;
+        }
+        Sleep(1);
+    }
+    // Import slots must not outlive this DLL if a caller releases its handle.
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                            (LPCSTR)(uintptr_t)hook_CreateFileW, &pinned)) {
+        logf_("script patches: could not pin module - off");
+        g_scriptHooks = 0;
+        return 0;
+    }
+    n = 0;
+    n += patch_iat("script-patcher", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW",
+                   (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+    n += patch_iat("script-patcher", IAT_FINDFIRSTFILEW, "kernel32.dll", "FindFirstFileW",
+                   (void*)hook_FindFirstFileW, (void**)&g_origFindFirstFileW);
+    n += patch_iat("script-patcher", IAT_FINDNEXTFILEW, "kernel32.dll", "FindNextFileW",
+                   (void*)hook_FindNextFileW, (void**)&g_origFindNextFileW);
+    logf_("script patches: hooks installed after %lu ms (%d/3 slots)", GetTickCount() - t0, n);
+    if (ft_slot(IAT_CREATEFILEW) != (void*)hook_CreateFileW) {
+        logf_("script patches: CreateFileW not hooked - the patched files cannot be served, off");
+        g_scriptHooks = 0;
+    }
     return 0;
 }
 
@@ -2110,6 +2204,24 @@ void* WINAPI GetdfDIJoystick(void)
     return fn ? fn() : NULL;
 }
 
+// <game>\bin\dinput8.dll -> game = <game>, cache = <game>\bin\witcher2_enginefix_cache
+// (decision 2 of the plan: next to the DLL, removed together with it).
+static int script_dirs(wchar_t* game, wchar_t* cache)
+{
+    wchar_t bin[MAX_PATH], *slash;
+
+    if (!GetModuleFileNameW(g_self, bin, MAX_PATH) || !bin[0]) return 0;
+    slash = wcsrchr(bin, L'\\');
+    if (!slash) return 0;
+    *slash = 0;
+    if (_snwprintf_s(cache, MAX_PATH, _TRUNCATE, L"%s\\witcher2_enginefix_cache", bin) < 0)
+        return 0;
+    slash = wcsrchr(bin, L'\\');
+    if (!slash) return 0;
+    *slash = 0;
+    return _snwprintf_s(game, MAX_PATH, _TRUNCATE, L"%s", bin) >= 0;
+}
+
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {
     (void)reserved;
@@ -2131,6 +2243,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d", cfg_skip_intro);
         logf_("diagnostics: file_trace=%d", cfg_file_trace);
+        logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d",
+              cfg_book_marker, cfg_continue, cfg_pause_quit);
         if (cfg_preset_mode)
             logf_("presets: startup=%s, cycle modifiers=%d VK=%02X (session only)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
@@ -2148,6 +2262,22 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                 HANDLE h = CreateThread(NULL, 0, filetrace_thread, NULL, 0, NULL);
                 if (h) CloseHandle(h);
                 else { logf_("file-trace: CreateThread failed - file trace off"); cfg_file_trace = 0; }
+            }
+            if (cfg_enabled && (cfg_book_marker || cfg_continue || cfg_pause_quit)) {
+                wchar_t sgame[MAX_PATH], scache[MAX_PATH];
+
+                if (script_dirs(sgame, scache) &&
+                    sp_hooks_start(sgame, scache, cfg_book_marker, cfg_continue, cfg_pause_quit,
+                                   logf_)) {
+                    g_scriptHooks = 1;
+                } else {
+                    logf_("script patches: cannot locate the game or cache folder - off");
+                }
+            }
+            if (g_scriptHooks) {
+                HANDLE h = CreateThread(NULL, 0, scripthooks_thread, NULL, 0, NULL);
+                if (h) CloseHandle(h);
+                else { logf_("script patches: CreateThread failed - off"); g_scriptHooks = 0; }
             }
         }
     }

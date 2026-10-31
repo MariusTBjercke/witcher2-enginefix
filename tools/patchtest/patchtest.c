@@ -1541,6 +1541,7 @@ static int run_build(const char* game_arg, const char* out_arg)
     for (i = 0; i < nr; i++) {
         printf("  redirect: %ls -> %ls\n", redirects[i].target, redirects[i].cached);
     }
+    printf("status: %s\n", sp_overlay_status());
     printf("build: %s, %d redirect%s, %lu ms\n", ok ? "ok" : "failed", nr, nr == 1 ? "" : "s",
            (unsigned long)(GetTickCount() - started));
     return ok ? 0 : 1;

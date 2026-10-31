@@ -26,4 +26,10 @@ typedef struct { int book_marker, cont, pause_quit; } sp_features;
 int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features f,
                      long long filetime, sp_redirect* r, int* nr, int maxr, sp_log_fn log);
 
+// One line describing the last build for the DLL's single log line, e.g.
+// "book_marker=on continue=on pause_quit=on cache=built 110 ms" (or "cache=reused",
+// "skipped: <why>", "build failed"). Empty before the first build. Written under the
+// caller's build lock, so read it right after sp_overlay_build.
+const char* sp_overlay_status(void);
+
 #endif

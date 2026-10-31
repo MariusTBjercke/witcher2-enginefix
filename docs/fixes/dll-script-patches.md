@@ -1,10 +1,11 @@
 # Script patches applied by the DLL
 
-Status: Tasks 1-6 of `docs/plans/2026-10-31-dll-script-patches.md` done 2026-10-31 on branch
-`dll-script-patches`. Task 1 traced file access passively; Task 5 added the offline script edit
-engine (below); Task 6 builds the patched files into a cache folder and proves the result equal
-to `ScriptPatches.ps1`. Nothing is hooked in the game yet (Task 7). Target: Steam Enhanced
-Edition 3.5.0.26.
+Status: Tasks 1-7 of `docs/plans/2026-10-31-dll-script-patches.md` implemented 2026-10-31 on
+branch `dll-script-patches`. Task 1 traced file access passively; Task 5 added the offline script
+edit engine; Task 6 builds the patched files into a cache folder and proves the result equal to
+`ScriptPatches.ps1`; Task 7 hooks the game's file opens and serves the cache. The owner's start
+test and in-game check (Task 7 Steps 2-3) are still pending. Target: Steam Enhanced Edition
+3.5.0.26.
 
 ## Why
 
@@ -348,3 +349,52 @@ vanilla `base_scripts.dzip` was at hand on this machine, so the vanilla case sti
 dry runs recorded in `docs/fixes/shop-book-read-marker.md`. Overlay build time on this machine:
 ~110 ms with all three features (the archive open reads 23 tables including `pack0.dzip`'s), and
 16 ms when the cache is reused.
+
+## Redirect in the DLL (Task 7)
+
+`src/sp_hooks.c` holds the redirect state and the build trigger; the IAT plumbing stays in
+`src/enginefix.c`, whose existing `hook_CreateFileW` / `hook_FindFirstFileW` /
+`hook_FindNextFileW` chain save_trace, file_trace and this redirect in one slot each (one slot
+must never be patched by two owners).
+
+* **ini.** `[scriptpatches] book_marker`, `continue`, `pause_quit`, each default 1 (decision 1);
+  `[general] enabled=0` keeps turning everything off. Written to
+  `dist-files\witcher2_enginefix.ini` next to the other sections; an existing user ini without
+  the section gets the defaults.
+* **Install.** `scripthooks_thread` starts from `DllMain` when a feature is on, polls every 1 ms
+  until the `CreateFileW` slot holds the kernel32 export (the Task 1 pattern), pins the module
+  with `GetModuleHandleExA(..._PIN)` like the save hooks, and patches three slots:
+  `CreateFileW` (`00CAD320`), `FindFirstFileW` (`00CAD26C`), `FindNextFileW` (`00CAD264`).
+  `patch_iat` refuses a slot that does not hold the expected export, so a wrong constant fails
+  loudly instead of mispatching. If `CreateFileW` cannot be hooked, the features switch
+  themselves off.
+* **Redirect.** `hook_CreateFileW` normalises the path (`GetFullPathNameW`; absolute paths that
+  do not contain `CookedPC` are skipped without a call), asks `sp_hooks_path` and opens the
+  cached copy instead - same access/share/flags, so still read-only. A cache open that fails
+  falls back to the original path and logs why. Every redirect is logged (first 8):
+  `script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy`.
+* **Build trigger.** The overlay is built on the first hit of a target, under a critical
+  section, once per session: normally the game's startup `FindFirstFileW
+  "<game>\CookedPC\*.dzip"` (its find data carries `base_scripts.dzip`'s size), or the first
+  `CreateFileW` of the archive or a loose movie if that listing never happens. The game waits
+  for that one build (~110 ms; later starts reuse the cache in ~16 ms).
+* **Find data.** For a `base_scripts.dzip` entry `FindFirstFileW`/`FindNextFileW` return the
+  cached file's attributes, sizes and times, name kept: the engine must see the archive it is
+  about to open, and its "have the scripts changed?" check reads that timestamp. No attribute
+  or size query needs a hook - Task 1 showed `GetFileAttributesW` carries no size and
+  `GetFileSize` follows the handle.
+* **Log line.** Once per session, from the build: `script patches: book_marker=on
+  continue=on pause_quit=on cache=built 110 ms` (`skipped: <why>` per feature, `cache=reused`
+  on later starts). `cache.status` in the cache folder remembers the per-feature outcome so a
+  cache hit reports the same states instead of guessing.
+
+Offline verification (2026-10-31): `cmd /c build.bat` builds the DLL with the script code,
+`build\sptest.exe test --game` still passes (22 tests) and `golden.py` still prints `GOLDEN
+OK`. A local harness (not committed) linked `src/sp_*.c` against the golden scratch layout and
+confirmed: the `*.dzip` glob triggers the build, the `base_scripts.dzip` find data reports the
+cached archive's size (4 508 633 bytes), the archive and both loose movies resolve to their
+cached copies, other archives and files outside `CookedPC` stay untouched, matching is
+case-insensitive, and the second session reuses the cache.
+
+The in-game check is pending: see the plan's Task 7 Steps 2-3 (owner start test with the old
+0.5 patches uninstalled once, then each feature and each ini key).

@@ -43,6 +43,8 @@ static void vlogf(sp_log_fn log, const char* fmt, ...)
     log("%s", buf);
 }
 
+
+
 // ---- growable text buffer ----------------------------------------------
 
 typedef struct { char* p; size_t n, cap; } obuf;
@@ -279,6 +281,43 @@ static int ensure_dir(const wchar_t* path)
     return 1;
 }
 
+// ---- build status ------------------------------------------------------
+// One line for the DLL's log (sp_overlay_status), built from the per-feature outcomes below.
+
+static char g_status[700];
+
+const char* sp_overlay_status(void)
+{
+    return g_status;
+}
+// cache.status remembers the per-feature outcome of a build, so a cache hit reports the same
+// "on" / "skipped: why" states on later starts instead of guessing.
+static int write_status(const wchar_t* cache_dir, const char* features)
+{
+    wchar_t path[MAX_PATH];
+    sp_buf b;
+
+    b.p = (unsigned char*)features;
+    b.n = strlen(features);
+    if (!path_join(path, MAX_PATH, cache_dir, L"cache.status")) return 0;
+    return sp_write_file_atomic(path, &b);
+}
+
+static int read_status(const wchar_t* cache_dir, char* out, size_t cap)
+{
+    wchar_t path[MAX_PATH];
+    sp_buf b;
+    size_t n;
+
+    out[0] = 0;
+    if (!path_join(path, MAX_PATH, cache_dir, L"cache.status")) return 0;
+    if (!sp_read_file(path, &b)) return 0;
+    n = b.n < cap - 1 ? b.n : cap - 1;
+    if (n) memcpy(out, b.p, n);
+    out[n] = 0;
+    sp_free(&b);
+    return 1;
+}
 // ---- the game's archives -----------------------------------------------
 
 typedef struct {
@@ -874,12 +913,12 @@ static int add_redirect(sp_redirect* r, int* nr, int maxr, const wchar_t* target
 
 static void remove_cache_outputs(const wchar_t* cache_dir)
 {
-    static const wchar_t* const leaves[4] = {
-        L"cache.key", L"base_scripts.dzip", L"ui_trade.swf", L"ui_storage.swf"
+    static const wchar_t* const leaves[5] = {
+        L"cache.key", L"cache.status", L"base_scripts.dzip", L"ui_trade.swf", L"ui_storage.swf"
     };
     int i;
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 5; i++) {
         wchar_t path[MAX_PATH];
 
         if (path_join(path, MAX_PATH, cache_dir, leaves[i])) DeleteFileW(path);
@@ -939,7 +978,9 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     int swf_kind[2] = { 0, 0 };
     sp_ctx sctx;
     sp_ctx* pctx = NULL;
-    int i, ok = 0, skip_scripts = 0, have_collect = 0, book_ok = 0, any;
+    char st_book[240] = "off", st_cont[240] = "off", st_quit[240] = "off";
+    char status_feats[620] = "";
+    int i, ok = 0, skip_scripts = 0, have_collect = 0, book_ok = 0, any, from_cache = 0;
     DWORD started = GetTickCount();
 
     memset(&ctx, 0, sizeof ctx);
@@ -958,6 +999,7 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     ctx.log = log;
     any = f.book_marker || f.cont || f.pause_quit;
     if (!any) {
+        _snprintf_s(g_status, sizeof g_status, _TRUNCATE, "book_marker=off continue=off pause_quit=off cache=-");
         vlogf(log, "script overlay: no feature enabled");
         return 1;
     }
@@ -976,7 +1018,18 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         goto done;
     }
     if (key_matches(cache_dir, &key)) {
+        char remembered[620];
+
         reuse_redirects(&ctx, cache_dir, f, r, nr, maxr, log);
+        if (read_status(cache_dir, remembered, sizeof remembered) && remembered[0]) {
+            _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE, "%s", remembered);
+        } else {
+            _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE,
+                        "book_marker=%s continue=%s pause_quit=%s",
+                        f.book_marker ? "on" : "off", f.cont ? "on" : "off",
+                        f.pause_quit ? "on" : "off");
+        }
+        from_cache = 1;
         vlogf(log, "script overlay: cache: reused (%d redirects)", *nr);
         ok = 1;
         goto done;
@@ -1024,6 +1077,12 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         }
     }
     if (skip_scripts) {
+        if (f.book_marker) _snprintf_s(st_book, sizeof st_book, _TRUNCATE, "skipped: scripts already patched");
+        if (f.cont) _snprintf_s(st_cont, sizeof st_cont, _TRUNCATE, "skipped: scripts already patched");
+        if (f.pause_quit) _snprintf_s(st_quit, sizeof st_quit, _TRUNCATE, "skipped: scripts already patched");
+        _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE,
+                    "book_marker=%s continue=%s pause_quit=%s", st_book, st_cont, st_quit);
+        write_status(cache_dir, status_feats);
         if (!write_key(cache_dir, &key)) {
             vlogf(log, "script overlay: cannot write the cache key");
         }
@@ -1055,25 +1114,32 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
 
     if (f.book_marker) {
         if (!have_collect) {
-            vlogf(log, "script overlay: book_marker=skipped: %s", sp_script_error());
+            _snprintf_s(st_book, sizeof st_book, _TRUNCATE, "skipped: %s", sp_script_error());
+            vlogf(log, "script overlay: book_marker=%s", st_book);
         } else if (!sp_script_apply("BookMarker", texts, 5, pctx, NULL, 0)) {
-            vlogf(log, "script overlay: book_marker=skipped: %s", sp_script_error());
+            _snprintf_s(st_book, sizeof st_book, _TRUNCATE, "skipped: %s", sp_script_error());
+            vlogf(log, "script overlay: book_marker=%s", st_book);
         } else {
+            _snprintf_s(st_book, sizeof st_book, _TRUNCATE, "on");
             book_ok = 1;
             vlogf(log, "script overlay: book_marker=on");
         }
     }
     if (f.cont) {
         if (!sp_script_apply("Continue", texts, 5, pctx, NULL, 0)) {
-            vlogf(log, "script overlay: continue=skipped: %s", sp_script_error());
+            _snprintf_s(st_cont, sizeof st_cont, _TRUNCATE, "skipped: %s", sp_script_error());
+            vlogf(log, "script overlay: continue=%s", st_cont);
         } else {
+            _snprintf_s(st_cont, sizeof st_cont, _TRUNCATE, "on");
             vlogf(log, "script overlay: continue=on");
         }
     }
     if (f.pause_quit) {
         if (!sp_script_apply("PauseQuit", texts, 5, pctx, NULL, 0)) {
-            vlogf(log, "script overlay: pause_quit=skipped: %s", sp_script_error());
+            _snprintf_s(st_quit, sizeof st_quit, _TRUNCATE, "skipped: %s", sp_script_error());
+            vlogf(log, "script overlay: pause_quit=%s", st_quit);
         } else {
+            _snprintf_s(st_quit, sizeof st_quit, _TRUNCATE, "on");
             vlogf(log, "script overlay: pause_quit=on");
         }
     }
@@ -1183,6 +1249,9 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         }
     }
 
+    _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE,
+                "book_marker=%s continue=%s pause_quit=%s", st_book, st_cont, st_quit);
+    write_status(cache_dir, status_feats);
     if (!write_key(cache_dir, &key)) {
         vlogf(log, "script overlay: cannot write the cache key");
         goto done;
@@ -1191,6 +1260,16 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
           (unsigned long)(GetTickCount() - started), *nr);
     ok = 1;
 done:
+    if (!ok) {
+        _snprintf_s(g_status, sizeof g_status, _TRUNCATE, "build failed");
+    } else if (from_cache) {
+        _snprintf_s(g_status, sizeof g_status, _TRUNCATE, "%s cache=reused", status_feats);
+    } else {
+        DWORD ms = GetTickCount() - started;
+
+        _snprintf_s(g_status, sizeof g_status, _TRUNCATE, "%s cache=built %lu ms", status_feats,
+                    (unsigned long)ms);
+    }
     for (i = 0; i < 5; i++) sp_free(&texts[i].text);
     for (i = 0; i < 5; i++) sp_free(&orig[i]);
     for (i = 0; i < 2; i++) sp_free(&swf_data[i]);

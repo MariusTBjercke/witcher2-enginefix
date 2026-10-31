@@ -364,8 +364,30 @@ Hook behaviour:
 - Install: the Task 1 early thread (now always on when any feature is on). `GetModuleHandleExA(..._PIN)` as the save hooks do.
 - Log once: `script patches: book_marker=on (ok|skipped: why) continue=... pause_quit=... cache=reused|built N ms`.
 
-- [ ] **Step 1:** implement; `.\build.bat`; `build\sptest.exe test` still PASS.
-- [ ] **Step 2: Owner start test** (hook rule) with the on-disk 0.5 patches *uninstalled first* (owner runs the old `Uninstall.bat` once; Task 8 handles this for users). Expected: game reaches the main menu; log shows the line above with all three `ok` and `cache=built`.
+- [x] **Step 1:** implement; `.\build.bat`; `build\sptest.exe test` still PASS.
+
+  Done 2026-10-31: `src/sp_hooks.{c,h}` (redirect table, build-on-first-hit under a critical
+  section, find data), `src/enginefix.c` (`[scriptpatches]` keys default 1, `script_dirs`,
+  `scripthooks_thread` for the three IAT slots, redirect chained into `hook_CreateFileW` and the
+  find-data fix into `hook_FindFirstFileW`/`hook_FindNextFileW`), `build.bat` links `src\sp_*.c`
+  and tinf into the DLL, `[scriptpatches]` added to `dist-files\witcher2_enginefix.ini`.
+  `cmd /c build.bat` builds; `build\sptest.exe test --game` 22 tests, 0 failures; the golden
+  test still prints `GOLDEN OK`. A local hooks harness against the golden scratch layout proved
+  the build trigger, the redirected find size (4 508 633 = the cached archive), the three
+  redirects and that unrelated paths are untouched. Details in
+  `docs/fixes/dll-script-patches.md`. Not yet committed separately: Step 4's commit below.
+
+- [ ] **Step 2: Owner start test** (hook rule) with the on-disk 0.5 patches *uninstalled first*
+  (owner runs the old `Uninstall.bat` once; Task 8 handles this for users). Expected: game
+  reaches the main menu; log shows the line above with all three `ok` and `cache=built`.
+  Owner steps: close the game, run
+  `<game>\Witcher2EngineFix_Optional\ScriptPatches\Uninstall.bat` once, copy
+  `build\dinput8.dll` to `<game>\bin`, start the game through Steam and press *Launch game*,
+  then send `bin\witcher2_enginefix.log`. Expected lines: `scriptpatches: book_marker=1
+  continue=1 pause_quit=1`, `script patches: hooks installed after N ms (3/3 slots)`,
+  `script overlay: read icons: 152 books, 152 icons`, `script patches: book_marker=on
+  continue=on pause_quit=on cache=built N ms`, and one `script patches: CreateFileW "... ->
+  cached copy` per target.
 - [ ] **Step 3: Owner in-game check** (same as `docs/fixes/shop-book-read-marker.md` "Final form" and `menu-buttons.md`): inventory statuses/tooltip/refresh after reading; trade and storage ticks both sides; loot window icon + `(Nothing new)`; container preview icon; Continue; pause-menu Quit. Then each ini key `0` → that feature gone, others still there. Then delete `bin\dinput8.dll` → vanilla game (uninstall check).
 - [ ] **Step 4: Commit** `0.6.0 work: script patches applied by the DLL`.
 

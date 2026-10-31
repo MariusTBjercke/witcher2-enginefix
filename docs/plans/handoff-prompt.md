@@ -4,7 +4,7 @@
 
 Ship 0.6.0 of `witcher2-enginefix` with the optional script patches (BookMarker, Continue,
 PauseQuit) applied by `bin\dinput8.dll` itself: no `.bat`/`.ps1` in the release, no game file
-written, uninstall = delete the DLL. Work Tasks 7-9 of
+written, uninstall = delete the DLL. Finish Task 7 Steps 2-3 (owner test) and then Tasks 8-9 of
 `docs/plans/2026-10-31-dll-script-patches.md` on branch `dll-script-patches`; `main` holds the
 released 0.5.1 and stays untouched until Task 7's in-game check passes.
 
@@ -12,7 +12,7 @@ released 0.5.1 and stays untouched until Task 7's in-game check passes.
 
 | Path | Purpose |
 |---|---|
-| `docs/plans/2026-10-31-dll-script-patches.md` | The plan. Tasks 1-6 are `[x]`, 7-9 open. |
+| `docs/plans/2026-10-31-dll-script-patches.md` | The plan. Tasks 1-6 and Task 7 Step 1 are `[x]`; Task 7 Steps 2-3 wait for the owner; 8-9 open. |
 | `tools/script-patches/ScriptPatches.ps1` | Reference implementation; authoritative for every byte until Task 9 deletes it. |
 | `docs/fixes/dll-script-patches.md` | Task 1 research: Q1-Q6 answers, IAT slots, what Task 7 must redirect. |
 | `docs/validation/file-trace-2026-10-31.md` | Sanitized log evidence for that research. |
@@ -31,41 +31,55 @@ Works (verified 2026-10-31 on this machine):
   `23 archives, 31999 entries`, `12 archives, 612 entries extracted`,
   `23 archives, 612 entries compared with the file reader, 11 large archive(s)`,
   `4 SWFs checked`, `markers 2 1 6 6 2, 224019 bytes of scripts`.
-- `cmd /c build.bat` -> `Built build\dinput8.dll` (the `sp_*` code is not linked into the DLL
-  yet; the script-patch RCDATA is already embedded).
+- `cmd /c build.bat` -> `Built build\dinput8.dll`, now with `src\sp_*.c` + tinf linked in
+  (only the pre-existing `LNK4104` export warnings).
 - `python -I tools\patchtest\golden.py "<game>" "<scratch>"` -> `GOLDEN OK`: 460
   `base_scripts.dzip` entries, 152 read-book icons and both movies byte-identical to the
   reference, and the second build reuses the cache without touching a file. Mersey + HD UI
   inputs only (the old patcher's backup); no vanilla archive was at hand.
 - Overlay build on this machine: ~110 ms with all three features, 16 ms when the cache is
-  reused (`build\sptest.exe build "<game>" <cache>`). The cache is
-  `<cache>\base_scripts.dzip`, `<cache>\ui_trade.swf`, `<cache>\ui_storage.swf`, `cache.key`.
+  reused. The cache is `<cache>\base_scripts.dzip`, `<cache>\ui_trade.swf`,
+  `<cache>\ui_storage.swf`, `cache.key`, `cache.status`.
+- Task 7 Step 1 is implemented and verified offline: `src/sp_hooks.{c,h}` and the enginefix
+  wiring install `CreateFileW`/`FindFirstFileW`/`FindNextFileW` from a 1 ms-poll early thread,
+  build the overlay on the startup `<game>\CookedPC\*.dzip` listing (or the first target open),
+  redirect the cached archive and the two loose movies, and report the cached find data for
+  `base_scripts.dzip`. A local hooks harness on the golden scratch layout passed all checks
+  (build trigger, find size 4 508 633 = cached archive, 3 redirects, unrelated paths untouched,
+  case-insensitive, cache reuse). `[scriptpatches]` keys default 1 and are documented in
+  `dist-files\witcher2_enginefix.ini`.
 - Game install is back at the released 0.5.1 state: original DLL and the owner's ini
   (`skip_intro=1`, no `file_trace` key). Backups in
   `build\file-trace-install-backup-20261031-180727\`.
 - Branch commits: `6fc5c82` research, `f96527b` DZIP + harness, `eb6e135` SWF + inflate,
   `cd18318` DDS icons, `2bfa968` plan note, `8e56ada` AGENTS probe fix, `bdd1f6a` edit engine,
-  then the overlay build.
-
-Not implemented: Tasks 7-9. `src/enginefix.c` still knows nothing about the script patches.
+  `873d337` overlay + golden, then the DLL redirect.
 
 ## Next item
 
-Task 7 of the plan, "Redirect in the DLL (owner start test)":
+Task 7 Steps 2-3, the owner start test and in-game check (hard stop). Give the owner this:
 
-- Create `src/sp_hooks.{c,h}`; modify `src/enginefix.c` (ini `[scriptpatches] book_marker`,
-  `continue`, `pause_quit`, all default 1), `dist-files/witcher2_enginefix.ini`, `build.bat`
-  (link `sp_*.c` + `bcrypt.lib` ready for Task 8).
-- `CreateFileW(path)`: full path via `GetFullPathNameW`, compared case-insensitively with the
-  redirect table. First hit of a target, under a critical section, runs `sp_overlay_build`
-  once (synchronously; the game waits, first start only) from the same early-install thread
-  pattern Task 1 added; the cache goes to `<game>\bin\witcher2_enginefix_cache`.
-- Redirect `FindFirstFileW`/`FindNextFileW` find data for `CookedPC\*.dzip` to the cached
-  size (Task 1 Q3); `GetFileSize` follows the handle. Log one line:
-  `script patches: book_marker=on continue=on pause_quit=on cache=built|reused`.
-- **Owner start test** (hook rule) after the owner runs the old `Uninstall.bat` once, then an
-  in-game check of all three features and each ini key set to 0; then delete the DLL and check
-  the vanilla game. Tasks 7 Steps 2-3 and everything after them are hard stops.
+1. Close the game and the launcher.
+2. Run `<game>\Witcher2EngineFix_Optional\ScriptPatches\Uninstall.bat` once. It restores the
+   0.5 on-disk patches (the DLL refuses to patch an already marked archive; Task 8 automates
+   this for users). Check that `CookedPC\base_scripts.dzip` is back to ~1.67 MB and the
+   `CookedPC\globals\gui\icons\items\w2ef_read` folder is gone.
+3. Copy `build\dinput8.dll` to `<game>\bin`. The installed ini may stay as it is (the new
+   `[scriptpatches]` keys default to 1) or take `dist-files\witcher2_enginefix.ini`.
+4. Start the game through Steam and press *Launch game*. Reaching the main menu is the start
+   test; then the in-game check: inventory statuses/tooltip/refresh after reading, trade and
+   storage ticks, loot window icon + `(Nothing new)`, container preview icon, Continue,
+   pause-menu Quit. Then each ini key `0` (feature gone, others intact) and finally delete
+   `bin\dinput8.dll` for the vanilla check.
+5. Send `<game>\bin\witcher2_enginefix.log`. Expected: `scriptpatches: book_marker=1
+   continue=1 pause_quit=1`, `script patches: hooks installed after N ms (3/3 slots)`,
+   `script overlay: read icons: 152 books, 152 icons`, `script patches: book_marker=on
+   continue=on pause_quit=on cache=built N ms`, one `script patches: CreateFileW
+   "<game>\CookedPC\base_scripts.dzip" -> cached copy` and the same for `ui_trade.swf` and
+   `ui_storage.swf`.
+
+A silent crash at startup means a wrong hook and needs a rollback (delete the DLL); report it
+instead of retrying. Steps 4 (commit) and Tasks 8-9 wait for this.
 
 ## Critical constraints
 
@@ -84,6 +98,12 @@ Task 7 of the plan, "Redirect in the DLL (owner start test)":
 - The golden test needs `<scratch>` on the game's volume (the 22 other dzips are hard links) and
   wipes `ref\`, `dll\`, `out\`, `backup\` and `ref-patch.ps1` under it. It runs a copy of
   `ScriptPatches.ps1`, so the repo never gets the patcher's `backup` folder.
+- The find-data redirect matches the entry name `base_scripts.dzip` in the archive listing; the
+  game has exactly one such file, so no directory bookkeeping is kept. If a second archive
+  listing ever carried that name, its size would be reported from the cache too.
+- The redirect only fires for paths the DLL recognises as absolute (or `CookedPC` paths it can
+  resolve); Task 1 saw absolute backslash paths for every target. If the start test shows no
+  `-> cached copy` line, log with `[diagnostics] file_trace=1` and compare the path form.
 - The cache is keyed on the DLL version, the three features and the size/mtime of every
   `CookedPC\*.dzip` and loose movie: bump `ENGINEFIX_VERSION` (Task 9) to force a rebuild for
   users, and delete `bin\witcher2_enginefix_cache` when testing by hand.
@@ -106,11 +126,12 @@ Task 7 of the plan, "Redirect in the DLL (owner start test)":
 ## First command
 
 ```powershell
-git log --oneline -6; cmd /c tools\patchtest\build.bat; build\sptest.exe test --game "<game>"
-python -I tools\patchtest\golden.py "<game>" "<scratch>"
+git log --oneline -6; cmd /c build.bat; cmd /c tools\patchtest\build.bat
+build\sptest.exe test --game "<game>"
 ```
 
-Then read Task 7 of `docs/plans/2026-10-31-dll-script-patches.md`, "Hook design" in
-`docs/fixes/dll-script-patches.md` and the existing early-install thread and `patch_iat` in
-`src/enginefix.c` (`filetrace_thread`, `hook_CreateFileW`). Task 7 Steps 2-3 need the owner.
+Then hand the owner the start-test steps above, or read Task 7 Steps 2-3 of
+`docs/plans/2026-10-31-dll-script-patches.md` and "Redirect in the DLL" in
+`docs/fixes/dll-script-patches.md`. After the owner reports back, Task 7 Step 4 is the commit
+and Task 8 (migration) follows; it has its own owner check at Step 5.
 
