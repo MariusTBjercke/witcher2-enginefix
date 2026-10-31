@@ -65,8 +65,9 @@ and throws on one. Pre-check zip 11847272 bytes, no script; 23 tests pass.
 
 ## Next item
 
-The owner's bundled in-game check right before the release (hard stop; verify as in
-`progress.json`), with a DLL built from the final commit:
+**The bundled in-game check below passed on 2026-10-31** (details in `progress.json` and the
+plan). What is left: rebuild the zip, the owner's Nexus upload and scan, then merge to `main`,
+push and the GitHub release on the owner's go-ahead. The check, for reference:
 
 1. Task 7 Step 3 rest: storage chest ticks (`ui_storage.swf` has not been opened in game yet),
    each `[scriptpatches]` key `0` (that feature gone, the others intact), then delete

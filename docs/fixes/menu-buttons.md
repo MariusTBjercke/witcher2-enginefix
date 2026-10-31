@@ -94,6 +94,9 @@ button says "to the main menu" in every language, so the two buttons cannot be c
   its `EnableInput`) lands a frame after the box opened and turns the HUD's mouse input off
   again. A fix would open the box one frame later, which needs a timer on an entity (e.g. a
   player timer, i.e. patching `player.ws` too) and some in-game iterations.
+  Not the same as the save list: the Load/Save list sometimes also needs one click before
+  hover works, but that happens with Quit switched off and in the vanilla game without the DLL
+  (owner, 2026-10-31), so it is the game's own.
 * Risk carried over from W1: there, quitting with an area loaded crashed during shutdown (an
   invisible fault, but it filled the Event Log). Whether `QuitApplication()` with a world loaded
   is clean in TW2 is part of the in-game test: after quitting this way, Windows Event Log

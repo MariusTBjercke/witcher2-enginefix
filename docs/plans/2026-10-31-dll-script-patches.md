@@ -403,9 +403,14 @@ Hook behaviour:
   (3/3), cache built in 109 ms (5 script entries, 152 icons in `dlc_finishers.dzip`, both
   movies), all three features `on`; `base_scripts.dzip` (twice), `dlc_finishers.dzip` and
   `ui_trade.swf` served from the cache. `CookedPC` unchanged since the old `Uninstall.bat`.
-- [ ] **Step 3: Owner in-game check.** Partly done in start test 2: the owner checked the book
-  markers and the menu buttons and saved a few times (thumbnails reloaded). Still open:
-  storage (`ui_storage.swf` was never opened that session), each ini key `0`, deleting the DLL.
+- [x] **Step 3: Owner in-game check.** Start test 2 covered the book markers, the menu buttons
+  and saving. The bundled check (2026-10-31, 0.6.0 DLL from `052b8de`) covered the rest:
+  run 1 (after Task 8's migration) all features, storage ticks (`ui_storage.swf` served from
+  the cache); run 2 `book_marker=0` (markers gone, Continue and Quit there; cache rebuilt in
+  31 ms with 1 script entry, no carrier, no movies); run 3 `continue=0`, `pause_quit=0` (both
+  buttons gone, markers there; 4 script entries); run 4 without `bin\dinput8.dll`: vanilla
+  game, works. The save list sometimes needs one click before hover works - in run 3 (no Quit
+  button, so not the Quit box) and in vanilla run 4 too, so it is the game's own behaviour.
   Original step (same as `docs/fixes/shop-book-read-marker.md` "Final form" and `menu-buttons.md`): inventory statuses/tooltip/refresh after reading; trade and storage ticks both sides; loot window icon + `(Nothing new)`; container preview icon; Continue; pause-menu Quit. Then each ini key `0` → that feature gone, others still there. Then delete `bin\dinput8.dll` → vanilla game (uninstall check).
 - [x] **Step 4: Commit** `0.6.0 work: script patches applied by the DLL`.
 
@@ -436,8 +441,13 @@ On start, before hooks serve anything: if `<game>\Witcher2EngineFix_Optional\Scr
   SHA-256 `"abc"` vector) - 23 tests pass; the step-1 case with the real reference runs in
   `golden.py` (`sptest migrate` on the reference's patched layout with its own backup: the three
   files equal the originals, 152 icons removed, backup renamed) - `GOLDEN OK`.
-- [ ] **Step 5: Owner check** (deferred: the owner bundles it with the other in-game checks just before the 0.6.0 release) on the real install (owner keeps a manual copy of `CookedPC\base_scripts.dzip` and `CookedPC\globals\gui\ui_trade.swf`/`ui_storage.swf` first): reinstall 0.5's patches with the old `Install.bat`, start with the new DLL → log `migrate: restored 3 files, removed w2ef_read`, game works with the DLL patches.
-- [ ] **Step 6: Commit** `0.6.0 work: restore old on-disk script patches once`.
+- [x] **Step 5: Owner check** - passed 2026-10-31 (run 1 of the bundled check): after the old
+  `Install.bat` (all three), the first start logged `migrate: restored base_scripts.dzip`,
+  `ui_trade.swf`, `ui_storage.swf`, `removed the read-book icons (152 files)`, `restored 3 files,
+  removed w2ef_read`, `old backup kept as ...backup.restored-by-dll` at +0.23 s, then built the
+  cache (125 ms); the three files equal the copies taken before `Install.bat` byte for byte
+  (SHA-256), and the game worked with the DLL patches. Original step (deferred: the owner bundles it with the other in-game checks just before the 0.6.0 release) on the real install (owner keeps a manual copy of `CookedPC\base_scripts.dzip` and `CookedPC\globals\gui\ui_trade.swf`/`ui_storage.swf` first): reinstall 0.5's patches with the old `Install.bat`, start with the new DLL → log `migrate: restored 3 files, removed w2ef_read`, game works with the DLL patches.
+- [x] **Step 6: Commit** `0.6.0 work: restore old on-disk script patches once` (`397b0dc`).
 
 ### Task 9: Release 0.6.0 without scripts
 
