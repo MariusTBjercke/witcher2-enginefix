@@ -69,7 +69,7 @@ See `docs/local/nexus.md` (scan results).
 | `tools/patchtest/golden.py` | runs the reference `.ps1` on a scratch copy and compares with the harness output |
 | `docs/fixes/dll-script-patches.md` | research results, design, validation (new) |
 
-The `sp_*` files compile into both `dinput8.dll` and `patchtest.exe`. They take an output
+The `sp_*` files compile into both `dinput8.dll` and `build\sptest.exe`. They take an output
 buffer and a log callback and never touch the game process, so everything except Task 1 and
 Task 7 is testable offline.
 
@@ -115,8 +115,8 @@ IAT slots (unpacked 3.5.0.26, computed from the import table; `CreateFileW`, `Co
 /* IAT_CREATEFILEW 0x00CAD320u already defined */
 ```
 
-- [ ] **Step 1: Early install thread.** Copy the `startvideo_thread` pattern: started from `DllMain` when `file_trace=1`, polls every 1 ms until the `CreateFileW` slot holds `GetProcAddress(kernel32, "CreateFileW")` (the stub has filled the IAT), then calls `patch_iat` for the slots above and logs `file-trace: hooked after N ms`. Reuse `patch_iat` (it already refuses a slot that does not hold the expected export). The existing `save_trace` `CreateFileW` hook must chain: one `hook_CreateFileW` that does both, so the slot is patched once.
-- [ ] **Step 2: Log hooks.** Each hook calls the original first, then logs one line for paths that contain `\CookedPC\` or end in `.dzip`/`.swf`/`.dds` (case-insensitive): API, path, result (handle/attributes/size), thread id, `GetTickCount()` relative to DLL load. Cap at 5 000 lines. Exact signatures (stdcall, same as the Win32 headers):
+- [x] **Step 1: Early install thread.** Copy the `startvideo_thread` pattern: started from `DllMain` when `file_trace=1`, polls every 1 ms until the `CreateFileW` slot holds `GetProcAddress(kernel32, "CreateFileW")` (the stub has filled the IAT), then calls `patch_iat` for the slots above and logs `file-trace: hooked after N ms`. Reuse `patch_iat` (it already refuses a slot that does not hold the expected export). The existing `save_trace` `CreateFileW` hook must chain: one `hook_CreateFileW` that does both, so the slot is patched once.
+- [x] **Step 2: Log hooks.** Each hook calls the original first, then logs one line for paths that contain `\CookedPC\` or end in `.dzip`/`.swf`/`.dds` (case-insensitive): API, path, result (handle/attributes/size), thread id, `GetTickCount()` relative to DLL load. Cap at 5 000 lines. Exact signatures (stdcall, same as the Win32 headers):
 
 ```c
 typedef HANDLE (WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
@@ -130,10 +130,10 @@ typedef BOOL   (WINAPI *GetFileSizeEx_t)(HANDLE, PLARGE_INTEGER);
 typedef HANDLE (WINAPI *CreateFileMappingW_t)(HANDLE, LPSECURITY_ATTRIBUTES, DWORD, DWORD, DWORD, LPCWSTR);
 ```
 
-- [ ] **Step 3: Build** with `.\build.bat`. Expected: `Built build\dinput8.dll`, no new warnings.
-- [ ] **Step 4: Owner start test** (required by the hook rule). Owner: install the DLL, set `[diagnostics] file_trace=1`, start the game, load a save, open a container with a book, open a merchant, quit. Expected: the game behaves as before; the log has `file-trace: hooked after N ms` before the first `base_scripts.dzip` line.
-- [ ] **Step 5: Write up** Q1-Q6 with log excerpts in `docs/fixes/dll-script-patches.md` and record **Branch A or B**. If Q2 fails (hook too late), stop and bring it to the owner: the fallback is to hook from `DirectInput8Create`/earlier or to patch on disk, which changes the plan.
-- [ ] **Step 6: Commit** `research: file access trace for DLL script patches`.
+- [x] **Step 3: Build** with `.\build.bat`. Expected: `Built build\dinput8.dll`, no new warnings.
+- [x] **Step 4: Owner start test** (required by the hook rule). Owner: install the DLL, set `[diagnostics] file_trace=1`, start the game, load a save, open a container with a book, open a merchant, quit. Expected: the game behaves as before; the log has `file-trace: hooked after N ms` before the first `base_scripts.dzip` line.
+- [x] **Step 5: Write up** Q1-Q6 with log excerpts in `docs/fixes/dll-script-patches.md` and record **Branch A or B**. If Q2 fails (hook too late), stop and bring it to the owner: the fallback is to hook from `DirectInput8Create`/earlier or to patch on disk, which changes the plan.
+- [x] **Step 6: Commit** `research: file access trace for DLL script patches`.
 
 ### Task 2: DZIP reader/writer + test harness
 
@@ -166,13 +166,13 @@ Port `ReadTable`, `Hash`, `Extract`, `LzfDecompress`, `EntryData`, `ReplaceEntri
 +24 hash). `filetime` is a parameter (the overlay passes the cache build time) instead of
 `DateTime.UtcNow`, so a build is reproducible.
 
-`patchtest.exe` runs `test` (all unit tests, prints `PASS name`/`FAIL name: why`, exit code =
+`build\sptest.exe` runs `test` (all unit tests, prints `PASS name`/`FAIL name: why`, exit code =
 failures) and later `build`. `tools/patchtest/build.bat` mirrors `build.bat`:
-`cl /nologo /O2 /W4 /MT tools\patchtest\patchtest.c src\sp_*.c /Fe:build\patchtest.exe`; Task 3
+`cl /nologo /O2 /W4 /MT /Isrc tools\patchtest\patchtest.c src\sp_*.c /Fe:build\sptest.exe` (the exe is not called `patchtest.exe`: Windows' UAC installer detection elevates any 32-bit, manifest-less exe whose name contains "patch", so an unattended run blocks on a consent prompt); Task 3
 adds `src\third_party\tinf\*.c` and Task 5 adds `build\scriptpatches.res` (plus `user32.lib` for
 the resource API) to that line.
 
-- [ ] **Step 1: Failing tests** in `patchtest.c`:
+- [x] **Step 1: Failing tests** in `patchtest.c`:
 
 ```c
 static void test_dzip_roundtrip(void) {
@@ -190,10 +190,10 @@ static void test_lzf_backrefs(void) {
 }
 ```
 
-- [ ] **Step 2:** `tools\patchtest\build.bat` then `build\patchtest.exe test` → FAIL (functions missing).
-- [ ] **Step 3:** Implement `sp_dzip.c` (port as above).
-- [ ] **Step 4:** `build\patchtest.exe test --game "<game>"` → all PASS, including every real `.dzip` (pack0 included: only the table is read).
-- [ ] **Step 5: Commit** `script patches in DLL: DZIP reader/writer and test harness`.
+- [x] **Step 2:** `tools\patchtest\build.bat` then `build\sptest.exe test` → FAIL (functions missing).
+- [x] **Step 3:** Implement `sp_dzip.c` (port as above).
+- [x] **Step 4:** `build\sptest.exe test --game "<game>"` → all PASS, including every real `.dzip` (pack0 included: only the table is read).
+- [x] **Step 5: Commit** `script patches in DLL: DZIP reader/writer and test harness`.
 
 ### Task 3: SWF patching + vendored inflate
 
@@ -306,7 +306,7 @@ Steps inside `sp_overlay_build`, mirroring the `.ps1` main flow (lines 1486-1620
 `base_scripts.dzip` and the loose SWFs **from the old patcher's backup**, because the owner's
 live files are patched; hard links for the other dzips, so `<scratch>` must be on the game's
 volume), runs `powershell -File tools\script-patches\ScriptPatches.ps1 -Action Install
--Features All -GameDir <scratch>\ref`, runs `build\patchtest.exe build <scratch>\dll <scratch>\out`,
+-Features All -GameDir <scratch>\ref`, runs `build\sptest.exe build <scratch>\dll <scratch>\out`,
 then compares: every `base_scripts.dzip` entry decompressed (own Python LZF reader, an
 independent check of the C one), each SWF byte for byte, the icon set name for name and byte
 for byte. Prints `GOLDEN OK` or each difference.
@@ -340,7 +340,7 @@ Hook behaviour:
 - Install: the Task 1 early thread (now always on when any feature is on). `GetModuleHandleExA(..._PIN)` as the save hooks do.
 - Log once: `script patches: book_marker=on (ok|skipped: why) continue=... pause_quit=... cache=reused|built N ms`.
 
-- [ ] **Step 1:** implement; `.\build.bat`; `build\patchtest.exe test` still PASS.
+- [ ] **Step 1:** implement; `.\build.bat`; `build\sptest.exe test` still PASS.
 - [ ] **Step 2: Owner start test** (hook rule) with the on-disk 0.5 patches *uninstalled first* (owner runs the old `Uninstall.bat` once; Task 8 handles this for users). Expected: game reaches the main menu; log shows the line above with all three `ok` and `cache=built`.
 - [ ] **Step 3: Owner in-game check** (same as `docs/fixes/shop-book-read-marker.md` "Final form" and `menu-buttons.md`): inventory statuses/tooltip/refresh after reading; trade and storage ticks both sides; loot window icon + `(Nothing new)`; container preview icon; Continue; pause-menu Quit. Then each ini key `0` → that feature gone, others still there. Then delete `bin\dinput8.dll` → vanilla game (uninstall check).
 - [ ] **Step 4: Commit** `0.6.0 work: script patches applied by the DLL`.
