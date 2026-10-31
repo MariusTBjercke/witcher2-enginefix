@@ -445,8 +445,14 @@ On start, before hooks serve anything: if `<game>\Witcher2EngineFix_Optional\Scr
 - Modify: `tools/package-release.ps1` (drop the `Witcher2EngineFix_Optional/...` entries), `docs/README.txt`, `README.md`, `dist-files/witcher2_enginefix.ini`, `CHANGELOG.md`, `src/version.h` (0.6.0 / 0,6,0,0), `docs/fixes/shop-book-read-marker.md` and `menu-buttons.md` (pointer to the DLL implementation), `docs/plans/progress.json`, `docs/local/nexus.md` (description, files, changelog)
 - Delete: `tools/script-patches/ScriptPatches.ps1`, `Install.bat`, `Uninstall.bat` (keep `check_texts.py`; the golden test goes with them, so record in the fix doc that it last passed at commit X)
 
-- [ ] **Step 1:** package; zip lists no `.bat`/`.ps1` (`[IO.Compression.ZipFile]::OpenRead(...).Entries`).
-- [ ] **Step 2:** the README/antivirus note now only mentions the DLL; Install/Uninstall text is "copy the files / delete them" again.
+- [x] **Step 1:** package; zip lists no `.bat`/`.ps1` (`[IO.Compression.ZipFile]::OpenRead(...).Entries`).
+- [x] **Step 2:** the README/antivirus note now only mentions the DLL; Install/Uninstall text is "copy the files / delete them" again.
+
+  Done 2026-10-31 (pre-check build, rebuild after the owner's in-game checks): the zip holds README,
+  LICENSE, `bin/dinput8.dll`, `bin/witcher2_enginefix.ini`, `map_scales.csv` and 25 maps;
+  `package-release.ps1` now throws on any `.bat`/`.cmd`/`.ps1`/`.vbs`/`.js` entry.
+  `check_texts.py` was kept by switching it to `src/scriptpatches/book_texts.ws` (it read the
+  `.ps1`); the golden test went with the `.ps1` (last pass `397b0dc`).
 - [ ] **Step 3:** owner uploads to Nexus as the new main file; check the scan. Target: at or near the W1 level (≤ 1-2 engines, file not quarantined). Record the result in `docs/local/nexus.md`.
 - [ ] **Step 4: Commit** `0.6.0: script patches built into the DLL, no scripts in the release` and a GitHub release per `docs/conventions.md` (owner's go-ahead for the push and release).
 

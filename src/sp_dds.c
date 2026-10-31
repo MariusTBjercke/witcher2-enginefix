@@ -1,5 +1,5 @@
 // DDS icon decode/encode; see sp_dds.h. Port of the Dds class in
-// tools/script-patches/ScriptPatches.ps1 (Decode64, Channel, Rgb565, Mix, Over, Encode64),
+// ScriptPatches.ps1 (git tag v0.5.1) (Decode64, Channel, Rgb565, Mix, Over, Encode64),
 // keeping the reference's integer division and .NET Math.Round (ties to even).
 #include "sp_dds.h"
 #include <math.h>

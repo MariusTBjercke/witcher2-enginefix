@@ -1,6 +1,6 @@
 // SWF patching for the UI movies: CWS -> FWS, plus the same-length statement patches the
 // reference applies. Port of the Swf class, $SwfCompare and $SwfFiles in
-// tools/script-patches/ScriptPatches.ps1; that file stays authoritative.
+// ScriptPatches.ps1 (git tag v0.5.1).
 #ifndef SP_SWF_H
 #define SP_SWF_H
 

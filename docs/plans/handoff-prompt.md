@@ -5,21 +5,21 @@
 Ship 0.6.0 of `witcher2-enginefix` with the optional script patches (BookMarker, Continue,
 PauseQuit) applied by `bin\dinput8.dll` itself: no `.bat`/`.ps1` in the release, no game file
 written, uninstall = delete the DLL. Code for Tasks 1-8 is committed on branch
-`dll-script-patches` and start test 2 passed; what is left is Task 9 and the owner's bundled
-in-game check (Task 7 Step 3, Task 8 Step 5) of `docs/plans/2026-10-31-dll-script-patches.md`.
+`dll-script-patches`, start test 2 passed and Task 9 Steps 1-2 (0.6.0 packaging) are done; what
+is left is the owner's bundled in-game check (Task 7 Step 3, Task 8 Step 5) of `docs/plans/2026-10-31-dll-script-patches.md`.
 `main` holds the released 0.5.1 and stays untouched until the in-game check passes.
 
 ## Source of truth
 
 | Path | Purpose |
 |---|---|
-| `docs/plans/2026-10-31-dll-script-patches.md` | The plan. Tasks 1-6, Task 7 Steps 1, 2, 4 and Task 8 Steps 1-4 are `[x]`; Task 7 Step 3 and Task 8 Step 5 wait for the owner; Task 9 open. |
+| `docs/plans/2026-10-31-dll-script-patches.md` | The plan. Tasks 1-6, Task 7 Steps 1, 2, 4 and Task 8 Steps 1-4 and Task 9 Steps 1-2 are `[x]`; Task 7 Step 3, Task 8 Step 5 and Task 9 Steps 3-4 wait for the owner. |
 | `docs/plans/progress.json` | Item state, `verify` and the evidence trail (`dll-script-patches`, owner `owner`). |
 | `docs/fixes/dll-script-patches.md` | Research (Q1-Q6, IAT slots) plus the design of the edit engine, overlay, redirect and migration. |
-| `tools/script-patches/ScriptPatches.ps1` | Byte-for-byte reference until Task 9 deletes it. |
+| `git show v0.5.1:tools/script-patches/ScriptPatches.ps1` | The old reference, removed from the tree in Task 9. |
 | `src/scriptpatches/`, `src/scriptpatches.rc`, `src/sp_script_ids.h` | Patch data (14-row `edits.txt` + `.ws` fragments) and its RCDATA numeric IDs. |
 | `src/sp_*.{c,h}`, `src/third_party/tinf/` | DZIP (buffer + file-backed), SWF, DDS, script edits, overlay build, redirects. |
-| `tools/patchtest/golden.py` | Golden test: reference `ScriptPatches.ps1` vs `build\sptest.exe build` on two scratch layouts. |
+| `git show 397b0dc:tools/patchtest/golden.py` | The golden test, removed with the reference; last `GOLDEN OK` at `397b0dc`. |
 | `AGENTS.md` | Paths, build/install, incident rules. |
 
 ## Current state
@@ -58,10 +58,15 @@ The install now has: clean `CookedPC` (0.5 patches restored by `Uninstall.bat`, 
 deleted), the d1dcb26 DLL and its cache. The Task 8 DLL is not installed yet: it changes the
 FindFirstFileW hook body, so the bundled check is also its start test.
 
+Task 9 Steps 1-2: version 0.6.0, `CHANGELOG.md`, READMEs, LICENSE (tinf), ini, fix-doc pointers,
+`docs/local/nexus.md`; `ScriptPatches.ps1`, `Install.bat`, `Uninstall.bat`, `golden.py` removed;
+`check_texts.py` reads `src/scriptpatches/book_texts.ws`; `package-release.ps1` ships no script
+and throws on one. Pre-check zip 11847272 bytes, no script; 23 tests pass.
+
 ## Next item
 
-Task 9 prep (release packaging without scripts; see the plan), then the owner's bundled
-in-game check right before the release (hard stop; verify as in `progress.json`):
+The owner's bundled in-game check right before the release (hard stop; verify as in
+`progress.json`), with a DLL built from the final commit:
 
 1. Task 7 Step 3 rest: storage chest ticks (`ui_storage.swf` has not been opened in game yet),
    each `[scriptpatches]` key `0` (that feature gone, the others intact), then delete
@@ -72,14 +77,15 @@ in-game check right before the release (hard stop; verify as in `progress.json`)
    files, removed w2ef_read`, `migrate: old backup kept as ...backup.restored-by-dll`, then the
    normal `script patches: ... cache=built` line; the game works with the DLL patches.
 
-A silent crash at startup means a wrong hook: delete the DLL, report, do not retry. No push or
-release without the owner's go-ahead.
+A silent crash at startup means a wrong hook: delete the DLL, report, do not retry. After a
+passing check: rebuild the zip (`tools\package-release.ps1`), update size/SHA-256 in
+`docs/local/nexus.md`, then Task 9 Steps 3-4 (Nexus upload and scan by the owner, merge to
+`main`, push and GitHub release) only on the owner's go-ahead.
 
 ## Critical constraints
 
 - Never write under `<game>`; Task 8's one-time restore is the only exception and runs from
   the DLL. Never touch `<game>\bin\witcher2.exe`.
-- `ScriptPatches.ps1` stays the byte-for-byte reference until Task 9.
 - Hook changes need an owner start test; a wrong signature kills the game silently
   (`docs/research.md` §6). No live software breakpoints.
 - `Documents\Witcher 2\Config\User.ini` and `Rendering.ini` are read-only by design.

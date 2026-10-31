@@ -1,5 +1,5 @@
 // One-time cleanup of the 0.4/0.5 on-disk script patches (plan Task 8, owner decision 3).
-// Port of the Uninstall side of tools/script-patches/ScriptPatches.ps1 (Read-Manifest,
+// Port of the Uninstall side of ScriptPatches.ps1 (git tag v0.5.1) (Read-Manifest,
 // Restore-Leaf): every file is put back from the old patcher's backup only while it still
 // holds exactly what that patcher wrote, so another mod's later change is never undone.
 // The DLL runs it once before its own overlay is built; the old patcher's files are the only

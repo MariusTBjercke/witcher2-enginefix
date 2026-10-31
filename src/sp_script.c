@@ -1,7 +1,7 @@
-// WitcherScript edit engine; see sp_script.h. The reference implementation is
-// tools/script-patches/ScriptPatches.ps1 at commit 26237ca - Add-Edit (line 1285),
-// ConvertTo-Tabs (1218), Get-CollectBody (1167) and New-ReadIconFunction (1273). It stays
-// authoritative until the golden test (Task 6) proves this port byte for byte.
+// WitcherScript edit engine; see sp_script.h. Port of tools/script-patches/ScriptPatches.ps1
+// at commit 26237ca - Add-Edit (line 1285), ConvertTo-Tabs (1218), Get-CollectBody (1167) and
+// New-ReadIconFunction (1273); proven byte for byte by the golden test until 0.6.0 removed the
+// .ps1 (last pass: docs/fixes/dll-script-patches.md).
 #include "sp_script.h"
 #include "sp_script_ids.h"
 

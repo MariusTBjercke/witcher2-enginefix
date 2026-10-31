@@ -1,5 +1,5 @@
 // 64x64 item icons: DXT1/3/5 or 32-bit BGRA DDS in, 32-bit BGRA DDS (no mipmaps) out.
-// Port of the Dds class in tools/script-patches/ScriptPatches.ps1; pixels are 0xAARRGGBB,
+// Port of the Dds class in ScriptPatches.ps1 (git tag v0.5.1); pixels are 0xAARRGGBB,
 // row by row, and the same rounding is used so the bytes match the reference.
 #ifndef SP_DDS_H
 #define SP_DDS_H

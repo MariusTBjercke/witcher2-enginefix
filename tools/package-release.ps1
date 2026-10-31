@@ -1,8 +1,9 @@
 # Builds dist\Witcher2EngineFix-<version>.zip, laid out to extract straight into the game folder
 # (bin\dinput8.dll, bin\witcher2_enginefix.ini, README_Witcher2EngineFix.txt,
-# LICENSE_Witcher2EngineFix.txt, CookedPC\globals\... interior maps, the opt-in
-# Witcher2EngineFix_Optional\ScriptPatches patcher). Runs build.bat first unless -NoBuild. Entries use "/" separators so
-# the zip also extracts correctly outside Windows (PowerShell 5.1's ZipFile writes "\").
+# LICENSE_Witcher2EngineFix.txt, CookedPC\globals\... interior maps). No scripts: since 0.6.0 the
+# DLL applies the script patches itself. Runs build.bat first unless -NoBuild. Entries use "/"
+# separators so the zip also extracts correctly outside Windows (PowerShell 5.1's ZipFile
+# writes "\").
 param([string]$Version = "", [switch]$NoBuild)
 
 $ErrorActionPreference = "Stop"
@@ -31,11 +32,6 @@ $sources = [ordered]@{
     "LICENSE_Witcher2EngineFix.txt" = "LICENSE"
     "bin/dinput8.dll"               = "build\dinput8.dll"
     "bin/witcher2_enginefix.ini"    = "dist-files\witcher2_enginefix.ini"
-    # Opt-in: nothing changes until the player runs Install.bat (docs/fixes/menu-buttons.md,
-    # docs/fixes/shop-book-read-marker.md).
-    "Witcher2EngineFix_Optional/ScriptPatches/ScriptPatches.ps1" = "tools\script-patches\ScriptPatches.ps1"
-    "Witcher2EngineFix_Optional/ScriptPatches/Install.bat"       = "tools\script-patches\Install.bat"
-    "Witcher2EngineFix_Optional/ScriptPatches/Uninstall.bat"     = "tools\script-patches\Uninstall.bat"
 }
 
 # Interior maps are generated from the game's own pack0.dzip by tools\build-interior-maps.py
@@ -62,5 +58,11 @@ try {
     }
 }
 finally { $zip.Dispose() }
+
+# Antivirus heuristics flagged the old PowerShell patcher (0.5.x); no script may ship again.
+$zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+try { $scripts = @($zip.Entries | Where-Object { $_.FullName -match '\.(bat|cmd|ps1|vbs|js)$' }) }
+finally { $zip.Dispose() }
+if ($scripts.Count -gt 0) { throw "the zip contains scripts: $($scripts.FullName -join ', ')" }
 
 Write-Output "Built $zipPath"

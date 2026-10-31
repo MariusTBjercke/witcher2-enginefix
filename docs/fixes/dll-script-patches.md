@@ -356,6 +356,12 @@ compares the file-backed decoder with the in-memory one over all 23 archives (`d
 
 ### Golden test
 
+**Removed in 0.6.0 together with the reference** (`ScriptPatches.ps1`, `Install.bat`,
+`Uninstall.bat`; plan Task 9). It last passed at commit `397b0dc` (Task 8): `GOLDEN OK` with the
+migration check. To run it again, restore `tools/patchtest/golden.py` and
+`tools/script-patches/ScriptPatches.ps1` from that commit (`git show 397b0dc:<path>`). What it
+did:
+
 `tools/patchtest/golden.py "<game>" "<scratch>"` makes two identical scratch game layouts (the
 old patcher's unpatched backup for `base_scripts.dzip` and the loose movies, hard links for the
 other 22 archives, so `<scratch>` must be on the game's volume), runs the reference

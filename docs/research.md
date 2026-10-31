@@ -260,7 +260,7 @@ and rollback are in [render-distance-experiment](fixes/render-distance-experimen
   offset table, entry table at the end. The header hash is FNV-1a 64 prime with seed
   `0xFFFFFFFF` over each entry's name bytes, name length, FILETIME, sizes and offset; it matches
   vanilla and Mersey `base_scripts.dzip` and `elf_flotsam.dzip`. Rewriting one entry and keeping
-  the others' compressed bytes is enough for the game (`tools/script-patches/ScriptPatches.ps1`).
+  the others' compressed bytes is enough for the game (`tools/script-patches/ScriptPatches.ps1`, git tag `v0.5.1`).
 * **Scripts are compiled from `CookedPC\base_scripts.dzip` at every start.**
   `compiledscripts.w2scripts` dates from the install and lacks Mersey's identifiers, yet Mersey
   works; our patched archives compiled in game. A compile error stops the game with

@@ -1,6 +1,6 @@
 # Witcher 2 Engine Fix
 
-Draw-distance, save-preview, interior-map and quality-of-life fixes for **The Witcher 2: Assassins of Kings - Enhanced Edition**. A small `dinput8.dll` that the game loads by itself and that adjusts specific engine values and bugs in memory while the game runs. `witcher2.exe` and your saves are never modified.
+Draw-distance, save-preview, interior-map and quality-of-life fixes for **The Witcher 2: Assassins of Kings - Enhanced Edition**. A small `dinput8.dll` that the game loads by itself and that adjusts specific engine values and bugs in memory while the game runs. `witcher2.exe`, the game's data files and your saves are never modified.
 
 Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-enginefix) for The Witcher 1, built the same way.
 
@@ -15,20 +15,19 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Black map in interiors** | In 25 interior map entries (temples, inns, Loredo's house, towers and other houses) the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
 | **Skip the startup videos** | `[startup] skip_intro=1` starts at the main menu without the logo videos and the intro movie. The mod presses "skip" for the game on each startup movie (the same path as Esc), so a short black moment remains. Works with or without an intro removal mod. | off |
 | **Ctrl+F9/F10 do not quick-load** | F9 (quick load) and F10 cannot be rebound in this game. While Ctrl or Alt is held, the mod hides F9/F10 from the game, so the mod's hotkeys never trigger a quick load. Plain F9 still quick-loads. | on |
+| **Book read markers** | Books show `Read`, `Nothing new` or `Unread` in the inventory, trade and storage lists, with a tooltip describing what reading them would still teach you. A tick marks books you have read; at merchants and in storage it also keeps the game's carried-copy meaning. `Nothing new` is text only, since the book itself is still unread. Reading a book refreshes the inventory immediately. Looted books show the read tick too; the loot window shows `(Nothing new)` after the name where applicable. In 12 languages. | on |
+| **Continue** | The main menu gets a Continue button (the game's own translated label) that loads your newest save. | on |
+| **Quit in the pause menu** | The pause menu gets the game's Quit button, with a confirmation, next to "Exit to main menu". | on |
 
 Each DLL part can be switched off in `witcher2_enginefix.ini`; the interior maps are removed by deleting their files (see below).
 
-### Optional script patches (off until you install them)
+### Script patches without touching the game files
 
-`Witcher2EngineFix_Optional\ScriptPatches\Install.bat` asks for each of these and patches the game files you have (your `base_scripts.dzip`, also when a mod like Project Mersey replaced it, and for the book marker the trade/storage screens, also when an HD UI mod replaced them). Originals go to its `backup\` folder; `Uninstall.bat` restores them. Run `Install.bat` again to change the choice.
+The last three change the game's scripts and UI screens. The DLL does that at game start: the first start builds patched copies of the files your game uses (your `base_scripts.dzip`, also when a mod like Project Mersey replaced it; the trade/storage screens, also when an HD UI mod replaced them; the read-book icons) into `bin\witcher2_enginefix_cache\`, and the game reads those instead of the originals. Later starts reuse them until a game file changes. A screen another UI mod changed in a way the patch does not recognize is left alone, and a part that cannot be applied is skipped and logged rather than half-applied.
 
-| | What you notice |
-|---|---|
-| **Book read markers** | Books show `Read`, `Nothing new` or `Unread` in the inventory, trade and storage lists, with a tooltip describing what reading them would still teach you. A tick marks books you have read; at merchants and in storage it also keeps the game's carried-copy meaning. `Nothing new` is text only, since the book itself is still unread. Reading a book refreshes the inventory immediately. Looted books show the read tick too; the loot window shows `(Nothing new)` after the name where applicable. In 12 languages. |
-| **Continue** | The main menu gets a Continue button (the game's own translated label) that loads your newest save. |
-| **Quit in the pause menu** | The pause menu gets the game's Quit button, with a confirmation, next to "Exit to main menu". |
+**Upgrading from 0.4/0.5 with the old script patches installed:** extract the new version over the old one. The first start puts the original files back once from `Witcher2EngineFix_Optional\ScriptPatches\backup` (only files still exactly as the old patcher left them) and keeps that folder as `backup.restored-by-dll`. After that start the `Witcher2EngineFix_Optional` folder can be deleted.
 
-Details: [shop-book-read-marker.md](docs/fixes/shop-book-read-marker.md), [menu-buttons.md](docs/fixes/menu-buttons.md). Details, addresses and how each part was verified are in [`docs/fixes/`](docs/fixes/).
+Details: [dll-script-patches.md](docs/fixes/dll-script-patches.md), [shop-book-read-marker.md](docs/fixes/shop-book-read-marker.md), [menu-buttons.md](docs/fixes/menu-buttons.md). Details, addresses and how each part was verified are in [`docs/fixes/`](docs/fixes/).
 
 ### Preset values
 
@@ -53,7 +52,7 @@ The higher levels cost GPU time. They do not change how far away the game spawns
    `...\steamapps\common\the witcher 2\bin\dinput8.dll`
 3. Start the game as usual (through Steam and the launcher).
 
-To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.5.1 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
+To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.6.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
 
 | File | Purpose |
 |---|---|
@@ -61,9 +60,9 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `bin\witcher2_enginefix.ini` | Settings |
 | `CookedPC\globals\map_scales.csv` | The game's map table with the missing interior maps filled in |
 | `CookedPC\globals\gui\maps\*_2048x2048.dds` | 25 upscaled interior maps (new names, nothing of the game's is replaced) |
-| `Witcher2EngineFix_Optional\ScriptPatches\` | The optional script patches; nothing changes until you run `Install.bat` |
+| `bin\witcher2_enginefix_cache\` | Created at the first start: the patched copies the game reads for the script patches |
 
-**Uninstall:** run `Witcher2EngineFix_Optional\ScriptPatches\Uninstall.bat` if you installed script patches, then delete `bin\dinput8.dll`, `bin\witcher2_enginefix.ini`, `CookedPC\globals\map_scales.csv` and the `*_2048x2048.dds` files the zip put in `CookedPC\globals\gui\maps\` (the game's own maps live inside `pack0.dzip`, not in that folder).
+**Uninstall:** delete `bin\dinput8.dll`, `bin\witcher2_enginefix.ini`, the folder `bin\witcher2_enginefix_cache\`, `CookedPC\globals\map_scales.csv` and the `*_2048x2048.dds` files the zip put in `CookedPC\globals\gui\maps\` (the game's own maps live inside `pack0.dzip`, not in that folder).
 
 ## Configuration
 
@@ -71,7 +70,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 
 | Section / key | Default | Meaning |
 |---|---|---|
-| `[general] enabled` | 1 | 0 turns off DLL patches (input still forwarded); map files and installed script patches are removed separately |
+| `[general] enabled` | 1 | 0 turns off everything the DLL does (input still forwarded); the map files are removed separately |
 | `[general] log` | 1 | 0 stops writing `witcher2_enginefix.log` |
 | `[presets] default` | extreme | Startup level: baseline, high, ultra or extreme |
 | `[presets] cycle` | Ctrl+F10 | Hotkey that cycles the levels (F9/F10 with Ctrl or Alt) |
@@ -79,6 +78,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[saves] fix_thumbnails` | 1 | 0 turns the save-preview fix off |
 | `[saves] fix_list_leak` | 1 | 0 turns the save-list leak fix off |
 | `[startup] skip_intro` | 0 | 1 starts at the main menu, without logo videos and intro |
+| `[scriptpatches] book_marker`, `continue`, `pause_quit` | 1, 1, 1 | 0 turns that script patch off (the cache is rebuilt) |
 | `[osd] enabled`, `size`, `ms` | 1, 34, 2500 | On-screen readout; 34 px suits 4K, 22 px 1080p |
 | `[diagnostics] save_trace` | 0 | 1 logs the save-preview path (Steam writes, screenshot encoding) |
 | `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
@@ -87,18 +87,18 @@ The ini file itself documents every key, including the legacy separate hotkeys (
 
 ## Compatibility
 
-The optional pause-menu Quit confirmation currently needs one click before it
+The pause-menu Quit confirmation currently needs one click before it
 responds to hover. The button still works; this is a known minor issue.
 
 - **DXVK**: works with and without it. The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen.
 - **Other `dinput8.dll` mods**: only one `dinput8.dll` can sit in `bin\`. This mod loads the system `dinput8.dll` itself.
 - **Other map mods**: a mod that ships its own `CookedPC\globals\map_scales.csv` conflicts with the interior maps; whichever was copied last wins. UI mods that replace `ui_nav.swf` (A Better UI, HD UI upscales) are fine.
 - **Steam Cloud**: no effect on the fix; saves and previews are written through the game's own Steam storage interface.
-- **Antivirus**: some scanners flag the release as suspicious. This is a false positive: `dinput8.dll` is an unsigned proxy DLL that reads hotkey state and patches values in the game's memory, and `Install.bat` runs `ScriptPatches.ps1` with `-ExecutionPolicy Bypass`. Both patterns trip heuristics. Nothing is downloaded or sent anywhere; build the DLL yourself from this source if you prefer (see below).
+- **Antivirus**: some scanners flag the release as suspicious. This is a false positive: `dinput8.dll` is an unsigned proxy DLL that reads hotkey state and patches values in the game's memory, which is what heuristics look for. Since 0.6.0 the release holds no `.bat` or PowerShell script (0.5.x shipped a PowerShell patcher, which most of the warnings were about). Nothing is downloaded or sent anywhere; build the DLL yourself from this source if you prefer (see below).
 
 ## Building from source
 
-Needs Visual Studio 2022 or newer with the **Desktop development with C++** workload (x86 tools). Nothing else.
+Needs Visual Studio 2022 or newer with the **Desktop development with C++** workload (x86 tools). Nothing else; the one third-party piece, [tinf](https://github.com/jibsen/tinf) 1.2.1 (zlib license), is vendored in `src/third_party/tinf`.
 
 ```bat
 build.bat

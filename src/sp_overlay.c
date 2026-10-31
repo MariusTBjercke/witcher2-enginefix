@@ -1,5 +1,5 @@
 // Overlay build; see sp_overlay.h. The reference is the install flow of
-// tools/script-patches/ScriptPatches.ps1: Get-Target / Get-ReadIcons / Build-Scripts /
+// ScriptPatches.ps1 (git tag v0.5.1): Get-Target / Get-ReadIcons / Build-Scripts /
 // Get-PatchedSwf and the final writes, with the cache in place of the backup manifest.
 #include "sp_overlay.h"
 #include "sp_dds.h"

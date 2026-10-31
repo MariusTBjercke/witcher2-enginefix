@@ -1,4 +1,5 @@
-# Checks every character of ScriptPatches.ps1's $BookTexts against the game's own texts in that
+# Checks every character of the book marker's texts (src/scriptpatches/book_texts.ws, the
+# W2EF_Text function the DLL compiles into the scripts) against the game's own texts in that
 # language (CookedPC\<lang>0.w2strings + <lang>_user.w2strings), the same idea as
 # witcher-enginefix tools\check_texts.py: a language's UI font may only hold the characters the
 # game itself uses. List labels (1-3) are checked upper-cased too, the swf shows them that way.
@@ -80,12 +81,30 @@ def chars_of(path):
 
 
 def book_texts():
-    ps1 = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ScriptPatches.ps1"), encoding="ascii").read()
-    block = re.search(r"^\$BookTexts = \[ordered\]@\{(.*?)^\}", ps1, re.S | re.M).group(1)
+    """language -> the 15 texts, read back from W2EF_Text in book_texts.ws.
+
+    Each language is an `if ( textLang == "XX" )` block of `if ( id == N ) { return ...; }` lines;
+    English is the fallback after the blocks. A return value joins "..." literals and
+    StrChar( n ) calls with +.
+    """
+    ws = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src", "scriptpatches",
+                      "book_texts.ws")
+    lang = "EN"
     texts = {}
-    for lang, body in re.findall(r"^\s+(\w+) = @\((.*?)^\s+\)", block, re.S | re.M):
-        texts[lang] = [re.sub(r"\\u([0-9A-Fa-f]{4})", lambda m: chr(int(m.group(1), 16)), s)
-                       for s in re.findall(r'"([^"]*)"', body)]
+    for line in open(ws, encoding="latin-1"):
+        m = re.search(r'textLang == "(\w+)"', line)
+        if m:
+            lang = m.group(1)
+            continue
+        if line.startswith("    }"):
+            lang = "EN"
+            continue
+        m = re.search(r"if \( id == (\d+) \) \{ return (.*); \}", line)
+        if not m:
+            continue
+        parts = re.findall(r'"([^"]*)"|StrChar\( (\d+) \)', m.group(2))
+        text = "".join(lit if not code else chr(int(code)) for lit, code in parts)
+        texts.setdefault(lang, []).append(text)
     return texts
 
 

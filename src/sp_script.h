@@ -1,7 +1,7 @@
 // WitcherScript edit engine: the C port of Add-Edit, ConvertTo-Tabs, Get-CollectBody and
-// New-ReadIconFunction in tools/script-patches/ScriptPatches.ps1, plus the edit table that
-// used to live in its $FeatureList. The .ps1 stays the byte-for-byte reference until the
-// golden test (Task 6) proves equality.
+// New-ReadIconFunction in ScriptPatches.ps1 (git tag v0.5.1), plus the
+// edit table that used to live in its $FeatureList. The golden test proved the port byte for
+// byte before the removal.
 //
 // The patch data (src/scriptpatches/edits.txt and the .ws fragments) is embedded as RCDATA
 // by src/scriptpatches.rc, so the DLL and the test harness need no file next to them.

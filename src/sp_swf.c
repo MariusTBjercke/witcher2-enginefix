@@ -1,5 +1,5 @@
 // SWF patching; see sp_swf.h. Port of the Swf class, $SwfCompare and Get-SwfState /
-// Get-PatchedSwf in tools/script-patches/ScriptPatches.ps1.
+// Get-PatchedSwf in ScriptPatches.ps1 (git tag v0.5.1).
 #include "sp_swf.h"
 #include "third_party/tinf/tinf.h"
 #include <stdio.h>

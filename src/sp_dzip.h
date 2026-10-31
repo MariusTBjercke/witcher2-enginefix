@@ -3,8 +3,8 @@
 // per-entry block-offset table, the entry table at the end, and in the header a FNV-1a 64
 // variant over the entry table at +24 and the table offset at +16.
 //
-// Port of the Dzip class in tools/script-patches/ScriptPatches.ps1; the reference is
-// authoritative until the golden test (Task 6) proves byte equality.
+// Port of the Dzip class in ScriptPatches.ps1 (git tag v0.5.1), proven
+// equal by the golden test before the removal.
 #ifndef SP_DZIP_H
 #define SP_DZIP_H
 

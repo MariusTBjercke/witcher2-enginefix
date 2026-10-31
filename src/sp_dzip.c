@@ -1,5 +1,5 @@
 // DZIP v2 reader/writer; see sp_dzip.h. Port of the Dzip class in
-// tools/script-patches/ScriptPatches.ps1 (ReadTable, Hash, Extract, LzfDecompress,
+// ScriptPatches.ps1 (git tag v0.5.1) (ReadTable, Hash, Extract, LzfDecompress,
 // EntryData, ReplaceEntries), with the reference's arithmetic kept as it is.
 #include "sp_dzip.h"
 #include <stdlib.h>

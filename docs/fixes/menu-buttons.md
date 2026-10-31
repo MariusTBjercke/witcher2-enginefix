@@ -1,5 +1,11 @@
 # Menu buttons: Continue in the main menu, Quit in the pause menu
 
+> **Since 0.6.0** the DLL applies this patch itself, without changing the game's files, and
+> the release ships no `ScriptPatches.ps1`/`Install.bat` (removed; git tag `v0.5.1` has them).
+> The script edits and fragments below live on unchanged in `src/scriptpatches/`; how the DLL
+> serves them is in [dll-script-patches.md](dll-script-patches.md). Mentions of Install.bat,
+> Uninstall.bat and the backup folder below describe 0.4/0.5.
+
 Status: implemented 2026-10-30 as the `Continue` and `PauseQuit` features of the opt-in
 `tools/script-patches/ScriptPatches.ps1`. Confirmed in game by the owner the same day ("works
 well"); no `witcher2.exe` fault in the Application log afterwards and the DLL log ends with a

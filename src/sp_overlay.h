@@ -1,9 +1,8 @@
 // Overlay build: reads the game's own files and writes the patched copies the DLL serves
 // through its file-API redirects (Task 7) into a cache directory next to the DLL. Nothing
-// under the game directory is written. Port of the install side of
-// tools/script-patches/ScriptPatches.ps1 (main flow, Get-ReadIcons, Build-Scripts and
-// Get-PatchedSwf); the .ps1 stays the byte-for-byte reference until the golden test proves
-// equality.
+// under the game directory is written. Port of the install side of ScriptPatches.ps1 (main
+// flow, Get-ReadIcons, Build-Scripts and Get-PatchedSwf; removed in 0.6.0, git tag v0.5.1),
+// proven byte for byte by the golden test before the removal.
 #ifndef SP_OVERLAY_H
 #define SP_OVERLAY_H
 

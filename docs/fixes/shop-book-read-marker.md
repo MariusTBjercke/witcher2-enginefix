@@ -1,5 +1,11 @@
 # Shop "already read" marker on books
 
+> **Since 0.6.0** the DLL applies this patch itself, without changing the game's files, and
+> the release ships no `ScriptPatches.ps1`/`Install.bat` (removed; git tag `v0.5.1` has them).
+> The script edits and fragments below live on unchanged in `src/scriptpatches/`; how the DLL
+> serves them is in [dll-script-patches.md](dll-script-patches.md). Mentions of Install.bat,
+> Uninstall.bat and the backup folder below describe 0.4/0.5.
+
 Status: opt-in patch implemented 2026-10-30, now the `BookMarker` feature of
 `tools/script-patches/ScriptPatches.ps1` (the tool is described in `docs/fixes/menu-buttons.md`). Version 1
 (read or carried) confirmed in game the same day; version 2 (also "nothing new", list status

@@ -4,6 +4,13 @@ Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
 with all earlier fixes included in one initial Nexus changelog entry; earlier
 versions are not separate Nexus releases.
 
+## 0.6.0
+
+- The script patches are now built into the DLL and on by default: book marker, Continue in the main menu and Quit in the pause menu work as soon as `dinput8.dll` is in `bin\`, with no `Install.bat` to run. The game's files are never changed: at the first start the DLL builds patched copies of the files it needs (your `base_scripts.dzip`, also Project Mersey's, the trade and storage screens, also HD UI's, and the read-book icons) into `bin\witcher2_enginefix_cache\` (about 0.1 s) and the game reads those instead; later starts reuse them until a game file changes. `[scriptpatches] book_marker`, `continue` and `pause_quit` turn each one off. Uninstalling is deleting the mod's files again. See `docs/fixes/dll-script-patches.md`.
+- Upgrading from 0.4/0.5 with the old script patches installed: the first start undoes them once from `Witcher2EngineFix_Optional\ScriptPatches\backup` (only files still exactly as the old patcher left them; a file another mod changed since is left alone and logged) and keeps that backup as `backup.restored-by-dll`. Afterwards the `Witcher2EngineFix_Optional` folder can be deleted.
+- No `.bat` or PowerShell script in the release any more. Antivirus heuristics (and the Nexus Mods upload scan) flagged the PowerShell patcher; the zip now holds only the DLL, the ini, the interior maps and the readme.
+- Third-party: the DLL includes tinf 1.2.1 by Joergen Ibsen (zlib license) to read the compressed UI movies.
+
 ## 0.5.1
 
 - `dinput8.dll` now carries version information (product name, description with the GitHub link, version, MIT copyright; Explorer > Properties > Details). An unsigned DLL without any metadata scores worse in antivirus heuristics; Nexus's scan flagged 0.5.0 as suspicious. No behaviour change. The version now lives in `src/version.h`, shared by the code and `src/version.rc`.
