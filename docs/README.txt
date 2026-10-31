@@ -29,20 +29,24 @@ What it does:
 Optional, off until you run it - script patches:
   Witcher2EngineFix_Optional\ScriptPatches\Install.bat asks for each one:
   - Book marker: the "already read" overlay on a book normally only means
-    "you carry a copy". It also shows for books Geralt has read (the game
-    records each book read from the inventory) or whose bestiary knowledge and
-    journal entries he already has. Books get "Read", "Unread" or "Nothing new"
-    after their type, and the tooltip lists what is still new. This works in
-    Geralt's own inventory (with the tooltip), at merchants, in the storage
-    chest, in the trade screen's own list and in the loot window - the loot
-    window has no tooltip, so there the status comes after the item name and
-    the tick goes in front of the icon.
+    "you carry a copy". It now also shows for books Geralt has read (the game
+    records each book read from the inventory). Books get "Read", "Unread" or
+    "Nothing new" (all its bestiary knowledge and journal entries are known
+    already) after their type, and the tooltip lists what is still new. This works in
+    Geralt's own inventory (with the tooltip; a book you read there updates
+    at once), at merchants and in the storage chest (on both sides, so also
+    for the books you are about to sell or store) and in the loot window -
+    the loot window has no tooltip, so there "(Nothing new)" comes after the
+    item name. There and in the small preview next to a container a read book
+    shows its icon with the tick on it (Install draws these icons from your
+    game's own files into CookedPC\globals\gui\icons\items\w2ef_read).
   - Continue: the main menu gets a Continue button that loads the newest save.
   - Quit in the pause menu: quits the game after a confirmation, without
     going back to the main menu first.
   It patches the files your game uses: CookedPC\base_scripts.dzip, for
-  the book marker the trade/storage screens (works with or without Witcher 2
-  HD UI AI Upscale and Project Mersey). Texts follow the game's language
+  the book marker the trade and storage screens (works
+  with or without Witcher 2 HD UI AI Upscale and Project Mersey; a screen
+  another UI mod changed is left alone). Texts follow the game's language
   (English, Polish, German, French, Spanish, Italian, Russian, Czech,
   Hungarian, Turkish, Japanese, Chinese). Close the game first. Run Install.bat
   again to change the choice. Originals are kept in its backup\ folder;

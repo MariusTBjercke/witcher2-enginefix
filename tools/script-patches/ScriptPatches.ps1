@@ -1,9 +1,10 @@
 # Optional script patches for The Witcher 2 EE, each one chosen separately:
-#   BookMarker  every item list: the "already read" overlay for books Geralt has read or whose
-#               knowledge and journal entries he already has (a merchant or the storage chest also
-#               marks a carried copy); books get Read / Nothing new / Unread in the list and a
-#               tooltip listing what is new, in 12 languages ($BookTexts). The loot window has no
-#               tooltip, so there the same status goes after the name and a tick into the icon.
+#   BookMarker  every item list: the "already read" overlay for books Geralt has read (a merchant
+#               or the storage chest also marks a carried copy); books get Read / Nothing new /
+#               Unread in the list and a tooltip listing what is new, in 12 languages ($BookTexts).
+#               The loot window has no tooltip, so there "Nothing new" goes after the name; there
+#               and in the preview next to a container a read book shows its icon with the
+#               inventory's tick drawn in.
 #               docs/fixes/shop-book-read-marker.md
 #   Continue    main menu: "Continue" at the top loads the newest save
 #   PauseQuit   pause menu: "Quit" (with confirmation) next to "Exit current game"
@@ -11,13 +12,17 @@
 #
 # Patches the files the game actually uses, whatever mod they come from:
 #   CookedPC\base_scripts.dzip       game\gui\guiutils.ws, game\gui\guishop.ws,
-#                                    game\gui\guimainmenu.ws, game\gameplay\container_class.ws:
+#                                    game\gui\guimainmenu.ws, game\gameplay\container_class.ws,
+#                                    game\gui\guiinventory.ws (list refilled after reading):
 #                                    blocks inserted next to anchor lines, marked
 #                                    //===witcher2-enginefix=== BEGIN/END <feature>
-#   CookedPC\globals\gui\ui_trade.swf, ui_storage.swf (BookMarker only)
-#                                    CompareInventories no longer overwrites _alreadyRead on the
-#                                    merchant side (24 bytes replaced by a same-length no-op)
-# A swf that only exists inside abetterui.dzip is written out as a loose file first.
+#   CookedPC\globals\gui\ (BookMarker only, same-length byte edits, see $SwfFiles):
+#     ui_trade.swf, ui_storage.swf   CompareInventories no longer overwrites _alreadyRead on
+#                                    either side (two statements replaced by no-ops)
+#   CookedPC\globals\gui\icons\items\w2ef_read\ (BookMarker only, created): every book's icon
+#                                    with the tick overlay, built from the game's own files
+# A swf that only exists inside abetterui.dzip is written out as a loose file first. A swf that
+# does not match (another UI mod) is left alone, and only the tick in that screen is lost.
 # Every Install rebuilds from the original files (kept in .\backup), so features can be added or
 # removed later by running Install again. Uninstall puts back only files that still hold our
 # patched bytes.
@@ -237,6 +242,183 @@ public static class Swf
         return hits;
     }
 }
+
+// Read-only DZIP access without loading the archive (pack0.dzip is ~10 GB).
+public class DzipFile
+{
+    public string Path;
+    public Dictionary<string, DzipEntry> Entries = new Dictionary<string, DzipEntry>(StringComparer.OrdinalIgnoreCase);
+
+    public DzipFile(string path)
+    {
+        Path = path;
+        using (var fs = File.OpenRead(path))
+        {
+            var head = new byte[32];
+            if (fs.Read(head, 0, 32) != 32 || BitConverter.ToUInt32(head, 0) != 0x50495A44) throw new InvalidDataException(path + ": not a DZIP archive");
+            int count = BitConverter.ToInt32(head, 8);
+            long table = BitConverter.ToInt64(head, 16);
+            fs.Position = table;
+            var t = new byte[fs.Length - table];
+            int got = 0, n;
+            while (got < t.Length && (n = fs.Read(t, got, t.Length - got)) > 0) got += n;
+            int p = 0;
+            for (int i = 0; i < count; i++)
+            {
+                int len = BitConverter.ToUInt16(t, p); p += 2;
+                var e = new DzipEntry();
+                e.Name = Encoding.ASCII.GetString(t, p, len).TrimEnd('\0'); p += len;
+                e.TimeStamp = BitConverter.ToInt64(t, p);
+                e.UncompressedSize = BitConverter.ToInt64(t, p + 8);
+                e.Offset = BitConverter.ToInt64(t, p + 16);
+                e.CompressedSize = BitConverter.ToInt64(t, p + 24);
+                p += 32;
+                Entries[e.Name] = e;
+            }
+        }
+    }
+
+    public byte[] Read(string name)
+    {
+        DzipEntry e;
+        if (!Entries.TryGetValue(name, out e)) return null;
+        var raw = new byte[e.CompressedSize];
+        using (var fs = File.OpenRead(Path))
+        {
+            fs.Position = e.Offset;
+            int got = 0, n;
+            while (got < raw.Length && (n = fs.Read(raw, got, raw.Length - got)) > 0) got += n;
+        }
+        var local = new DzipEntry();
+        local.Name = e.Name; local.UncompressedSize = e.UncompressedSize; local.CompressedSize = e.CompressedSize; local.Offset = 0;
+        return Dzip.Extract(raw, local);
+    }
+}
+
+// 64x64 item icons: DXT1/3/5 or 32-bit BGRA DDS in, 32-bit BGRA DDS (no mipmaps) out.
+public static class Dds
+{
+    // Pixels as 0xAARRGGBB, row by row; null for anything else than a 64x64 icon.
+    public static uint[] Decode64(byte[] b)
+    {
+        if (b == null || b.Length < 128 || BitConverter.ToUInt32(b, 0) != 0x20534444) return null;
+        int h = BitConverter.ToInt32(b, 12), w = BitConverter.ToInt32(b, 16);
+        if (w != 64 || h != 64) return null;
+        uint pfFlags = BitConverter.ToUInt32(b, 80);
+        string fourcc = Encoding.ASCII.GetString(b, 84, 4);
+        var px = new uint[64 * 64];
+        if ((pfFlags & 4) == 0)
+        {
+            if (BitConverter.ToInt32(b, 88) != 32 || b.Length < 128 + 64 * 64 * 4) return null;
+            uint rm = BitConverter.ToUInt32(b, 92), gm = BitConverter.ToUInt32(b, 96), bm = BitConverter.ToUInt32(b, 100), am = BitConverter.ToUInt32(b, 104);
+            for (int i = 0; i < px.Length; i++)
+            {
+                uint v = BitConverter.ToUInt32(b, 128 + 4 * i);
+                uint a = (pfFlags & 1) != 0 ? Channel(v, am) : 255u;
+                px[i] = (a << 24) | (Channel(v, rm) << 16) | (Channel(v, gm) << 8) | Channel(v, bm);
+            }
+            return px;
+        }
+        int blockSize = fourcc == "DXT1" ? 8 : 16;
+        if (fourcc != "DXT1" && fourcc != "DXT3" && fourcc != "DXT5") return null;
+        if (b.Length < 128 + 256 * blockSize) return null;
+        int k = 128;
+        for (int by = 0; by < 64; by += 4)
+            for (int bx = 0; bx < 64; bx += 4, k += blockSize)
+            {
+                int c = fourcc == "DXT1" ? k : k + 8;
+                int c0 = BitConverter.ToUInt16(b, c), c1 = BitConverter.ToUInt16(b, c + 2);
+                uint idx = BitConverter.ToUInt32(b, c + 4);
+                var pal = new uint[4];
+                pal[0] = 0xFF000000u | Rgb565(c0);
+                pal[1] = 0xFF000000u | Rgb565(c1);
+                if (fourcc != "DXT1" || c0 > c1) { pal[2] = Mix(pal[0], pal[1], 2, 1, 3); pal[3] = Mix(pal[0], pal[1], 1, 2, 3); }
+                else { pal[2] = Mix(pal[0], pal[1], 1, 1, 2); pal[3] = 0; }
+                var alpha = new uint[16];
+                if (fourcc == "DXT3")
+                {
+                    ulong av = BitConverter.ToUInt64(b, k);
+                    for (int i = 0; i < 16; i++) alpha[i] = (uint)((av >> (4 * i)) & 15) * 17;
+                }
+                else if (fourcc == "DXT5")
+                {
+                    int a0 = b[k], a1 = b[k + 1];
+                    ulong ai = 0;
+                    for (int i = 0; i < 6; i++) ai |= (ulong)b[k + 2 + i] << (8 * i);
+                    var ap = new int[8];
+                    ap[0] = a0; ap[1] = a1;
+                    if (a0 > a1) for (int i = 0; i < 6; i++) ap[2 + i] = ((6 - i) * a0 + (i + 1) * a1) / 7;
+                    else { for (int i = 0; i < 4; i++) ap[2 + i] = ((4 - i) * a0 + (i + 1) * a1) / 5; ap[6] = 0; ap[7] = 255; }
+                    for (int i = 0; i < 16; i++) alpha[i] = (uint)ap[(int)((ai >> (3 * i)) & 7)];
+                }
+                for (int i = 0; i < 16; i++)
+                {
+                    uint col = pal[(idx >> (2 * i)) & 3];
+                    if (fourcc != "DXT1") col = (col & 0x00FFFFFFu) | (alpha[i] << 24);
+                    px[(by + i / 4) * 64 + bx + i % 4] = col;
+                }
+            }
+        return px;
+    }
+
+    static uint Channel(uint v, uint mask)
+    {
+        if (mask == 0) return 0;
+        int shift = 0;
+        while (((mask >> shift) & 1) == 0) shift++;
+        uint max = mask >> shift;
+        return (uint)(((v & mask) >> shift) * 255 / max);
+    }
+
+    static uint Rgb565(int c)
+    {
+        uint r = (uint)((c >> 11) & 31) * 255 / 31, g = (uint)((c >> 5) & 63) * 255 / 63, bl = (uint)(c & 31) * 255 / 31;
+        return (r << 16) | (g << 8) | bl;
+    }
+
+    static uint Mix(uint p, uint q, int wp, int wq, int d)
+    {
+        uint res = 0xFF000000u;
+        for (int s = 0; s < 24; s += 8)
+            res |= (uint)((((p >> s) & 255) * wp + ((q >> s) & 255) * wq) / d) << s;
+        return res;
+    }
+
+    // top drawn over base with the given opacity (the inventory shows its overlay at alpha 90).
+    public static uint[] Over(uint[] baseImg, uint[] top, double opacity)
+    {
+        var res = new uint[baseImg.Length];
+        for (int i = 0; i < res.Length; i++)
+        {
+            double ta = ((top[i] >> 24) & 255) / 255.0 * opacity, ba = ((baseImg[i] >> 24) & 255) / 255.0;
+            double oa = ta + ba * (1 - ta);
+            if (oa <= 0) { res[i] = 0; continue; }
+            uint outPx = (uint)Math.Round(oa * 255) << 24;
+            for (int s = 0; s < 24; s += 8)
+            {
+                double v = (((top[i] >> s) & 255) * ta + ((baseImg[i] >> s) & 255) * ba * (1 - ta)) / oa;
+                outPx |= (uint)Math.Max(0, Math.Min(255, Math.Round(v))) << s;
+            }
+            res[i] = outPx;
+        }
+        return res;
+    }
+
+    // Uncompressed A8R8G8B8, the layout of the game's own 32-bit item icons.
+    public static byte[] Encode64(uint[] px)
+    {
+        var ms = new MemoryStream();
+        var w = new BinaryWriter(ms);
+        w.Write(0x20534444u); w.Write(124); w.Write(0x100Fu); w.Write(64); w.Write(64); w.Write(256); w.Write(0); w.Write(0);
+        for (int i = 0; i < 11; i++) w.Write(0);
+        w.Write(32); w.Write(0x41u); w.Write(0); w.Write(32);
+        w.Write(0x00FF0000u); w.Write(0x0000FF00u); w.Write(0x000000FFu); w.Write(0xFF000000u);
+        w.Write(0x1000u); w.Write(0); w.Write(0); w.Write(0); w.Write(0);
+        foreach (uint p in px) w.Write(p);
+        w.Flush();
+        return ms.ToArray();
+    }
+}
 '@
 
 # Appended to guiutils.ws by BookMarker. __COLLECT_BODY__ is CGuiInventory.AddBookKnowledge from the
@@ -244,10 +426,10 @@ public static class Swf
 # each book gives (and its conditions) always matches the installed scripts.
 $BookHelpers = @'
 // Books anywhere in the UI: _alreadyRead (the A Better UI overlay) when the book was read
-// (<item>_Examined, set by CGuiInventory.ExamineItem) or when nothing it gives is new; a
-// merchant's or the storage chest's list also marks a carried copy. Books get a short status
-// after their type in the list and a few lines in the tooltip. The loot window (ui_loot.swf)
-// has no tooltip, so there the status goes after the name and a tick into the icon.
+// (<item>_Examined, set by CGuiInventory.ExamineItem); a merchant's or the storage chest's list
+// also marks a carried copy. Books get a short status (Read / Nothing new / Unread) after their
+// type in the list and a few lines in the tooltip. The loot window (ui_loot.swf) has no tooltip:
+// there a read book's icon carries the tick and "nothing new" goes after the name.
 __TEXT_FUNCTION__
 
 class W2EFBookGrants
@@ -380,7 +562,8 @@ function W2EF_BookStatus( inventory : CInventoryComponent, itemId : SItemUniqueI
 // One call at the end of CGuiUtils.FillItemObject, so every panel that lists items (inventory,
 // shop, storage, trade, craft, alchemy, ...) gets this for free. context is 'merchant' for a
 // merchant's or the storage chest's list, where carrying a copy also marks the item; everywhere
-// else only having read the book or gaining nothing from it does.
+// else only having read the book does. "Nothing new" is told in the text, not by the tick: such a
+// book still has a text the player has not read.
 function W2EF_MarkItem( inventory : CInventoryComponent, itemId : SItemUniqueId, AS_item : int, context : name )
 {
     var itemName : name;
@@ -414,7 +597,7 @@ function W2EF_MarkItem( inventory : CInventoryComponent, itemId : SItemUniqueId,
     grants = new W2EFBookGrants in theHud;
     grants.Collect( itemName );
     markState = grants.Status( isRead );
-    theHud.SetBool( "_alreadyRead", markState != 3 || isOwned, AS_item );
+    theHud.SetBool( "_alreadyRead", markState == 1 || isOwned, AS_item );
 
     label = W2EF_Text( markState );
     status = W2EF_Text( 3 + markState );
@@ -452,31 +635,34 @@ function W2EF_MarkItem( inventory : CInventoryComponent, itemId : SItemUniqueId,
 }
 
 // Loot window (ui_loot.swf): eight fixed rows with a name, a quantity and an icon that the
-// script builds as HTML, and no tooltip of any kind. The status therefore goes after the name
-// and the same overlay image the item lists use goes in front of the icon.
+// script builds as HTML, and no tooltip of any kind. A read book shows the tick on its icon and
+// an unread one nothing, so only "nothing new" goes after the name.
 function W2EF_LootName( inventory : CInventoryComponent, itemId : SItemUniqueId, text : string ) : string
 {
-    var markState : int;
-
-    markState = W2EF_BookStatus( inventory, itemId );
-    if ( markState == 0 )
+    if ( W2EF_BookStatus( inventory, itemId ) != 2 )
     {
         return text;
     }
-    return text + " / " + W2EF_Text( markState );
+    return text + " (" + W2EF_Text( 2 ) + ")";
 }
 
-function W2EF_LootIcon( inventory : CInventoryComponent, itemId : SItemUniqueId, icon : string ) : string
+// Loot window rows and the loot preview next to a container have no overlay of their own, so a
+// read book shows a copy of its icon with the inventory's tick drawn in (written by the patcher
+// to globals\gui\icons\items\w2ef_read\, see W2EF_HasReadIcon).
+// icon is the game's own icon path or <img> tag; anything else is returned as it is.
+function W2EF_ReadIcon( inventory : CInventoryComponent, itemId : SItemUniqueId, icon : string ) : string
 {
     var markState : int;
 
     markState = W2EF_BookStatus( inventory, itemId );
-    if ( markState == 0 || markState == 3 )
+    if ( markState != 1 || ! W2EF_HasReadIcon( inventory.GetItemName( itemId ) ) )
     {
         return icon;
     }
-    return "<img src='img://globals/gui/icons/tooltip/alreadyread_15x15.dds' width='15' height='15'>" + icon;
+    return StrReplace( icon, "/icons/items/", "/icons/items/w2ef_read/" );
 }
+
+__READ_ICONS__
 '@
 
 # BookMarker's texts per game text language (theGame.GetGameLanguageName, the codes CGuiMainMenu
@@ -789,6 +975,54 @@ class W2EFConfirmQuit extends CGuiConfirmationBox
 }
 '@
 
+# Inventory: reading a book changes its status (and that of every other book giving the same
+# entries), but the list was only filled when the panel opened. ExamineItem now fills it again
+# the way RemoveItem does. Commit runs the panel's Init, which puts the list back at the top
+# (SetPosition( 0 )), so the scroll is put back the way the list's own ScrollUsed does it. If
+# the movie lacks those members, only the scroll is lost.
+$InventoryRefill = @'
+private final function W2EF_RefillAfterReading()
+{
+    var AS_panel, AS_list : int;
+    var hasPanel, hasList, keepScroll : bool;
+    var offset, position : float;
+
+    hasList = false;
+    keepScroll = false;
+    hasPanel = theHud.GetObject( "pPanelClass", AS_panel );
+    if ( hasPanel )
+    {
+        hasList = theHud.GetObject( "m_mcItemList", AS_list, AS_panel );
+    }
+    if ( hasList )
+    {
+        keepScroll = theHud.GetFloat( "m_iCurrentOffset", offset, AS_list ) && theHud.GetFloat( "m_iCurrentPosition", position, AS_list );
+    }
+
+    ProcessInventoryChanges();
+    FillInventory();
+
+    if ( keepScroll )
+    {
+        theHud.InvokeOneArg( "SetOffset", FlashValueFromInt( (int)offset ), AS_list );
+        theHud.InvokeOneArg( "SetPosition", FlashValueFromInt( (int)position ), AS_list );
+        theHud.Invoke( "UpdateListData", AS_list );
+        theHud.Invoke( "UpdateGraphic", AS_list );
+    }
+    if ( hasList )
+    {
+        theHud.ForgetObject( AS_list );
+    }
+    if ( hasPanel )
+    {
+        theHud.ForgetObject( AS_panel );
+    }
+}
+
+'@
+$ExamineItem = "private final function ExamineItem\( itemIdxF : float \) : bool"
+$ExamineBookText = 'theHud.InvokeOneArg("SetBookText", FlashValueFromString(str), AS_inventory );'
+
 $InputMainMenu = "private final function InputMainMenu\( button : int \)"
 $InputMainInGame = "private final function InputMainInGame\( button : int \)"
 
@@ -811,12 +1045,16 @@ $LootIcon = @'
 args.PushBack( FlashValueFromString( "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) ;
 '@
 $LootIconPatched = @'
-args.PushBack( FlashValueFromString( W2EF_LootIcon( inventory, itemId, "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) );
+args.PushBack( FlashValueFromString( W2EF_ReadIcon( inventory, itemId, "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) );
 '@
 $LootName = $LootName.Trim()
 $LootNamePatched = $LootNamePatched.Trim()
 $LootIcon = $LootIcon.Trim()
 $LootIconPatched = $LootIconPatched.Trim()
+# ShowLootPreview (the small list next to a container before it is opened) sets each row's icon
+# path in a quest-item loop and an ordinary loop (regex: the game's line is tab-aligned).
+$PreviewIcon = 'theHud\.SetString\( "Icon",\s+"img://globals/gui/icons/items/" \+ StrReplaceAll\(itemName, " ", ""\) \+ "_64x64\.dds",\s+AS_item \);'
+$PreviewIconPatched = 'theHud.SetString( "Icon", W2EF_ReadIcon( inventory, itemId, "img://globals/gui/icons/items/" + StrReplaceAll(itemName, " ", "") + "_64x64.dds" ), AS_item );'
 
 # Each edit inserts Code next to the single line matching Anchor (regex): Before or After that
 # line, or at the end of the file when Anchor is $null. After + Body: Anchor ends with the "{" of
@@ -835,11 +1073,18 @@ $FeatureList = [ordered]@{
             # A merchant's or the storage chest's list also marks a book Geralt carries.
             @{ Entry = $ShopEntry; Where = "Replace"; Anchor = [regex]::Escape($ShopMerchant)
                Code = $ShopMerchantPatched },
-            # Loot window rows: the status goes after the name and a tick in front of the icon.
+            # Loot window rows: the status after the name, and a read book's icon with the tick.
             @{ Entry = $ContainerEntry; Where = "Replace"; Count = 2
                Anchor = [regex]::Escape($LootName); Code = $LootNamePatched },
             @{ Entry = $ContainerEntry; Where = "Replace"; Count = 2
-               Anchor = [regex]::Escape($LootIcon); Code = $LootIconPatched }
+               Anchor = [regex]::Escape($LootIcon); Code = $LootIconPatched },
+            # Loot preview next to a container: the same icon with the tick.
+            @{ Entry = $ContainerEntry; Where = "Replace"; Count = 2
+               Anchor = $PreviewIcon; Code = $PreviewIconPatched },
+            # Inventory: after reading, the list shows the new status at once.
+            @{ Entry = $InventoryEntry; Where = "Before"; Anchor = $ExamineItem; Code = $InventoryRefill },
+            @{ Entry = $InventoryEntry; Where = "After"; Anchor = [regex]::Escape($ExamineBookText)
+               Code = "W2EF_RefillAfterReading();" }
         )
     }
     Continue = @{
@@ -862,15 +1107,36 @@ $FeatureList = [ordered]@{
     }
 }
 
-# CompareInventories, merchant loop: if (!(item.Mask & books) > 0) skip 24 bytes;
-#   item._alreadyRead = (owned[item.Name] != null)
-# becomes the same if followed by "push r10, null x9; pop x10" (24 bytes, stack-neutral).
-$SwfIf = @(0x9D, 0x02, 0x00, 0x18, 0x00)
-$SwfOriginal = $SwfIf + @(0x96, 0x0C, 0x00, 0x04, 0x0A, 0x09, -1, -1, 0x04, 0x03, 0x04, 0x0A, 0x09, -1, -1,
-                          0x4E, 0x4E, 0x96, 0x01, 0x00, 0x02, 0x49, 0x12, 0x4F)
-$SwfPatch = @(0x96, 0x0B, 0x00, 0x04, 0x0A) + @(0x02) * 9 + @(0x17) * 10
-$SwfPatched = $SwfIf + $SwfPatch
-$SwfNames = @("ui_trade.swf", "ui_storage.swf")
+# CompareInventories overwrites the script's _alreadyRead in both of its loops; each statement
+# becomes a same-length, stack-neutral no-op. -1 is a wildcard (constant pool indices differ
+# between trade and storage) and, in Patched, a byte that is kept.
+#   Player loop: if (!(item.Mask & books) > 0) skip 28 bytes;
+#     item._alreadyRead = false; owned[item.Name] = true
+#   the first statement (11 bytes) becomes "push r7, r7, null; pop x3", the second stays.
+#   Merchant loop: if (!(item.Mask & books) > 0) skip 24 bytes;
+#     item._alreadyRead = (owned[item.Name] != null)
+#   becomes "push r10, null x9; pop x10" (24 bytes).
+$SwfOwnedName = @(0x96, 0x07, 0x00, 0x04, 0x03, 0x04, 0x07, 0x09, -1, -1, 0x4E, 0x96, 0x02, 0x00, 0x05, 0x01, 0x4F)
+$SwfCompare = @(
+    @{ Name     = "player side"
+       Original = @(0x9D, 0x02, 0x00, 0x1C, 0x00, 0x96, 0x07, 0x00, 0x04, 0x07, 0x09, -1, -1, 0x05, 0x00, 0x4F) + $SwfOwnedName
+       Patched  = @(0x9D, 0x02, 0x00, 0x1C, 0x00, 0x96, 0x05, 0x00, 0x04, 0x07, 0x04, 0x07, 0x02, 0x17, 0x17, 0x17) + $SwfOwnedName },
+    @{ Name     = "merchant side"
+       Original = @(0x9D, 0x02, 0x00, 0x18, 0x00, 0x96, 0x0C, 0x00, 0x04, 0x0A, 0x09, -1, -1, 0x04, 0x03, 0x04, 0x0A, 0x09, -1, -1,
+                    0x4E, 0x4E, 0x96, 0x01, 0x00, 0x02, 0x49, 0x12, 0x4F)
+       Patched  = @(0x9D, 0x02, 0x00, 0x18, 0x00, 0x96, 0x0B, 0x00, 0x04, 0x0A) + @(0x02) * 9 + @(0x17) * 10 }
+)
+# Movie -> its statements. A movie that does not match (another UI mod) is left alone; the book
+# marker then only lacks the tick in that screen.
+$SwfFiles = [ordered]@{
+    "ui_trade.swf"   = $SwfCompare
+    "ui_storage.swf" = $SwfCompare
+}
+foreach ($f in $SwfFiles.Keys) {
+    foreach ($p in $SwfFiles[$f]) {
+        if ($p.Original.Count -ne $p.Patched.Count) { throw "swf patch '$f $($p.Name)' changes the length" }
+    }
+}
 
 # --- helpers --------------------------------------------------------------------------------
 
@@ -953,13 +1219,74 @@ function ConvertTo-Tabs([string]$code) {
     return [regex]::Replace($code.Replace("`r`n", "`n"), "(?m)^((?:    )+)", { param($m) "`t" * ($m.Groups[1].Length / 4) })
 }
 
+# The books that get a read icon: every item tagged SortTypeBook in an items definition
+# (def_*.xml) whose 64x64 icon the game has, with its icon redrawn with the inventory's overlay
+# (alreadyread_64x64.dds at alpha 90, as A Better UI's list rows show it). Files resolve as the
+# game loads them: a loose file over the archives, a later archive (by name) over an earlier one.
+# Names with double quotes, backslashes or non-ASCII are left out (the script compares them as
+# string literals).
+# Returns Books (item names) and Files (file name -> DDS bytes); Why says what was missing.
+function Get-ReadIcons {
+    $res = @{ Books = @(); Files = [ordered]@{}; Why = "" }
+    $archives = @()
+    foreach ($f in @(Get-ChildItem -LiteralPath $cooked -Filter *.dzip | Sort-Object { $_.Name.ToLowerInvariant() })) {
+        try { $archives += New-Object DzipFile $f.FullName } catch { }
+    }
+    $find = {
+        param([string]$name)
+        $loose = Join-Path $cooked $name
+        if (Test-Path -LiteralPath $loose) { return , [IO.File]::ReadAllBytes($loose) }
+        for ($i = $archives.Count - 1; $i -ge 0; $i--) {
+            if ($archives[$i].Entries.ContainsKey($name)) { return , $archives[$i].Read($name) }
+        }
+        return $null
+    }
+    $tick = [Dds]::Decode64((& $find "globals\gui\icons\tooltip\alreadyread_64x64.dds"))
+    if ($null -eq $tick) { $res.Why = "alreadyread_64x64.dds not found"; return $res }
+    $defs = @($archives | ForEach-Object { $_.Entries.Keys } | Where-Object { $_ -match '(^|\\)def_[^\\]*\.xml$' } | Sort-Object -Unique)
+    $books = [ordered]@{}
+    foreach ($def in $defs) {
+        $raw = & $find $def
+        if ($null -eq $raw -or $raw.Length -lt 2) { continue }
+        $text = if ($raw[0] -eq 0xFF -and $raw[1] -eq 0xFE) { [Text.Encoding]::Unicode.GetString($raw) }
+                elseif ($raw[0] -eq 0xFE -and $raw[1] -eq 0xFF) { [Text.Encoding]::BigEndianUnicode.GetString($raw) }
+                else { $Latin1.GetString($raw) }
+        foreach ($m in [regex]::Matches($text, '<item\s+name\s*=\s*"([^"]+)"(.*?)</item>', "Singleline")) {
+            if ($m.Groups[2].Value -match '<tags>[^<]*SortTypeBook') { $books[$m.Groups[1].Value] = $true }
+        }
+    }
+    foreach ($book in $books.Keys) {
+        if ($book -notmatch '^[\x20-\x7E]+$' -or $book.Contains('"') -or $book.Contains("\")) { continue }
+        # The loot window's icon name drops spaces and apostrophes. (The preview only drops spaces,
+        # so for a name with an apostrophe it finds no icon at all, ours or the game's.)
+        $icon = ($book -replace " ", "" -replace "'", "").ToLowerInvariant() + "_64x64.dds"
+        $px = [Dds]::Decode64((& $find "globals\gui\icons\items\$icon"))
+        if ($null -eq $px) { continue }
+        $res.Files[$icon] = [Dds]::Encode64([Dds]::Over($px, $tick, 0.9))
+        $res.Books += $book
+    }
+    if ($res.Books.Count -eq 0) { $res.Why = "no book icons found" }
+    return $res
+}
+
+# W2EF_HasReadIcon( itemName ): whether Get-ReadIcons wrote an icon for that book.
+function New-ReadIconFunction {
+    $lines = @("// Books with an icon in globals\gui\icons\items\w2ef_read\ (written by the patcher).",
+               "function W2EF_HasReadIcon( itemName : name ) : bool", "{", "    var book : string;", "",
+               "    book = NameToString( itemName );")
+    foreach ($book in $readIcons.Books) { $lines += "    if ( book == `"$book`" ) { return true; }" }
+    $lines += @("    return false;", "}")
+    return $lines -join "`n"
+}
+
 # Inserts one edit, wrapped in BEGIN/END marker lines, into $text.
 # Where Replace: the anchor must match whole lines (as many as Count, or any number when
 # Multiple), and each of those lines is replaced by the code, still inside its indentation.
 function Add-Edit([string]$text, $edit, [string]$feature, [string]$collect) {
     if ($edit.Code -eq "BOOK_HELPERS") {
         $code = (ConvertTo-Tabs $BookHelpers).Replace("__COLLECT_BODY__", "`t" + $collect.TrimEnd()).Replace(
-            "__TEXT_FUNCTION__", (ConvertTo-Tabs (New-TextFunction)))
+            "__TEXT_FUNCTION__", (ConvertTo-Tabs (New-TextFunction))).Replace(
+            "__READ_ICONS__", (ConvertTo-Tabs (New-ReadIconFunction)))
     }
     else { $code = ConvertTo-Tabs $edit.Code }
     $lines = @("$Marker BEGIN $feature") + $code.TrimEnd("`n").Split("`n") + @("$Marker END $feature")
@@ -1033,20 +1360,36 @@ function Build-Scripts([byte[]]$orig, [string[]]$chosen) {
     return [Dzip]::ReplaceEntries($orig, $names, $datas)
 }
 
-function Get-SwfState([byte[]]$swf) {
-    $orig = [Swf]::FindAll($swf, [int[]]$SwfOriginal)
-    $done = [Swf]::FindAll($swf, [int[]]$SwfPatched)
-    if ($done.Count -eq 1 -and $orig.Count -eq 0) { return @{ State = "patched" } }
-    if ($orig.Count -eq 1 -and $done.Count -eq 0) { return @{ State = "original"; At = $orig[0] } }
-    return @{ State = "unknown"; Why = "pattern found $($orig.Count) times, patched form $($done.Count) times" }
+# "original" when every statement is there exactly once unpatched, "patched" when every one is
+# there exactly once patched; anything else (also a mix, e.g. from an older copy of this tool)
+# is unknown.
+function Get-SwfState([byte[]]$swf, $patches) {
+    $at = @()
+    $states = @()
+    $why = @()
+    foreach ($p in $patches) {
+        $orig = [Swf]::FindAll($swf, [int[]]$p.Original)
+        $done = [Swf]::FindAll($swf, [int[]]$p.Patched)
+        if ($done.Count -eq 1 -and $orig.Count -eq 0) { $states += "patched" }
+        elseif ($orig.Count -eq 1 -and $done.Count -eq 0) { $states += "original"; $at += $orig[0] }
+        else { $states += "unknown" }
+        $why += "$($p.Name): pattern found $($orig.Count) times, patched form $($done.Count) times"
+    }
+    if (@($states | Where-Object { $_ -ne "patched" }).Count -eq 0) { return @{ State = "patched" } }
+    if (@($states | Where-Object { $_ -ne "original" }).Count -eq 0) { return @{ State = "original"; At = $at } }
+    return @{ State = "unknown"; Why = $why -join "; " }
 }
 
-function Get-PatchedSwf([byte[]]$swf) {
-    $s = Get-SwfState $swf
+function Get-PatchedSwf([byte[]]$swf, $patches) {
+    $s = Get-SwfState $swf $patches
     if ($s.State -ne "original") { throw "swf: $($s.Why)" }
     $new = [byte[]]$swf.Clone()
-    $at = $s.At + $SwfIf.Count
-    for ($k = 0; $k -lt $SwfPatch.Count; $k++) { $new[$at + $k] = [byte]$SwfPatch[$k] }
+    for ($i = 0; $i -lt $patches.Count; $i++) {
+        $patched = $patches[$i].Patched
+        for ($k = 0; $k -lt $patched.Count; $k++) {
+            if ($patched[$k] -ge 0) { $new[$s.At[$i] + $k] = [byte]$patched[$k] }
+        }
+    }
     return $new
 }
 
@@ -1091,31 +1434,46 @@ if ($Action -ne "Check") {
     if ($running) { throw "The Witcher 2 is running. Close the game first." }
 }
 
+$iconDir = Join-Path $guiDir "icons\items\w2ef_read"
+$IconLeaf = "w2ef_read"
+
 function Get-LeafPath([string]$leaf) {
     if ($leaf -eq "base_scripts.dzip") { return $scriptsPath }
+    if ($leaf -eq $IconLeaf) { return $iconDir }
     return Join-Path $guiDir $leaf
+}
+
+# Puts one manifest entry back the way it was: our icon folder is removed, a created file removed,
+# a replaced file restored from the backup, each file only while it still holds what we wrote.
+function Restore-Leaf([string]$leaf) {
+    $path = Get-LeafPath $leaf
+    if (-not (Test-Path -LiteralPath $path)) { Write-Output "$leaf is gone, skipped"; return }
+    if ($manifest[$leaf].Mode -eq "folder") {
+        Remove-Item -LiteralPath $path -Recurse -Force
+        Write-Output "Removed the read-book icons"
+        return
+    }
+    if ((Sha256 ([IO.File]::ReadAllBytes($path))) -ne $manifest[$leaf].Hash) {
+        Write-Output "$leaf was changed after patching (another mod or update?), left as it is"
+        return
+    }
+    if ($manifest[$leaf].Mode -eq "created") {
+        Remove-Item -LiteralPath $path -Force
+        Write-Output "Removed $leaf (game uses its packed copy again)"
+    }
+    else {
+        Write-Atomic $path ([IO.File]::ReadAllBytes((Join-Path $backup $leaf)))
+        Write-Output "Restored $leaf"
+    }
+    $bak = Join-Path $backup $leaf
+    if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Force }
 }
 
 # --- uninstall ------------------------------------------------------------------------------
 
 if ($Action -eq "Uninstall") {
     if ($manifest.Count -eq 0) { Write-Output "Not installed (no backup manifest)."; return }
-    foreach ($leaf in @($manifest.Keys)) {
-        $path = Get-LeafPath $leaf
-        if (-not (Test-Path -LiteralPath $path)) { Write-Output "$leaf is gone, skipped"; continue }
-        if ((Sha256 ([IO.File]::ReadAllBytes($path))) -ne $manifest[$leaf].Hash) {
-            Write-Output "$leaf was changed after patching (another mod or update?), left as it is"
-            continue
-        }
-        if ($manifest[$leaf].Mode -eq "created") {
-            Remove-Item -LiteralPath $path -Force
-            Write-Output "Removed $leaf (game uses its packed copy again)"
-        }
-        else {
-            Write-Atomic $path ([IO.File]::ReadAllBytes((Join-Path $backup $leaf)))
-            Write-Output "Restored $leaf"
-        }
-    }
+    foreach ($leaf in @($manifest.Keys)) { Restore-Leaf $leaf }
     Remove-Item -LiteralPath $backup -Recurse -Force
     Write-Output "Uninstalled."
     return
@@ -1140,28 +1498,35 @@ function Get-Target([string]$leaf, [string]$path, [scriptblock]$fromArchive) {
 }
 
 $scripts = Get-Target "base_scripts.dzip" $scriptsPath { throw "base_scripts.dzip missing" }
-$patchedEntries = @($UtilsEntry, $ShopEntry, $MenuEntry, $ContainerEntry)
+$patchedEntries = @($UtilsEntry, $ShopEntry, $MenuEntry, $ContainerEntry, $InventoryEntry)
 foreach ($entry in $patchedEntries) {
     if ((Get-EntryText $scripts.Orig $entry).Contains($Marker)) {
         throw "$entry already holds witcher2-enginefix changes from another copy of this tool (BookReadMarker?). Run that copy's Uninstall.bat first."
     }
 }
+# Movies that do not match (another UI mod, or none to be found) are left alone; $swfSkipped says
+# why.
 $swfs = @()
-foreach ($name in $SwfNames) {
-    $swfs += Get-Target $name (Join-Path $guiDir $name) {
+$swfSkipped = [ordered]@{}
+foreach ($name in $SwfFiles.Keys) {
+    $t = Get-Target $name (Join-Path $guiDir $name) {
+        if (-not (Test-Path -LiteralPath $abetterui)) { return $null }
         $ab = [IO.File]::ReadAllBytes($abetterui)
-        $t = 0L
-        $e = [Dzip]::Find([Dzip]::ReadTable($ab, [ref]$t), "globals\gui\$name")
-        if (-not $e) { throw "$name not found in abetterui.dzip" }
-        [Swf]::Uncompressed([Dzip]::Extract($ab, $e))
+        $tableAt = 0L
+        $e = [Dzip]::Find([Dzip]::ReadTable($ab, [ref]$tableAt), "globals\gui\$name")
+        if (-not $e) { return $null }
+        , [Swf]::Uncompressed([Dzip]::Extract($ab, $e))
     }.GetNewClosure()
-}
-foreach ($t in $swfs) {
+    if ($null -eq $t.Orig) { $swfSkipped[$name] = "not found, neither loose nor in abetterui.dzip"; continue }
     $t.Raw = $t.Orig   # as found; backups and restores use these bytes
     $t.Orig = [Swf]::Uncompressed($t.Orig)
-    $s = Get-SwfState $t.Orig
-    if ($s.State -ne "original") { throw "$($t.Leaf): $($s.Why). Another copy of this tool may have patched it; run its Uninstall.bat first." }
+    $t.Patches = $SwfFiles[$name]
+    $s = Get-SwfState $t.Orig $t.Patches
+    if ($s.State -ne "original") { $swfSkipped[$name] = "$($s.Why) (another UI mod?)"; continue }
+    $swfs += $t
 }
+
+$readIcons = Get-ReadIcons
 
 # --- check ----------------------------------------------------------------------------------
 
@@ -1174,6 +1539,11 @@ foreach ($name in $FeatureList.Keys) {
     $state = if ($installed -contains $name) { "installed" } else { "not installed" }
     Write-Output ("{0,-11} {1,-14} {2}" -f $name, $state, $ok)
 }
+foreach ($name in $swfSkipped.Keys) {
+    Write-Output "  note: $name is left as it is ($($swfSkipped[$name])); the book marker works without that part."
+}
+if ($readIcons.Why) { Write-Output "  note: no read-book icons ($($readIcons.Why)); the loot window shows the status text only." }
+else { Write-Output "  read-book icons: $($readIcons.Books.Count) books" }
 
 if ($Action -eq "Check") { return }
 
@@ -1197,7 +1567,7 @@ else {
 
 $wantSwf = @($chosen | Where-Object { $FeatureList[$_].Swf }).Count -gt 0
 $scripts.Desired = Build-Scripts $scripts.Orig $chosen
-foreach ($t in $swfs) { $t.Desired = if ($wantSwf) { Get-PatchedSwf $t.Orig } else { $t.Orig } }
+foreach ($t in $swfs) { $t.Desired = if ($wantSwf) { Get-PatchedSwf $t.Orig $t.Patches } else { $t.Orig } }
 
 foreach ($t in @($scripts) + $swfs) {
     $raw = if ($t.Raw) { $t.Raw } else { $t.Orig }
@@ -1226,6 +1596,23 @@ foreach ($t in @($scripts) + $swfs) {
     }
     $manifest[$t.Leaf] = @{ Mode = $mode; Hash = $newHash }
     Save-Manifest $manifest
+}
+
+# Read-book icons: our own folder, written again on every install that has the book marker.
+if (Test-Path -LiteralPath $iconDir) { Remove-Item -LiteralPath $iconDir -Recurse -Force }
+if ($wantSwf -and $readIcons.Files.Count -gt 0) {
+    New-Item -ItemType Directory -Force -Path $iconDir | Out-Null
+    foreach ($icon in $readIcons.Files.Keys) { [IO.File]::WriteAllBytes((Join-Path $iconDir $icon), $readIcons.Files[$icon]) }
+    $manifest[$IconLeaf] = @{ Mode = "folder"; Hash = "$($readIcons.Files.Count) files" }
+    Write-Output "Wrote $($readIcons.Files.Count) read-book icons"
+}
+elseif ($manifest.Contains($IconLeaf)) { $manifest.Remove($IconLeaf); Write-Output "Removed the read-book icons" }
+
+# Files an earlier version of this tool patched and this one no longer does go back as they were.
+$current = @("base_scripts.dzip", $IconLeaf) + @($swfs | ForEach-Object { $_.Leaf })
+foreach ($leaf in @($manifest.Keys | Where-Object { $current -notcontains $_ })) {
+    Restore-Leaf $leaf
+    $manifest.Remove($leaf)
 }
 Save-Manifest $manifest
 
