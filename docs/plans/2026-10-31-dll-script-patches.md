@@ -215,9 +215,9 @@ extern const sp_swf_patch SP_SWF_COMPARE[2];                      /* "player sid
 `SP_SWF_COMPARE` is `$SwfCompare` (ScriptPatches.ps1, `$SwfCompare`/`$SwfOwnedName`) copied
 byte for byte. The patched SWF is written uncompressed (FWS), as the `.ps1` does.
 
-- [ ] **Step 1: Failing tests:** state of a synthetic buffer holding each pattern once → ORIGINAL; after `sp_swf_apply` → PATCHED; pattern twice → UNKNOWN; with `--game`: the HD UI loose `ui_trade.swf`/`ui_storage.swf` from the old patcher's backup and the `abetterui.dzip` copies are ORIGINAL.
-- [ ] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** run → PASS.
-- [ ] **Step 5: Commit** `script patches in DLL: SWF patch and inflate`.
+- [x] **Step 1: Failing tests:** state of a synthetic buffer holding each pattern once → ORIGINAL; after `sp_swf_apply` → PATCHED; pattern twice → UNKNOWN; with `--game`: the HD UI loose `ui_trade.swf`/`ui_storage.swf` from the old patcher's backup and the `abetterui.dzip` copies are ORIGINAL.
+- [x] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** run → PASS.
+- [x] **Step 5: Commit** `script patches in DLL: SWF patch and inflate`.
 
 ### Task 4: Read-book icons (DDS)
 

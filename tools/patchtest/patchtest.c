@@ -15,6 +15,7 @@
 #include <wchar.h>
 #include "sp_common.h"
 #include "sp_dzip.h"
+#include "sp_swf.h"
 
 #define DZIP_MAGIC 0x50495A44u
 
@@ -291,6 +292,242 @@ done:
     return why;
 }
 
+// ---- SWF ----------------------------------------------------------------
+
+static void put_pattern(unsigned char* p, const short* pat, int len)
+{
+    for (int i = 0; i < len; i++)
+        p[i] = pat[i] < 0 ? 0x55 : (unsigned char)pat[i];
+}
+
+// A synthetic FWS (8-byte header + filler) whose body holds each pattern `times` times.
+static sp_buf make_swf_with(const short* pat0, int times0, const short* pat1, int times1)
+{
+    size_t l0 = (size_t)SP_SWF_COMPARE[0].len, l1 = (size_t)SP_SWF_COMPARE[1].len;
+    size_t need = 8 + 16 + (size_t)times0 * l0 + 8 + (size_t)times1 * l1 + 8;
+    sp_buf b;
+    size_t at;
+
+    b.n = need;
+    b.p = (unsigned char*)malloc(need);
+    if (!b.p) { b.n = 0; return b; }
+    memset(b.p, 'Z', need);
+    b.p[0] = 'F'; b.p[1] = 'W'; b.p[2] = 'S'; b.p[3] = 10;
+    wr32(b.p + 4, (unsigned int)need);
+    at = 8 + 16;
+    for (int i = 0; i < times0; i++) {
+        put_pattern(b.p + at, pat0, (int)l0);
+        at += l0;
+    }
+    at += 8;
+    for (int i = 0; i < times1; i++) {
+        put_pattern(b.p + at, pat1, (int)l1);
+        at += l1;
+    }
+    return b;
+}
+
+// Both statements present once: ORIGINAL, apply writes exactly the patched bytes, the
+// result is PATCHED.
+static const char* test_swf_state(void)
+{
+    const char* why = NULL;
+    const sp_swf_patch* p = SP_SWF_COMPARE;
+    sp_buf fws = { NULL, 0 }, out = { NULL, 0 };
+    int at[2] = { -1, -1 };
+    char whytxt[512];
+    size_t at0 = 8 + 16, at1 = at0 + (size_t)p[0].len + 8;
+
+    fws = make_swf_with(p[0].orig, 1, p[1].orig, 1);
+    CHECK(fws.p != NULL);
+    whytxt[0] = 0;
+    CHECK(sp_swf_state(&fws, p, 2, at, whytxt, sizeof whytxt) == SP_SWF_ORIGINAL);
+    CHECK(at[0] == (int)at0 && at[1] == (int)at1);
+    CHECK(sp_swf_apply(&fws, p, 2, &out));
+    CHECK(out.n == fws.n);
+    for (int i = 0; i < 2; i++) {
+        size_t base = i ? at1 : at0;
+        int len = i ? p[1].len : p[0].len;
+        for (int k = 0; k < len; k++) {
+            if (p[i].patched[k] >= 0)
+                CHECK(out.p[base + k] == (unsigned char)p[i].patched[k]);
+            else
+                CHECK(out.p[base + k] == fws.p[base + k]);
+        }
+    }
+    CHECK(memcmp(out.p, fws.p, at0) == 0);                                  // header + filler
+    CHECK(memcmp(out.p + at0 + p[0].len, fws.p + at0 + p[0].len, 8) == 0);  // between
+    CHECK(memcmp(out.p + at1 + p[1].len, fws.p + at1 + p[1].len,
+                 fws.n - at1 - (size_t)p[1].len) == 0);                     // after
+    CHECK(sp_swf_state(&out, p, 2, NULL, whytxt, sizeof whytxt) == SP_SWF_PATCHED);
+done:
+    sp_free(&out);
+    sp_free(&fws);
+    return why;
+}
+
+// A pattern twice, and one patched next to one original: both are UNKNOWN, and apply
+// refuses.
+static const char* test_swf_unknown(void)
+{
+    const char* why = NULL;
+    const sp_swf_patch* p = SP_SWF_COMPARE;
+    sp_buf fws = { NULL, 0 }, out = { NULL, 0 };
+    char whytxt[512];
+
+    fws = make_swf_with(p[0].orig, 2, p[1].orig, 1);
+    CHECK(fws.p != NULL);
+    whytxt[0] = 0;
+    CHECK(sp_swf_state(&fws, p, 2, NULL, whytxt, sizeof whytxt) == SP_SWF_UNKNOWN);
+    CHECK(strstr(whytxt, "player side: pattern found 2 times") != NULL);
+    CHECK(!sp_swf_apply(&fws, p, 2, &out) && out.p == NULL);
+    sp_free(&fws);
+
+    fws = make_swf_with(p[0].patched, 1, p[1].orig, 1);
+    CHECK(fws.p != NULL);
+    CHECK(sp_swf_state(&fws, p, 2, NULL, whytxt, sizeof whytxt) == SP_SWF_UNKNOWN);
+done:
+    sp_free(&out);
+    sp_free(&fws);
+    return why;
+}
+
+// CWS -> FWS through the vendored inflate: a final stored deflate block behind the
+// two-byte zlib header, exactly the shape the reference reads (b[10..]).
+static const char* test_swf_uncompressed(void)
+{
+    const char* why = NULL;
+    enum { BODY = 32, FWS_LEN = 8 + BODY, CWS_LEN = 10 + 5 + BODY + 4 };
+    unsigned char fws[FWS_LEN], cws[CWS_LEN], junk[4] = { 'N', 'O', 'P', 'E' };
+    sp_buf in = { cws, CWS_LEN }, out = { NULL, 0 }, same = { fws, FWS_LEN };
+    sp_buf passthru = { NULL, 0 }, bad = { junk, sizeof junk }, o2 = { NULL, 0 };
+    size_t n = 0;
+
+    for (int i = 0; i < BODY; i++) fws[8 + i] = (unsigned char)(0x40 + i);
+    fws[0] = 'F'; fws[1] = 'W'; fws[2] = 'S'; fws[3] = 10;
+    wr32(fws + 4, FWS_LEN);
+
+    cws[n++] = 'C'; cws[n++] = 'W'; cws[n++] = 'S'; cws[n++] = 10;
+    wr32(cws + 4, FWS_LEN);
+    n = 8;
+    cws[n++] = 0x78; cws[n++] = 0x01;                    // zlib header, skipped
+    cws[n++] = 0x01;                                     // final, stored deflate block
+    cws[n++] = BODY & 0xFF; cws[n++] = 0;
+    cws[n++] = (unsigned char)(~BODY & 0xFF); cws[n++] = 0xFF;
+    memcpy(cws + n, fws + 8, BODY);
+    n += BODY;
+    cws[n++] = 0; cws[n++] = 0; cws[n++] = 0; cws[n++] = 0;   // adler32, never read
+    CHECK(n == CWS_LEN);
+
+    CHECK(sp_swf_uncompressed(&in, &out));
+    CHECK(out.n == FWS_LEN && memcmp(out.p, fws, FWS_LEN) == 0);
+    CHECK(sp_swf_uncompressed(&same, &passthru));
+    CHECK(passthru.n == FWS_LEN && memcmp(passthru.p, fws, FWS_LEN) == 0);
+    CHECK(!sp_swf_uncompressed(&bad, &o2));
+    CHECK(o2.p == NULL && o2.n == 0);
+done:
+    sp_free(&passthru);
+    sp_free(&out);
+    return why;
+}
+
+// Reads one entry of a DZIP into `out` (owned); NULL on success, else a reason.
+static const char* read_dzip_entry(const wchar_t* dzip, const char* name, sp_buf* out)
+{
+    sp_buf raw = { NULL, 0 };
+    sp_dzip z;
+    int i;
+
+    memset(out, 0, sizeof *out);
+    memset(&z, 0, sizeof z);
+    if (!sp_read_file(dzip, &raw)) return "cannot read the archive";
+    if (!sp_dzip_open(&raw, &z)) {
+        sp_free(&raw);
+        return "not a DZIP v2 archive";
+    }
+    i = sp_dzip_find(&z, name);
+    if (i < 0) {
+        sp_dzip_close(&z);
+        sp_free(&raw);
+        return "entry not found";
+    }
+    if (!sp_dzip_extract(&z, i, out)) {
+        sp_dzip_close(&z);
+        sp_free(&raw);
+        return "extraction failed";
+    }
+    sp_dzip_close(&z);
+    sp_free(&raw);
+    return NULL;
+}
+
+// The real movies are ORIGINAL: the HD UI originals in the old patcher's backup and the
+// copies inside abetterui.dzip. Both sources are optional (a vanilla or migrated install
+// has neither), but at least one SWF must have been checked.
+static const char* test_swf_real(void)
+{
+    const char* why = NULL;
+    const wchar_t* files[2] = { L"ui_trade.swf", L"ui_storage.swf" };
+    const char* entries[2] = { "globals\\gui\\ui_trade.swf", "globals\\gui\\ui_storage.swf" };
+    wchar_t cc[MAX_PATH], dir[MAX_PATH], path[MAX_PATH], dzip[MAX_PATH];
+    sp_buf raw = { NULL, 0 }, fws = { NULL, 0 };
+    char whytxt[512];
+    int tested = 0;
+
+    if (!path_join(cc, MAX_PATH, g_game, L"CookedPC") ||
+        !path_join(dzip, MAX_PATH, cc, L"abetterui.dzip") ||
+        !path_join(dir, MAX_PATH, g_game, L"Witcher2EngineFix_Optional\\ScriptPatches\\backup"))
+        return "path too long";
+
+    for (int i = 0; i < 2; i++) {
+        if (!path_join(path, MAX_PATH, dir, files[i])) return "path too long";
+        if (!sp_read_file(path, &raw)) continue;        // no backup on this install
+        if (!sp_swf_uncompressed(&raw, &fws)) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%ls: not a SWF", path);
+            why = g_why;
+            goto done;
+        }
+        whytxt[0] = 0;
+        if (sp_swf_state(&fws, SP_SWF_COMPARE, 2, NULL, whytxt, sizeof whytxt) != SP_SWF_ORIGINAL) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%ls: %s", path, whytxt);
+            why = g_why;
+            goto done;
+        }
+        tested++;
+        sp_free(&raw);
+        sp_free(&fws);
+    }
+    for (int i = 0; i < 2; i++) {
+        const char* err = read_dzip_entry(dzip, entries[i], &raw);
+        if (err) {
+            if (strcmp(err, "cannot read the archive") == 0) continue;   // no HD UI mod
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "abetterui.dzip %s: %s", entries[i], err);
+            why = g_why;
+            goto done;
+        }
+        if (!sp_swf_uncompressed(&raw, &fws)) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "abetterui.dzip %s: not a SWF", entries[i]);
+            why = g_why;
+            goto done;
+        }
+        whytxt[0] = 0;
+        if (sp_swf_state(&fws, SP_SWF_COMPARE, 2, NULL, whytxt, sizeof whytxt) != SP_SWF_ORIGINAL) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "abetterui.dzip %s: %s", entries[i], whytxt);
+            why = g_why;
+            goto done;
+        }
+        tested++;
+        sp_free(&raw);
+        sp_free(&fws);
+    }
+    if (tested == 0) return "no ui_trade/ui_storage original to check (no backup, no abetterui.dzip)";
+    printf("  %d SWFs checked\n", tested);
+done:
+    sp_free(&fws);
+    sp_free(&raw);
+    return why;
+}
+
 // sp_write_file_atomic + sp_read_file round-trip through %TEMP%; a missing file fails and
 // leaves the buffer empty.
 static const char* test_common_io(void)
@@ -435,8 +672,12 @@ static const test_case k_tests[] = {
     { "dzip_replace",      test_dzip_replace,      0 },
     { "lzf_backrefs",      test_lzf_backrefs,      0 },
     { "common_io",         test_common_io,         0 },
+    { "swf_state",         test_swf_state,         0 },
+    { "swf_unknown",       test_swf_unknown,       0 },
+    { "swf_uncompressed",  test_swf_uncompressed,  0 },
     { "dzip_real_hash",    test_dzip_real_hash,    1 },
     { "dzip_real_extract", test_dzip_real_extract, 1 },
+    { "swf_real",          test_swf_real,          1 },
 };
 
 static int run_tests(void)

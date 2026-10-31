@@ -1,0 +1,14 @@
+tinf 1.2.1
+
+Vendored from https://github.com/jibsen/tinf, tag v1.2.1
+(commit 9929246b87f0946b124cfa2a89894b8943b0b072).
+
+Files taken unchanged: src/tinf.h, src/tinflate.c, LICENSE.
+
+Used for the SWF CWS -> FWS conversion in src/sp_swf.c: raw deflate starting after the
+two-byte zlib header, exactly what the reference patcher does
+(ScriptPatches.ps1, System.IO.Compression.DeflateStream over b[10..]). Only
+tinf_uncompress() is called.
+
+License: zlib, see LICENSE. Do not edit these files; to update, replace the folder with a
+newer tag and change the version line above.

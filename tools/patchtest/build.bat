@@ -21,5 +21,14 @@ rem cl does not expand wildcards itself; every src\sp_*.c goes into the harness.
 set "SP="
 for %%f in (src\sp_*.c) do set "SP=!SP! %%f"
 
-cl /nologo /O2 /W4 /MT /Isrc tools\patchtest\patchtest.c !SP! /Fobuild\ /Fe:build\sptest.exe || exit /b 1
+rem tinf is third-party and kept unaltered. It is not /W4-clean (two signed/unsigned
+rem mismatches remain at /W3 too), so it is compiled on its own with /W3 /wd4018 and the
+rem object is linked into the harness.
+set "TINF="
+for %%f in (src\third_party\tinf\*.c) do (
+    cl /nologo /O2 /W3 /wd4018 /MT /c "%%f" /Fobuild\ || exit /b 1
+    set "TINF=!TINF! build\%%~nf.obj"
+)
+
+cl /nologo /O2 /W4 /MT /Isrc tools\patchtest\patchtest.c !SP! !TINF! /Fobuild\ /Fe:build\sptest.exe || exit /b 1
 echo Built build\sptest.exe
