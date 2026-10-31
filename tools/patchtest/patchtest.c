@@ -14,6 +14,7 @@
 #include <string.h>
 #include <wchar.h>
 #include "sp_common.h"
+#include "sp_dds.h"
 #include "sp_dzip.h"
 #include "sp_swf.h"
 
@@ -528,6 +529,246 @@ done:
     return why;
 }
 
+// ---- DDS icons ----------------------------------------------------------
+
+#define DDS_MAGIC 0x20534444u
+
+// A DXT5 64x64 DDS: 128-byte header, then 16 bytes per 4x4 block. Block 0 (x 0..3) has
+// a0 > a1 (8-value alpha, 255,0,218,182,145,109,72,36); block 1 (x 4..7) has a0 < a1
+// (6-value alpha, 0,1,0,0,0,0,0,255) - the branch the real alreadyread overlay uses. Both
+// use c0 = pure red, c1 = pure blue (four-colour palette), colour indices 0,1,2,3 repeating.
+static sp_buf make_dxt5_sample(void)
+{
+    static const unsigned char block0[16] = {
+        255, 0, 0x88, 0xC6, 0xFA, 0x88, 0xC6, 0xFA,
+        0x00, 0xF8, 0x1F, 0x00, 0xE4, 0xE4, 0xE4, 0xE4
+    };
+    static const unsigned char block1[16] = {
+        0, 1, 0x88, 0xC6, 0xFA, 0x88, 0xC6, 0xFA,
+        0x00, 0xF8, 0x1F, 0x00, 0xE4, 0xE4, 0xE4, 0xE4
+    };
+    sp_buf b;
+    unsigned char* h;
+
+    b.n = 128 + 256 * 16;
+    b.p = (unsigned char*)malloc(b.n);
+    if (!b.p) { b.n = 0; return b; }
+    memset(b.p, 0, b.n);
+    h = b.p;
+    wr32(h + 0, DDS_MAGIC);
+    wr32(h + 4, 124);                    // dwSize
+    wr32(h + 8, 0x81007);                // caps|height|width|pitch|pixelformat|linearsize
+    wr32(h + 12, 64);                    // height
+    wr32(h + 16, 64);                    // width
+    wr32(h + 20, 64 * 16);               // linear size
+    wr32(h + 76, 32);                    // pixel format size
+    wr32(h + 80, 4);                     // DDPF_FOURCC
+    memcpy(h + 84, "DXT5", 4);
+    wr32(h + 108, 0x1000);               // caps: texture
+    memcpy(h + 128, block0, sizeof block0);
+    memcpy(h + 144, block1, sizeof block1);
+    return b;
+}
+
+// A 32-bit A8R8G8B8 DDS with a hand-written header (the reference's Encode64 layout) and
+// the given pixels.
+static sp_buf make_dds32(const unsigned* px)
+{
+    sp_buf b;
+    unsigned char* h;
+
+    b.n = 128 + SP_DDS_PIXELS * 4;
+    b.p = (unsigned char*)malloc(b.n);
+    if (!b.p) { b.n = 0; return b; }
+    memset(b.p, 0, b.n);
+    h = b.p;
+    wr32(h + 0, DDS_MAGIC);
+    wr32(h + 4, 124);
+    wr32(h + 8, 0x100F);                 // caps|height|width|pitch|pixelformat
+    wr32(h + 12, 64);                    // height
+    wr32(h + 16, 64);                    // width
+    wr32(h + 20, 256);                   // pitch
+    wr32(h + 76, 32);                    // pixel format size
+    wr32(h + 80, 0x41);                  // DDPF_RGB | DDPF_ALPHAPIXELS
+    wr32(h + 88, 32);                    // rgb bit count
+    wr32(h + 92, 0x00FF0000u);
+    wr32(h + 96, 0x0000FF00u);
+    wr32(h + 100, 0x000000FFu);
+    wr32(h + 104, 0xFF000000u);
+    wr32(h + 108, 0x1000);               // caps: texture
+    for (int i = 0; i < SP_DDS_PIXELS; i++) wr32(h + 128 + 4 * i, px[i]);
+    return b;
+}
+
+// The hand-built DXT5 block decodes to the expected pixels, and non-icons are rejected.
+static const char* test_dds_decode_dxt5(void)
+{
+    static const unsigned expect[16] = {
+        0xFFFF0000u, 0x000000FFu, 0xDAAA0055u, 0xB65500AAu,
+        0x91FF0000u, 0x6D0000FFu, 0x48AA0055u, 0x245500AAu,
+        0xFFFF0000u, 0x000000FFu, 0xDAAA0055u, 0xB65500AAu,
+        0x91FF0000u, 0x6D0000FFu, 0x48AA0055u, 0x245500AAu
+    };
+    static const unsigned expect1[16] = {
+        0x00FF0000u, 0x010000FFu, 0x00AA0055u, 0x005500AAu,
+        0x00FF0000u, 0x000000FFu, 0x00AA0055u, 0xFF5500AAu,
+        0x00FF0000u, 0x010000FFu, 0x00AA0055u, 0x005500AAu,
+        0x00FF0000u, 0x000000FFu, 0x00AA0055u, 0xFF5500AAu
+    };
+    const char* why = NULL;
+    sp_buf dds = { NULL, 0 };
+    unsigned* px = (unsigned*)malloc(SP_DDS_PIXELS * sizeof *px);
+
+    CHECK(px != NULL);
+    dds = make_dxt5_sample();
+    CHECK(dds.p != NULL);
+    CHECK(sp_dds_decode64(&dds, px));
+    for (int i = 0; i < 16; i++) {
+        int at = (i / 4) * 64 + i % 4;      // block pixel i is at row i/4, column i%4
+        if (px[at] != expect[i]) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "pixel %d (%d) is %08X, expected %08X",
+                        i, at, px[at], expect[i]);
+            why = g_why;
+            goto done;
+        }
+    }
+    for (int i = 0; i < 16; i++) {
+        int at = (i / 4) * 64 + 4 + i % 4;  // block 1, a0 < a1
+        if (px[at] != expect1[i]) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "block 1 pixel %d (%d) is %08X, expected %08X",
+                        i, at, px[at], expect1[i]);
+            why = g_why;
+            goto done;
+        }
+    }
+    CHECK(sp_dds_decode64(&dds, px));                       // unchanged on a second call
+    wr32(dds.p + 12, 32);                                   // 32x32 is not an icon
+    CHECK(!sp_dds_decode64(&dds, px));
+    wr32(dds.p + 12, 64);
+    {
+        sp_buf cut = { dds.p, 128 + 255 * 16 };
+        CHECK(!sp_dds_decode64(&cut, px));                  // truncated
+    }
+    wr32(dds.p, 0x20534445u);
+    CHECK(!sp_dds_decode64(&dds, px));
+done:
+    free(px);
+    sp_free(&dds);
+    return why;
+}
+
+// decode64 is exact for a standard 32-bit DDS, and encode64 writes exactly that file back.
+static const char* test_dds_roundtrip(void)
+{
+    const char* why = NULL;
+    sp_buf dds32 = { NULL, 0 }, enc = { NULL, 0 };
+    unsigned* px = (unsigned*)malloc(SP_DDS_PIXELS * sizeof *px);
+    unsigned* back = (unsigned*)malloc(SP_DDS_PIXELS * sizeof *back);
+    unsigned seed = 12345;
+
+    CHECK(px != NULL && back != NULL);
+    for (int i = 0; i < SP_DDS_PIXELS; i++) {               // deterministic, every byte varies
+        seed = seed * 1664525u + 1013904223u;
+        px[i] = seed;
+    }
+    dds32 = make_dds32(px);
+    CHECK(dds32.p != NULL);
+    CHECK(sp_dds_decode64(&dds32, back));
+    CHECK(memcmp(back, px, SP_DDS_PIXELS * sizeof *px) == 0);
+    CHECK(sp_dds_encode64(back, &enc));
+    CHECK(enc.n == dds32.n && memcmp(enc.p, dds32.p, dds32.n) == 0);
+done:
+    sp_free(&enc);
+    sp_free(&dds32);
+    free(back);
+    free(px);
+    return why;
+}
+
+// The alpha-over used for the read-icon overlay, with the reference's rounding.
+static const char* test_dds_over(void)
+{
+    struct { unsigned base, top; double opacity; unsigned expect; } cases[] = {
+        { 0xFF000000u, 0x80FF0000u, 0.9, 0xFF730000u },
+        { 0xFFFFFFFFu, 0xFFFFFFFFu, 0.0, 0xFFFFFFFFu },
+        { 0x00000000u, 0xFF00FF00u, 0.9, 0xE600FF00u },
+        { 0xFFFFFFFFu, 0x00FFFFFFu, 0.9, 0xFFFFFFFFu },
+        { 0x00000000u, 0xFD336699u, 0.5, 0x7E336699u },
+        { 0x80808080u, 0x80402010u, 1.0, 0xC0554035u },
+        { 0x00000000u, 0x00000000u, 0.9, 0x00000000u }
+    };
+    const char* why = NULL;
+    unsigned base[SP_DDS_PIXELS], top[SP_DDS_PIXELS];
+
+    for (int i = 0; i < SP_DDS_PIXELS; i++) { base[i] = 0; top[i] = 0; }
+    for (int c = 0; c < (int)(sizeof cases / sizeof cases[0]); c++) {
+        for (int i = 0; i < SP_DDS_PIXELS; i++) {
+            base[i] = cases[c].base;
+            top[i] = cases[c].top;
+        }
+        sp_dds_over(base, top, cases[c].opacity);
+        if (base[0] != cases[c].expect) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE,
+                        "case %d (%08X over %08X at %g) is %08X, expected %08X", c,
+                        cases[c].top, cases[c].base, cases[c].opacity, base[0], cases[c].expect);
+            why = g_why;
+            goto done;
+        }
+    }
+done:
+    return why;
+}
+
+static unsigned long long fnv1a64(const void* data, size_t n)
+{
+    const unsigned char* p = (const unsigned char*)data;
+    unsigned long long h = 0xcbf29ce484222325ULL;
+    for (size_t i = 0; i < n; i++) {
+        h ^= p[i];
+        h *= 0x100000001b3ULL;
+    }
+    return h;
+}
+
+// The real read-icon overlay (DXT5, 64x64) decodes to the same pixels as the reference:
+// FNV-1a 64 over the 4096 RGBA values was taken from a Python port of the .ps1 Decode64.
+static const char* test_dds_real_overlay(void)
+{
+    const char* why = NULL;
+    wchar_t cc[MAX_PATH], dzip[MAX_PATH];
+    sp_buf raw = { NULL, 0 };
+    unsigned* px = (unsigned*)malloc(SP_DDS_PIXELS * sizeof *px);
+    const char* err;
+
+    CHECK(px != NULL);
+    if (!path_join(cc, MAX_PATH, g_game, L"CookedPC") ||
+        !path_join(dzip, MAX_PATH, cc, L"abetterui.dzip"))
+        return "path too long";
+    err = read_dzip_entry(dzip, "globals\\gui\\icons\\tooltip\\alreadyread_64x64.dds", &raw);
+    if (err) {
+        if (strcmp(err, "cannot read the archive") == 0) {
+            printf("  (no abetterui.dzip - skipped)\n");
+            goto done;
+        }
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "alreadyread_64x64.dds: %s", err);
+        why = g_why;
+        goto done;
+    }
+    CHECK(sp_dds_decode64(&raw, px));
+    CHECK(px[0] == 0x00FFFFFFu && px[1] == 0x00FFFFFFu && px[100] == 0x00FFFFFFu);
+    CHECK(px[4095] == 0x00FFFFFFu);
+    if (fnv1a64(px, SP_DDS_PIXELS * sizeof *px) != 0x760A865CFC2814ECULL) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "pixel checksum is %016llX",
+                    fnv1a64(px, SP_DDS_PIXELS * sizeof *px));
+        why = g_why;
+        goto done;
+    }
+done:
+    sp_free(&raw);
+    free(px);
+    return why;
+}
+
 // sp_write_file_atomic + sp_read_file round-trip through %TEMP%; a missing file fails and
 // leaves the buffer empty.
 static const char* test_common_io(void)
@@ -675,9 +916,13 @@ static const test_case k_tests[] = {
     { "swf_state",         test_swf_state,         0 },
     { "swf_unknown",       test_swf_unknown,       0 },
     { "swf_uncompressed",  test_swf_uncompressed,  0 },
+    { "dds_decode_dxt5",   test_dds_decode_dxt5,   0 },
+    { "dds_roundtrip",     test_dds_roundtrip,     0 },
+    { "dds_over",          test_dds_over,          0 },
     { "dzip_real_hash",    test_dzip_real_hash,    1 },
     { "dzip_real_extract", test_dzip_real_extract, 1 },
     { "swf_real",          test_swf_real,          1 },
+    { "dds_real_overlay",  test_dds_real_overlay,  1 },
 };
 
 static int run_tests(void)

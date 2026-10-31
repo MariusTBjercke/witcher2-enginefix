@@ -232,9 +232,9 @@ int  sp_dds_encode64(const unsigned* px, sp_buf* out);            /* 32-bit BGRA
 Port `Dds.Decode64`, `Over`, `Encode64` (ScriptPatches.ps1 lines 299-420) with the same
 rounding, so the bytes match.
 
-- [ ] **Step 1: Failing test:** decode a known 4x4-block DXT5 sample (hand-built in the test) to its expected pixels; `encode64(decode64(x))` of a 32-bit DDS returns `x`.
-- [ ] **Step 2-4:** run FAIL → implement → PASS.
-- [ ] **Step 5: Commit** `script patches in DLL: read-book icons`.
+- [x] **Step 1: Failing test:** decode a known 4x4-block DXT5 sample (hand-built in the test) to its expected pixels; `encode64(decode64(x))` of a 32-bit DDS returns `x`.
+- [x] **Step 2-4:** run FAIL → implement → PASS.
+- [x] **Step 5: Commit** `script patches in DLL: read-book icons`.
 
 ### Task 5: WitcherScript edit engine and patch data
 
