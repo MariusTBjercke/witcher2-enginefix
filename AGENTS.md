@@ -63,7 +63,10 @@ gh release create v<version> dist\Witcher2EngineFix-<version>.zip --title "Witch
 `tools/inputprobe/probe.exe` is git-ignored; build it once with
 `cl /nologo /O2 /MT /guard:cf tools\inputprobe\probe.c dinput8.lib dxguid.lib user32.lib /Fe:tools\inputprobe\probe.exe`
 from an x86 developer prompt. Note that it injects real F9/F10 key presses:
-never run it while the game is in the foreground.
+never run it while the game is in the foreground. It loads `dinput8.dll` by bare name, and
+the application directory is searched before the CWD, so run it with `probe.exe` copied into
+`<game>\bin` - from `tools\inputprobe` it silently tests the system DLL instead of the proxy.
+Its F9/F10 checks also need the console to have foreground focus; without it every key reads 0.
 
 No CI: the build needs a local MSVC, and every behaviour test needs the game.
 
