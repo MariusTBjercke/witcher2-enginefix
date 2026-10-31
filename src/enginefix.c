@@ -102,17 +102,24 @@ static int cfg_save_thumbs = 1; // [saves] fix_thumbnails: write the late save p
 static int cfg_savelist_trace;  // [diagnostics] savelist_trace: time/memory of the save list
 static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the save list leaks
 static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos before the main menu
+static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
 
 // ---- logging ------------------------------------------------------------
+// One lock for whole lines: the worker, the file-trace hooks (called on any game
+// thread) and the save hooks all append to the same FILE*.
+
+static CRITICAL_SECTION g_logLock;
 
 static void logf_(const char* fmt, ...)
 {
     if (!g_log || !cfg_log) return;
     SYSTEMTIME st; GetLocalTime(&st);
+    EnterCriticalSection(&g_logLock);
     fprintf(g_log, "%02d:%02d:%02d.%03d ", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
     va_list ap; va_start(ap, fmt); vfprintf(g_log, fmt, ap); va_end(ap);
     fputc('\n', g_log);
     fflush(g_log);
+    LeaveCriticalSection(&g_logLock);
 }
 
 // ---- ini ----------------------------------------------------------------
@@ -296,6 +303,7 @@ static void load_config(void)
     cfg_savelist_trace = ini_int("diagnostics", "savelist_trace", 0);
     cfg_list_leak = ini_int("saves", "fix_list_leak", 1);
     cfg_skip_intro = ini_int("startup", "skip_intro", 0);
+    cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -944,18 +952,8 @@ static void thumb_note_write(const char* name)
     LeaveCriticalSection(&g_thumbLock);
 }
 
-static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
-                                      LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, HANDLE tmpl)
-{
-    HANDLE h = g_origCreateFileW(path, access, share, sa, disp, flags, tmpl);
-    if (trace_path(path)) {
-        DWORD err = GetLastError();
-        logf_("save-trace: CreateFileW \"%ls\" access=%08lX disp=%lu -> %s (err %lu)",
-              path, access, disp, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", err);
-        SetLastError(err);
-    }
-    return h;
-}
+// hook_CreateFileW sits in the file trace section below: save_trace and file_trace
+// share the one slot, so both behaviours live in a single chain.
 
 static BOOL WINAPI hook_DeleteFileW(LPCWSTR path)
 {
@@ -1328,15 +1326,15 @@ static DWORD WINAPI startvideo_thread(LPVOID param)
 }
 
 // Replace one import slot only if it still holds the expected export.
-static int patch_iat(uintptr_t slot, const char* dll, const char* fn, void* hook, void** orig)
+static int patch_iat(const char* tag, uintptr_t slot, const char* dll, const char* fn, void* hook, void** orig)
 {
     HMODULE mod = GetModuleHandleA(dll);
     void* expect = mod ? (void*)GetProcAddress(mod, fn) : NULL;
     void* have = range_readable((void*)slot, sizeof(void*)) ? read_ptr((void*)slot) : NULL;
     if (have == hook) return 1;
     if (!expect || have != expect) {
-        logf_("save-trace: %s!%s slot %08X holds %08X, expected %08X - not hooked",
-              dll, fn, (unsigned)slot, (unsigned)(uintptr_t)have, (unsigned)(uintptr_t)expect);
+        logf_("%s: %s!%s slot %08X holds %08X, expected %08X - not hooked",
+              tag, dll, fn, (unsigned)slot, (unsigned)(uintptr_t)have, (unsigned)(uintptr_t)expect);
         return 0;
     }
     DWORD old = 0, tmp = 0;
@@ -1344,8 +1342,548 @@ static int patch_iat(uintptr_t slot, const char* dll, const char* fn, void* hook
     *orig = have;
     *(void**)slot = hook;
     VirtualProtect((void*)slot, sizeof(void*), old, &tmp);
-    logf_("save-trace: hooked %s!%s", dll, fn);
+    logf_("%s: hooked %s!%s", tag, dll, fn);
     return 1;
+}
+
+// ---- file trace (research for the DLL script patches) -------------------
+// [diagnostics] file_trace=1 answers how the game opens its data - questions Q1-Q6 of
+// docs/plans/2026-10-31-dll-script-patches.md; results in docs/fixes/dll-script-patches.md.
+// Passive: every hook calls the real function first and changes nothing. The slots are
+// the unpacked 3.5.0.26 kernel32 imports, re-checked against the import table of
+// witcher2.exe.unpacked.exe:
+//   00CAD0B4 CreateFileMappingW  00CAD0BC GetFileAttributesExW  00CAD318 GetFileAttributesW
+//   00CAD198 FindFirstFileExW    00CAD264 FindNextFileW        00CAD26C FindFirstFileW
+//   00CAD280 GetFileSize         00CAD290 GetFileSizeEx        00CAD320 CreateFileW
+// The game imports the ANSI variants as well (CreateFileA 00CAD234, GetFileAttributesA
+// 00CAD1D8, FindFirstFileA 00CAD1DC, FindNextFileA 00CAD1E0) and reports sizes/times
+// through GetFileInformationByHandle (00CAD0A8), so those are traced too - missing them
+// would make a "not opened" answer wrong.
+// CreateFileW is shared with save_trace: one hook chains both behaviours.
+//
+// The Windows loader fills the original IAT (KERNEL32 thunks at 0x00CAD070) before any
+// DllMain runs, so the slots are already usable there; filetrace_thread still polls for
+// the real kernel32 export and keeps watching for a later rewrite (Q2).
+
+#define IAT_CREATEFILEA        0x00CAD234u
+#define IAT_CREATEFILEMAPPINGW 0x00CAD0B4u
+#define IAT_GETFILEATTREXW     0x00CAD0BCu
+#define IAT_GETFILEATTRA       0x00CAD1D8u
+#define IAT_GETFILEINFO        0x00CAD0A8u
+#define IAT_FINDFIRSTFILEA     0x00CAD1DCu
+#define IAT_FINDFIRSTFILEEXW   0x00CAD198u
+#define IAT_FINDNEXTFILEA      0x00CAD1E0u
+#define IAT_FINDNEXTFILEW      0x00CAD264u
+#define IAT_FINDFIRSTFILEW     0x00CAD26Cu
+#define IAT_GETFILESIZE        0x00CAD280u
+#define IAT_GETFILESIZEEX      0x00CAD290u
+#define IAT_GETFILEATTRW       0x00CAD318u
+
+#define FT_SLOTS       14       // patched IAT slots below
+#define FT_MAX_LINES   100000   // log cap: the startup loose-file scan alone is ~4k lines
+#define FT_MAX_HANDLES 256      // handle -> path memory for the size/mapping queries
+
+typedef HANDLE (WINAPI *CreateFileA_t)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+typedef BOOL   (WINAPI *GetFileAttributesExW_t)(LPCWSTR, GET_FILEEX_INFO_LEVELS, LPVOID);
+typedef DWORD  (WINAPI *GetFileAttributesA_t)(LPCSTR);
+typedef DWORD  (WINAPI *GetFileAttributesW_t)(LPCWSTR);
+typedef BOOL   (WINAPI *GetFileInformationByHandle_t)(HANDLE, LPBY_HANDLE_FILE_INFORMATION);
+typedef HANDLE (WINAPI *FindFirstFileA_t)(LPCSTR, LPWIN32_FIND_DATAA);
+typedef HANDLE (WINAPI *FindFirstFileW_t)(LPCWSTR, LPWIN32_FIND_DATAW);
+typedef HANDLE (WINAPI *FindFirstFileExW_t)(LPCWSTR, FINDEX_INFO_LEVELS, LPVOID, FINDEX_SEARCH_OPS, LPVOID, DWORD);
+typedef BOOL   (WINAPI *FindNextFileA_t)(HANDLE, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *FindNextFileW_t)(HANDLE, LPWIN32_FIND_DATAW);
+typedef DWORD  (WINAPI *GetFileSize_t)(HANDLE, LPDWORD);
+typedef BOOL   (WINAPI *GetFileSizeEx_t)(HANDLE, PLARGE_INTEGER);
+typedef HANDLE (WINAPI *CreateFileMappingW_t)(HANDLE, LPSECURITY_ATTRIBUTES, DWORD, DWORD, DWORD, LPCWSTR);
+
+static CreateFileA_t          g_origCreateFileA;
+static GetFileAttributesExW_t g_origGetFileAttributesExW;
+static GetFileAttributesA_t   g_origGetFileAttributesA;
+static GetFileAttributesW_t   g_origGetFileAttributesW;
+static GetFileInformationByHandle_t g_origGetFileInformationByHandle;
+static FindFirstFileA_t       g_origFindFirstFileA;
+static FindFirstFileW_t       g_origFindFirstFileW;
+static FindFirstFileExW_t     g_origFindFirstFileExW;
+static FindNextFileA_t        g_origFindNextFileA;
+static FindNextFileW_t        g_origFindNextFileW;
+static GetFileSize_t          g_origGetFileSize;
+static GetFileSizeEx_t        g_origGetFileSizeEx;
+static CreateFileMappingW_t   g_origCreateFileMappingW;
+
+static volatile LONG g_ftLines;
+static DWORD         g_ftT0;
+static CRITICAL_SECTION g_ftLock;
+typedef struct { HANDLE h; wchar_t what[MAX_PATH]; unsigned char is_find; } ft_handle;
+static ft_handle g_ftHandles[FT_MAX_HANDLES];
+static int g_ftNext;
+
+// Case-insensitive substring search ('needle' not empty).
+static const wchar_t* wcsistr(const wchar_t* hay, const wchar_t* needle)
+{
+    size_t n = wcslen(needle);
+    for (; *hay; hay++)
+        if (!_wcsnicmp(hay, needle, n)) return hay;
+    return NULL;
+}
+
+// Q1/Q4 targets: anything under CookedPC plus the archive, movie and icon extensions.
+static int ft_match(const wchar_t* p)
+{
+    size_t n;
+    if (!p || !*p) return 0;
+    if (wcsistr(p, L"cookedpc")) return 1;
+    n = wcslen(p);
+    if (n >= 5 && !_wcsicmp(p + n - 5, L".dzip")) return 1;
+    if (n >= 4 && (!_wcsicmp(p + n - 4, L".swf") || !_wcsicmp(p + n - 4, L".dds"))) return 1;
+    return 0;
+}
+
+// Entries of a directory listing are logged only for the files whose discovery matters;
+// CookedPC holds thousands of loose .dds and .xbm files.
+static int ft_match_entry(const wchar_t* name)
+{
+    size_t n = name ? wcslen(name) : 0;
+    if (n >= 5 && !_wcsicmp(name + n - 5, L".dzip")) return 1;
+    return n >= 4 && !_wcsicmp(name + n - 4, L".swf");
+}
+
+static int ft_relative(const wchar_t* p)
+{
+    if (p[0] == L'\\' || p[0] == L'/') return 0;   // rooted, UNC or device path
+    return !(p[0] && p[1] == L':');               // "C:..."
+}
+
+// One trace line: local time, ms since DllMain (Q2), thread id, then the caller text.
+static void ft_log(const char* fmt, ...)
+{
+    LONG n;
+    SYSTEMTIME st;
+    if (!cfg_file_trace || !g_log || !cfg_log) return;
+    n = InterlockedIncrement(&g_ftLines);
+    if (n > FT_MAX_LINES) {
+        if (n == FT_MAX_LINES + 1)
+            logf_("file-trace: %d lines reached - further lines suppressed", FT_MAX_LINES);
+        return;
+    }
+    GetLocalTime(&st);
+    EnterCriticalSection(&g_logLock);
+    fprintf(g_log, "%02d:%02d:%02d.%03d file-trace: t=+%lums tid=%lu ",
+            st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+            GetTickCount() - g_ftT0, GetCurrentThreadId());
+    va_list ap; va_start(ap, fmt); vfprintf(g_log, fmt, ap); va_end(ap);
+    fputc('\n', g_log);
+    fflush(g_log);
+    LeaveCriticalSection(&g_logLock);
+}
+
+static void ft_note_handle(HANDLE h, const wchar_t* what, int is_find)
+{
+    int i;
+    if (h == NULL || h == INVALID_HANDLE_VALUE || !what || !*what) return;
+    EnterCriticalSection(&g_ftLock);
+    for (i = 0; i < FT_MAX_HANDLES; i++)
+        if (g_ftHandles[i].h == h) break;
+    if (i == FT_MAX_HANDLES) {   // reuse the oldest slot
+        i = g_ftNext;
+        g_ftNext = (g_ftNext + 1) % FT_MAX_HANDLES;
+    }
+    g_ftHandles[i].h = h;
+    g_ftHandles[i].is_find = (unsigned char)(is_find != 0);
+    lstrcpynW(g_ftHandles[i].what, what, MAX_PATH);
+    LeaveCriticalSection(&g_ftLock);
+}
+
+static int ft_lookup(HANDLE h, wchar_t* what, int* is_find)
+{
+    int i, found = 0;
+    if (h == NULL || h == INVALID_HANDLE_VALUE) return 0;
+    EnterCriticalSection(&g_ftLock);
+    for (i = 0; i < FT_MAX_HANDLES; i++) {
+        if (g_ftHandles[i].h == h) {
+            if (what) lstrcpynW(what, g_ftHandles[i].what, MAX_PATH);
+            if (is_find) *is_find = g_ftHandles[i].is_find;
+            found = 1;
+            break;
+        }
+    }
+    LeaveCriticalSection(&g_ftLock);
+    return found;
+}
+
+static long long ft_handle_size(HANDLE h)
+{
+    LARGE_INTEGER size;
+    if (h == NULL || h == INVALID_HANDLE_VALUE || !GetFileSizeEx(h, &size)) return -1LL;
+    return size.QuadPart;
+}
+
+static long long ft_find_size(const WIN32_FIND_DATAW* d)
+{
+    return d ? (((long long)d->nFileSizeHigh << 32) | d->nFileSizeLow) : -1LL;
+}
+
+static long long ft_find_size_a(const WIN32_FIND_DATAA* d)
+{
+    return d ? (((long long)d->nFileSizeHigh << 32) | d->nFileSizeLow) : -1LL;
+}
+
+// Widen an A-variant path or have name; 0 when the system code page cannot express it.
+static int ft_wide(const char* a, wchar_t* w)
+{
+    w[0] = 0;
+    if (!a || !*a) return 0;
+    return MultiByteToWideChar(CP_ACP, 0, a, -1, w, MAX_PATH) > 0;
+}
+
+// Full path of a relative name; empty when the name is already absolute (Q1).
+static void ft_full_path(const wchar_t* path, wchar_t* full)
+{
+    DWORD n;
+    full[0] = 0;
+    if (!path || !*path || !ft_relative(path)) return;
+    n = GetFullPathNameW(path, MAX_PATH, full, NULL);
+    if (!n || n >= MAX_PATH) full[0] = 0;   // too long or failed: keep it empty
+}
+
+static HANDLE WINAPI hook_CreateFileA(LPCSTR path, DWORD access, DWORD share,
+                                      LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, HANDLE tmpl)
+{
+    wchar_t wide[MAX_PATH];
+    HANDLE h = g_origCreateFileA(path, access, share, sa, disp, flags, tmpl);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ft_wide(path, wide) && ft_match(wide)) {
+        wchar_t full[MAX_PATH];
+        ft_full_path(wide, full);
+        ft_log("CreateFileA \"%s\" full=\"%ls\" access=%08lX share=%08lX disp=%lu flags=%08lX -> %s handle=%08X size=%lld (err %lu)",
+               path, full, access, share, disp, flags, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok",
+               (unsigned)(uintptr_t)h, ft_handle_size(h), err);
+        if (h != INVALID_HANDLE_VALUE) ft_note_handle(h, full[0] ? full : wide, 0);
+    }
+    SetLastError(err);
+    return h;
+}
+
+static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
+                                      LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, HANDLE tmpl)
+{
+    HANDLE h = g_origCreateFileW(path, access, share, sa, disp, flags, tmpl);
+    DWORD err = GetLastError();
+    if (cfg_save_trace && trace_path(path))
+        logf_("save-trace: CreateFileW \"%ls\" access=%08lX disp=%lu -> %s (err %lu)",
+              path, access, disp, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", err);
+    if (cfg_file_trace && ft_match(path)) {
+        wchar_t full[MAX_PATH];
+        ft_full_path(path, full);
+        ft_log("CreateFileW \"%ls\" full=\"%ls\" access=%08lX share=%08lX disp=%lu flags=%08lX -> %s handle=%08X size=%lld (err %lu)",
+               path, full, access, share, disp, flags, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok",
+               (unsigned)(uintptr_t)h, ft_handle_size(h), err);
+        if (h != INVALID_HANDLE_VALUE) ft_note_handle(h, full[0] ? full : path, 0);
+    }
+    SetLastError(err);
+    return h;
+}
+
+static BOOL WINAPI hook_GetFileAttributesExW(LPCWSTR path, GET_FILEEX_INFO_LEVELS level, LPVOID info)
+{
+    BOOL ok = g_origGetFileAttributesExW(path, level, info);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ft_match(path)) {
+        long long size = -1;
+        DWORD attr = 0;
+        if (ok && info && level == GetFileExInfoStandard) {
+            const WIN32_FILE_ATTRIBUTE_DATA* d = (const WIN32_FILE_ATTRIBUTE_DATA*)info;
+            size = ((long long)d->nFileSizeHigh << 32) | d->nFileSizeLow;
+            attr = d->dwFileAttributes;
+        }
+        ft_log("GetFileAttributesExW \"%ls\" level=%d -> %d size=%lld attr=%08lX (err %lu)",
+               path, (int)level, ok, size, attr, err);
+    }
+    SetLastError(err);
+    return ok;
+}
+
+static DWORD WINAPI hook_GetFileAttributesA(LPCSTR path)
+{
+    wchar_t wide[MAX_PATH];
+    DWORD attr = g_origGetFileAttributesA(path);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ft_wide(path, wide) && ft_match(wide))
+        ft_log("GetFileAttributesA \"%s\" -> %08lX (err %lu)", path, attr, err);
+    SetLastError(err);
+    return attr;
+}
+
+static DWORD WINAPI hook_GetFileAttributesW(LPCWSTR path)
+{
+    DWORD attr = g_origGetFileAttributesW(path);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ft_match(path))
+        ft_log("GetFileAttributesW \"%ls\" -> %08lX (err %lu)", path, attr, err);
+    SetLastError(err);
+    return attr;
+}
+
+static HANDLE WINAPI hook_FindFirstFileA(LPCSTR pattern, LPWIN32_FIND_DATAA data)
+{
+    wchar_t wide[MAX_PATH];
+    HANDLE h = g_origFindFirstFileA(pattern, data);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ft_wide(pattern, wide) && ft_match(wide)) {
+        ft_log("FindFirstFileA \"%s\" -> %s handle=%08X name=\"%s\" size=%lld (err %lu)",
+               pattern, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", (unsigned)(uintptr_t)h,
+               (h != INVALID_HANDLE_VALUE && data) ? data->cFileName : "",
+               (h != INVALID_HANDLE_VALUE) ? ft_find_size_a(data) : -1LL, err);
+        if (h != INVALID_HANDLE_VALUE) ft_note_handle(h, wide, 1);
+    }
+    SetLastError(err);
+    return h;
+}
+
+static HANDLE WINAPI hook_FindFirstFileW(LPCWSTR pattern, LPWIN32_FIND_DATAW data)
+{
+    HANDLE h = g_origFindFirstFileW(pattern, data);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ft_match(pattern)) {
+        ft_log("FindFirstFileW \"%ls\" -> %s handle=%08X name=\"%ls\" size=%lld (err %lu)",
+               pattern, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", (unsigned)(uintptr_t)h,
+               (h != INVALID_HANDLE_VALUE && data) ? data->cFileName : L"",
+               (h != INVALID_HANDLE_VALUE) ? ft_find_size(data) : -1LL, err);
+        if (h != INVALID_HANDLE_VALUE) ft_note_handle(h, pattern, 1);
+    }
+    SetLastError(err);
+    return h;
+}
+
+static HANDLE WINAPI hook_FindFirstFileExW(LPCWSTR pattern, FINDEX_INFO_LEVELS level, LPVOID data,
+                                           FINDEX_SEARCH_OPS op, LPVOID filter, DWORD flags)
+{
+    HANDLE h = g_origFindFirstFileExW(pattern, level, data, op, filter, flags);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ft_match(pattern)) {
+        const WIN32_FIND_DATAW* d = NULL;
+        if (h != INVALID_HANDLE_VALUE && data &&
+            (level == FindExInfoStandard || level == FindExInfoBasic))
+            d = (const WIN32_FIND_DATAW*)data;
+        ft_log("FindFirstFileExW \"%ls\" level=%d search=%d flags=%08lX -> %s handle=%08X name=\"%ls\" size=%lld (err %lu)",
+               pattern, (int)level, (int)op, flags, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok",
+               (unsigned)(uintptr_t)h, d ? d->cFileName : L"", ft_find_size(d), err);
+        if (h != INVALID_HANDLE_VALUE) ft_note_handle(h, pattern, 1);
+    }
+    SetLastError(err);
+    return h;
+}
+
+static BOOL WINAPI hook_FindNextFileA(HANDLE find, LPWIN32_FIND_DATAA data)
+{
+    BOOL ok = g_origFindNextFileA(find, data);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ok && data) {
+        wchar_t name[MAX_PATH], pattern[MAX_PATH];
+        if (ft_wide(data->cFileName, name) && ft_match_entry(name)) {
+            int known = ft_lookup(find, pattern, NULL);
+            ft_log("FindNextFileA handle=%08X pattern=\"%ls\" name=\"%s\" size=%lld -> %d (err %lu)",
+                   (unsigned)(uintptr_t)find, known ? pattern : L"", data->cFileName,
+                   ft_find_size_a(data), ok, err);
+        }
+    }
+    SetLastError(err);
+    return ok;
+}
+
+static BOOL WINAPI hook_FindNextFileW(HANDLE find, LPWIN32_FIND_DATAW data)
+{
+    BOOL ok = g_origFindNextFileW(find, data);
+    DWORD err = GetLastError();
+    if (cfg_file_trace && ok && data && ft_match_entry(data->cFileName)) {
+        wchar_t pattern[MAX_PATH];
+        int known = ft_lookup(find, pattern, NULL);
+        ft_log("FindNextFileW handle=%08X pattern=\"%ls\" name=\"%ls\" size=%lld -> %d (err %lu)",
+               (unsigned)(uintptr_t)find, known ? pattern : L"", data->cFileName,
+               ft_find_size(data), ok, err);
+    }
+    SetLastError(err);
+    return ok;
+}
+
+static DWORD WINAPI hook_GetFileSize(HANDLE h, LPDWORD high)
+{
+    DWORD size = g_origGetFileSize(h, high);
+    DWORD err = GetLastError();
+    if (cfg_file_trace) {
+        wchar_t what[MAX_PATH];
+        if (ft_lookup(h, what, NULL) && ft_match(what))
+            ft_log("GetFileSize handle=%08X \"%ls\" -> %lu high=%lu (err %lu)",
+                   (unsigned)(uintptr_t)h, what, size,
+                   (size != INVALID_FILE_SIZE && high) ? *high : 0, err);
+    }
+    SetLastError(err);
+    return size;
+}
+
+static BOOL WINAPI hook_GetFileSizeEx(HANDLE h, PLARGE_INTEGER size)
+{
+    BOOL ok = g_origGetFileSizeEx(h, size);
+    DWORD err = GetLastError();
+    if (cfg_file_trace) {
+        wchar_t what[MAX_PATH];
+        if (ft_lookup(h, what, NULL) && ft_match(what))
+            ft_log("GetFileSizeEx handle=%08X \"%ls\" -> %d size=%lld (err %lu)",
+                   (unsigned)(uintptr_t)h, what, ok, (ok && size) ? size->QuadPart : -1LL, err);
+    }
+    SetLastError(err);
+    return ok;
+}
+
+static BOOL WINAPI hook_GetFileInformationByHandle(HANDLE h, LPBY_HANDLE_FILE_INFORMATION info)
+{
+    BOOL ok = g_origGetFileInformationByHandle(h, info);
+    DWORD err = GetLastError();
+    if (cfg_file_trace) {
+        wchar_t what[MAX_PATH];
+        if (ft_lookup(h, what, NULL) && ft_match(what)) {
+            long long size = (ok && info) ? (((long long)info->nFileSizeHigh << 32) | info->nFileSizeLow) : -1LL;
+            ft_log("GetFileInformationByHandle handle=%08X \"%ls\" -> %d size=%lld (err %lu)",
+                   (unsigned)(uintptr_t)h, what, ok, size, err);
+        }
+    }
+    SetLastError(err);
+    return ok;
+}
+
+static HANDLE WINAPI hook_CreateFileMappingW(HANDLE file, LPSECURITY_ATTRIBUTES sa, DWORD protect,
+                                             DWORD max_high, DWORD max_low, LPCWSTR name)
+{
+    HANDLE map = g_origCreateFileMappingW(file, sa, protect, max_high, max_low, name);
+    DWORD err = GetLastError();
+    if (cfg_file_trace) {
+        wchar_t what[MAX_PATH];
+        int known = ft_lookup(file, what, NULL);
+        if ((known && ft_match(what)) || ft_match(name)) {
+            long long maxsize = ((long long)max_high << 32) | max_low;
+            ft_log("CreateFileMappingW handle=%08X \"%ls\" protect=%08lX maxsize=%lld name=\"%ls\" -> %s map=%08X (err %lu)",
+                   (unsigned)(uintptr_t)file, known ? what : L"", protect, maxsize,
+                   name ? name : L"", map ? "ok" : "FAILED", (unsigned)(uintptr_t)map, err);
+        }
+    }
+    SetLastError(err);
+    return map;
+}
+
+static void* ft_slot(uintptr_t slot)
+{
+    return range_readable((void*)slot, sizeof(void*)) ? read_ptr((void*)slot) : NULL;
+}
+
+// Install all trace slots; returns how many hold our hooks afterwards.
+static int ft_install(void)
+{
+    int n = 0;
+    n += patch_iat("file-trace", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW",
+                   (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+    n += patch_iat("file-trace", IAT_CREATEFILEA, "kernel32.dll", "CreateFileA",
+                   (void*)hook_CreateFileA, (void**)&g_origCreateFileA);
+    n += patch_iat("file-trace", IAT_GETFILEATTREXW, "kernel32.dll", "GetFileAttributesExW",
+                   (void*)hook_GetFileAttributesExW, (void**)&g_origGetFileAttributesExW);
+    n += patch_iat("file-trace", IAT_GETFILEATTRW, "kernel32.dll", "GetFileAttributesW",
+                   (void*)hook_GetFileAttributesW, (void**)&g_origGetFileAttributesW);
+    n += patch_iat("file-trace", IAT_GETFILEATTRA, "kernel32.dll", "GetFileAttributesA",
+                   (void*)hook_GetFileAttributesA, (void**)&g_origGetFileAttributesA);
+    n += patch_iat("file-trace", IAT_GETFILEINFO, "kernel32.dll", "GetFileInformationByHandle",
+                   (void*)hook_GetFileInformationByHandle, (void**)&g_origGetFileInformationByHandle);
+    n += patch_iat("file-trace", IAT_FINDFIRSTFILEW, "kernel32.dll", "FindFirstFileW",
+                   (void*)hook_FindFirstFileW, (void**)&g_origFindFirstFileW);
+    n += patch_iat("file-trace", IAT_FINDFIRSTFILEA, "kernel32.dll", "FindFirstFileA",
+                   (void*)hook_FindFirstFileA, (void**)&g_origFindFirstFileA);
+    n += patch_iat("file-trace", IAT_FINDFIRSTFILEEXW, "kernel32.dll", "FindFirstFileExW",
+                   (void*)hook_FindFirstFileExW, (void**)&g_origFindFirstFileExW);
+    n += patch_iat("file-trace", IAT_FINDNEXTFILEW, "kernel32.dll", "FindNextFileW",
+                   (void*)hook_FindNextFileW, (void**)&g_origFindNextFileW);
+    n += patch_iat("file-trace", IAT_FINDNEXTFILEA, "kernel32.dll", "FindNextFileA",
+                   (void*)hook_FindNextFileA, (void**)&g_origFindNextFileA);
+    n += patch_iat("file-trace", IAT_GETFILESIZE, "kernel32.dll", "GetFileSize",
+                   (void*)hook_GetFileSize, (void**)&g_origGetFileSize);
+    n += patch_iat("file-trace", IAT_GETFILESIZEEX, "kernel32.dll", "GetFileSizeEx",
+                   (void*)hook_GetFileSizeEx, (void**)&g_origGetFileSizeEx);
+    n += patch_iat("file-trace", IAT_CREATEFILEMAPPINGW, "kernel32.dll", "CreateFileMappingW",
+                   (void*)hook_CreateFileMappingW, (void**)&g_origCreateFileMappingW);
+    return n;
+}
+
+static int ft_hooked(void)
+{
+    int n = 0;
+    n += ft_slot(IAT_CREATEFILEW) == (void*)hook_CreateFileW;
+    n += ft_slot(IAT_CREATEFILEA) == (void*)hook_CreateFileA;
+    n += ft_slot(IAT_GETFILEATTREXW) == (void*)hook_GetFileAttributesExW;
+    n += ft_slot(IAT_GETFILEATTRW) == (void*)hook_GetFileAttributesW;
+    n += ft_slot(IAT_GETFILEATTRA) == (void*)hook_GetFileAttributesA;
+    n += ft_slot(IAT_GETFILEINFO) == (void*)hook_GetFileInformationByHandle;
+    n += ft_slot(IAT_FINDFIRSTFILEW) == (void*)hook_FindFirstFileW;
+    n += ft_slot(IAT_FINDFIRSTFILEA) == (void*)hook_FindFirstFileA;
+    n += ft_slot(IAT_FINDFIRSTFILEEXW) == (void*)hook_FindFirstFileExW;
+    n += ft_slot(IAT_FINDNEXTFILEW) == (void*)hook_FindNextFileW;
+    n += ft_slot(IAT_FINDNEXTFILEA) == (void*)hook_FindNextFileA;
+    n += ft_slot(IAT_GETFILESIZE) == (void*)hook_GetFileSize;
+    n += ft_slot(IAT_GETFILESIZEEX) == (void*)hook_GetFileSizeEx;
+    n += ft_slot(IAT_CREATEFILEMAPPINGW) == (void*)hook_CreateFileMappingW;
+    return n;
+}
+
+// Started from DllMain while file_trace=1. The SteamStub fills the IAT after DllMain
+// returned, so poll for the real kernel32 export instead of the worker's 1.5 s delay.
+static DWORD WINAPI filetrace_thread(LPVOID param)
+{
+    DWORD t0 = GetTickCount(), hooked_at;
+    HMODULE k32 = NULL;
+    void* expect = NULL;
+    int n, last_n, tries;
+    wchar_t cwd[MAX_PATH];
+    (void)param;
+
+    logf_("file-trace: thread started, CreateFileW slot holds %08X",
+          (unsigned)(uintptr_t)ft_slot(IAT_CREATEFILEW));
+    for (;;) {
+        if (!k32) k32 = GetModuleHandleA("kernel32.dll");
+        if (k32 && !expect) expect = (void*)GetProcAddress(k32, "CreateFileW");
+        if (expect && ft_slot(IAT_CREATEFILEW) == expect) break;
+        if (!g_running || GetTickCount() - t0 > 120000) {
+            logf_("file-trace: CreateFileW slot never held the kernel32 export - not hooked");
+            return 0;
+        }
+        Sleep(1);
+    }
+
+    // Import slots must not outlive this DLL if a caller releases its handle.
+    HMODULE pinned;
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                            (LPCSTR)(uintptr_t)hook_CreateFileW, &pinned)) {
+        logf_("file-trace: could not pin module - file trace off");
+        cfg_file_trace = 0;
+        return 0;
+    }
+    n = ft_install();
+    hooked_at = GetTickCount();
+    cwd[0] = 0;
+    GetCurrentDirectoryW(MAX_PATH, cwd);
+    logf_("file-trace: hooked after %lu ms (%d/%d slots), current directory \"%ls\"",
+          hooked_at - t0, n, FT_SLOTS, cwd);
+
+    // If anything rewrites the slots later, re-hook so no call is lost (Q2).
+    for (last_n = n, tries = 0; g_running && tries < 20 && GetTickCount() - t0 < 60000; ) {
+        Sleep(GetTickCount() - t0 < 10000 ? 100 : 1000);
+        if (!g_running) break;
+        n = ft_hooked();
+        if (n == last_n) continue;
+        tries++;
+        logf_("file-trace: %d/%d slots still hooked after %lu ms - re-hooking",
+              n, FT_SLOTS, GetTickCount() - t0);
+        last_n = ft_install();
+    }
+    n = ft_hooked();
+    if (n < FT_SLOTS)
+        logf_("file-trace: %d/%d slots hooked - the rest are not redirectable", n, FT_SLOTS);
+    return 0;
 }
 
 static void save_tick(void)
@@ -1365,12 +1903,12 @@ static void save_tick(void)
             return;
         }
         if (cfg_save_trace) {
-            patch_iat(IAT_CREATEFILEW, "kernel32.dll", "CreateFileW", (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
-            patch_iat(IAT_DELETEFILEW, "kernel32.dll", "DeleteFileW", (void*)hook_DeleteFileW, (void**)&g_origDeleteFileW);
-            patch_iat(IAT_COPYFILEW, "kernel32.dll", "CopyFileW", (void*)hook_CopyFileW, (void**)&g_origCopyFileW);
-            patch_iat(IAT_D3DX_SAVEFILE, "d3dx9_39.dll", "D3DXSaveSurfaceToFileW", (void*)hook_SaveFile, (void**)&g_origSaveFile);
+            patch_iat("save-trace", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW", (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+            patch_iat("save-trace", IAT_DELETEFILEW, "kernel32.dll", "DeleteFileW", (void*)hook_DeleteFileW, (void**)&g_origDeleteFileW);
+            patch_iat("save-trace", IAT_COPYFILEW, "kernel32.dll", "CopyFileW", (void*)hook_CopyFileW, (void**)&g_origCopyFileW);
+            patch_iat("save-trace", IAT_D3DX_SAVEFILE, "d3dx9_39.dll", "D3DXSaveSurfaceToFileW", (void*)hook_SaveFile, (void**)&g_origSaveFile);
         }
-        if (!patch_iat(IAT_D3DX_SAVEMEM, "d3dx9_39.dll", "D3DXSaveSurfaceToFileInMemory", (void*)hook_SaveMem, (void**)&g_origSaveMem) &&
+        if (!patch_iat("save-trace", IAT_D3DX_SAVEMEM, "d3dx9_39.dll", "D3DXSaveSurfaceToFileInMemory", (void*)hook_SaveMem, (void**)&g_origSaveMem) &&
             cfg_save_thumbs) {
             logf_("thumbnail: capture import not found - fix disabled");
             cfg_save_thumbs = 0;
@@ -1578,7 +2116,10 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (reason == DLL_PROCESS_ATTACH) {
         g_self = inst;
         DisableThreadLibraryCalls(inst);
+        InitializeCriticalSection(&g_logLock);
         InitializeCriticalSection(&g_thumbLock);
+        InitializeCriticalSection(&g_ftLock);
+        g_ftT0 = GetTickCount();
         ini_path();
         load_config();
         if (cfg_log) fopen_s(&g_log, g_logPath, "w");
@@ -1589,16 +2130,24 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
               cfg_distance, cfg_visibility, cfg_shadow_range);
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d", cfg_skip_intro);
+        logf_("diagnostics: file_trace=%d", cfg_file_trace);
         if (cfg_preset_mode)
             logf_("presets: startup=%s, cycle modifiers=%d VK=%02X (session only)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
-        if (cfg_enabled) {
+        if (cfg_enabled || cfg_file_trace) {
             g_running = 1;
-            HANDLE h = CreateThread(NULL, 0, worker, NULL, 0, NULL);
-            if (h) CloseHandle(h); else logf_("CreateThread failed");
-            if (cfg_skip_intro) {
-                h = CreateThread(NULL, 0, startvideo_thread, NULL, 0, NULL);
-                if (h) CloseHandle(h); else logf_("startup: CreateThread failed - skip_intro off");
+            if (cfg_enabled) {
+                HANDLE h = CreateThread(NULL, 0, worker, NULL, 0, NULL);
+                if (h) CloseHandle(h); else logf_("CreateThread failed");
+                if (cfg_skip_intro) {
+                    h = CreateThread(NULL, 0, startvideo_thread, NULL, 0, NULL);
+                    if (h) CloseHandle(h); else logf_("startup: CreateThread failed - skip_intro off");
+                }
+            }
+            if (cfg_file_trace) {
+                HANDLE h = CreateThread(NULL, 0, filetrace_thread, NULL, 0, NULL);
+                if (h) CloseHandle(h);
+                else { logf_("file-trace: CreateThread failed - file trace off"); cfg_file_trace = 0; }
             }
         }
     }

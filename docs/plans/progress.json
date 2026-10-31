@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-31T02:30:00+01:00",
+  "updated": "2026-10-31T18:35:00+01:00",
   "owner": "dsh",
   "items": [
     {
@@ -162,15 +162,17 @@
     {
       "id": "dll-script-patches",
       "title": "Apply the script patches from the DLL (no .bat/.ps1 in the release)",
-      "status": "planned",
+      "status": "in_progress",
       "owner": "unassigned",
       "files": [
         "docs/plans/2026-10-31-dll-script-patches.md",
+        "docs/fixes/dll-script-patches.md",
+        "docs/validation/file-trace-2026-10-31.md",
         "tools/script-patches/ScriptPatches.ps1",
         "src/enginefix.c"
       ],
       "verify": "Plan tasks 1-9: research trace answered (Q1-Q6), golden test equal to ScriptPatches.ps1, owner start test and in-game check of BookMarker/Continue/PauseQuit with the DLL only, release zip without scripts, Nexus scan not quarantined.",
-      "evidence": "Nexus quarantined 0.5.0 and 0.5.1 (VirusTotal 8/68 and 7/67, BitDefender Heur.BZC.PZQ.Boxter on the PowerShell patcher); W1's script-free zip scans 1/66. See docs/local/nexus.md."
+      "evidence": "Nexus quarantined 0.5.0 and 0.5.1 (VirusTotal 8/68 and 7/67, BitDefender Heur.BZC.PZQ.Boxter on the PowerShell patcher); W1's script-free zip scans 1/66. See docs/local/nexus.md. Task 1 (research) done 2026-10-31 on branch dll-script-patches: docs/fixes/dll-script-patches.md, raw excerpts in docs/validation/file-trace-2026-10-31.md. All 14 trace hooks were in place at t=+0 ms (the loader fills the original IAT before DllMain); first CookedPC access at +235 ms. Archives are found by the CookedPC\\*.dzip glob and opened by absolute path; UI movies are opened loose by absolute path after a failing relative FindFirstFileExW probe, icons the same without a probe; a loose file that does not exist is never looked up by path, so new files must be entries of a redirected archive (branch B); sizes come from the find data (archives) and GetFileSize on the handle (movies and icons, twice per open); no CreateFileMappingW and no ANSI variants. Next: Task 2, DZIP reader/writer and the patchtest harness."
     }
   ]
 }
