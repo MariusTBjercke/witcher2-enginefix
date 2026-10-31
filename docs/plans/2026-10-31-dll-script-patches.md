@@ -277,9 +277,17 @@ Port `Add-Edit`, `ConvertTo-Tabs`, `Get-CollectBody`, `New-ReadIconFunction` and
 unchanged and is reported, like the `.ps1`'s `throw`, but the other features still apply.
 Also port the guard: a text that already contains `//===witcher2-enginefix===` is not patched.
 
-- [ ] **Step 1: Failing tests:** each `where` on a 5-line sample (indentation and CRLF/LF kept); Replace with Count 2; an anchor found 0 or 2 times for count 1 → feature skipped, texts unchanged; whitespace-flexible match of `$PreviewIcon`'s tab-aligned line.
-- [ ] **Step 2-4:** run FAIL → implement → PASS.
-- [ ] **Step 5: Commit** `script patches in DLL: script edit engine and patch data`.
+- [x] **Step 1: Failing tests:** each `where` on a 5-line sample (indentation and CRLF/LF kept); Replace with Count 2; an anchor found 0 or 2 times for count 1 → feature skipped, texts unchanged; whitespace-flexible match of `$PreviewIcon`'s tab-aligned line.
+- [x] **Step 2-4:** run FAIL → implement → PASS.
+- [x] **Step 5: Commit** `script patches in DLL: script edit engine and patch data`.
+
+  Done 2026-10-31: `src/scriptpatches/{edits.txt,*.ws}`, `src/scriptpatches.rc`,
+  `src/sp_script_ids.h` (numeric RCDATA IDs), `src/sp_script.{c,h}`; `build.bat` and
+  `tools\patchtest\build.bat` compile the `.rc`. 20 tests, 0 failures; `script_real` applies
+  all 14 rows to the real 3.5.0.26 scripts. The port's output also equals the reference's on
+  those five entries byte for byte (224 019 bytes, local check). Details in
+  `docs/fixes/dll-script-patches.md`. Note: the resource API is in kernel32, so the harness
+  needs no `user32.lib`.
 
 ### Task 6: Overlay build + golden test against the reference
 

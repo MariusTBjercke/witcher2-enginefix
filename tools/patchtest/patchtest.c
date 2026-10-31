@@ -16,6 +16,7 @@
 #include "sp_common.h"
 #include "sp_dds.h"
 #include "sp_dzip.h"
+#include "sp_script.h"
 #include "sp_swf.h"
 
 #define DZIP_MAGIC 0x50495A44u
@@ -898,6 +899,450 @@ static const char* test_dzip_real_extract(void)
     return why;
 }
 
+// ---- WitcherScript edits ------------------------------------------------
+
+// The expected outputs below were produced by the reference Add-Edit with the same inputs
+// (build\scratch\ref-samples.ps1 at the time), so a difference here is a porting bug.
+
+static sp_buf buf_from_str(const char* s)
+{
+    sp_buf b;
+
+    b.n = strlen(s);
+    b.p = (unsigned char*)malloc(b.n ? b.n : 1);
+    if (!b.p) { b.n = 0; return b; }
+    if (b.n) memcpy(b.p, s, b.n);
+    return b;
+}
+
+static int text_is_str(const sp_buf* b, const char* s)
+{
+    size_t n = strlen(s);
+
+    return b->n == n && (n == 0 || memcmp(b->p, s, n) == 0);
+}
+
+static void escape_into(char* out, size_t cap, const unsigned char* p, size_t n)
+{
+    size_t w = 0, i;
+
+    for (i = 0; i < n && w + 3 < cap; i++) {
+        unsigned char c = p[i];
+
+        if (c == '\r') { memcpy(out + w, "\\r", 2); w += 2; }
+        else if (c == '\n') { memcpy(out + w, "\\n", 2); w += 2; }
+        else if (c == '\t') { memcpy(out + w, "\\t", 2); w += 2; }
+        else out[w++] = (char)c;
+    }
+    out[w] = 0;
+}
+
+static int count_in_text(const sp_buf* b, const char* s)
+{
+    size_t l = strlen(s), off = 0;
+    int n = 0;
+
+    while (l && off + l <= b->n) {
+        if (memcmp(b->p + off, s, l) == 0) {
+            n++;
+            off += l;
+        } else {
+            off++;
+        }
+    }
+    return n;
+}
+
+// One edit against one text: must apply and produce exactly `expect`.
+static const char* run_edit_case(const char* label, int where, int count, const char* anchor,
+                                 const char* code, const char* input, const char* expect)
+{
+    sp_text t;
+    sp_edit e;
+    char whytxt[512];
+    const char* why = NULL;
+
+    memset(&e, 0, sizeof e);
+    e.feature = "X";
+    e.entry = "e";
+    e.where = where;
+    e.count = count;
+    e.anchor = anchor ? anchor : "";
+    e.code = code;
+    memset(&t, 0, sizeof t);
+    t.name = "e";
+    t.text = buf_from_str(input);
+    if (!t.text.p) return "out of memory";
+    whytxt[0] = 0;
+    if (!sp_script_apply_edits(&e, 1, "X", &t, 1, NULL, whytxt, sizeof whytxt)) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%s: refused: %s", label, whytxt);
+        why = g_why;
+    } else if (!text_is_str(&t.text, expect)) {
+        char got[1400], want[1400];
+
+        escape_into(got, sizeof got, t.text.p, t.text.n);
+        escape_into(want, sizeof want, (const unsigned char*)expect, strlen(expect));
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%s: got [%s], expected [%s]", label, got,
+                    want);
+        why = g_why;
+    }
+    sp_free(&t.text);
+    return why;
+}
+
+// One edit against one text: must be refused and leave the text untouched.
+static const char* run_edit_fail(const char* label, int where, int count, const char* anchor,
+                                 const char* code, const char* input)
+{
+    sp_text t;
+    sp_edit e;
+    char whytxt[512];
+    const char* why = NULL;
+
+    memset(&e, 0, sizeof e);
+    e.feature = "X";
+    e.entry = "e";
+    e.where = where;
+    e.count = count;
+    e.anchor = anchor ? anchor : "";
+    e.code = code;
+    memset(&t, 0, sizeof t);
+    t.name = "e";
+    t.text = buf_from_str(input);
+    if (!t.text.p) return "out of memory";
+    whytxt[0] = 0;
+    if (sp_script_apply_edits(&e, 1, "X", &t, 1, NULL, whytxt, sizeof whytxt)) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%s: was applied", label);
+        why = g_why;
+    } else if (!text_is_str(&t.text, input)) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%s: text changed on failure", label);
+        why = g_why;
+    } else if (!whytxt[0]) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%s: no reason given", label);
+        why = g_why;
+    }
+    sp_free(&t.text);
+    return why;
+}
+
+// Before/After/Body/Replace/End each write the block exactly as the reference does,
+// including indentation, blank lines and the CRLF of a CRLF file.
+#define EDIT_CASE(...)                                                              \
+    do {                                                                            \
+        const char* r_ = run_edit_case(__VA_ARGS__);                                \
+        if (r_) { why = r_; goto done; }                                            \
+    } while (0)
+
+static const char* test_script_where(void)
+{
+    const char* why = NULL;
+    const char* b = "a\n\tb\n\tc\n";
+
+    EDIT_CASE("before", SP_BEFORE, 1, "b", "ins;", b,
+        "a\n\t//===witcher2-enginefix=== BEGIN X\n\tins;\n\t//===witcher2-enginefix=== END X\n\tb\n\tc\n");
+    EDIT_CASE("after", SP_AFTER, 1, "b", "ins;", b,
+        "a\n\tb\n\t//===witcher2-enginefix=== BEGIN X\n\tins;\n\t//===witcher2-enginefix=== END X\n\tc\n");
+    EDIT_CASE("body", SP_BODY, 1, "function F() {", "ins;",
+        "x\n\tfunction F()\n\t{\n\t\tbody();\n\t}\n",
+        "x\n\tfunction F()\n\t{\n\t\t//===witcher2-enginefix=== BEGIN X\n\t\tins;\n\t\t//===witcher2-enginefix=== END X\n\t\tbody();\n\t}\n");
+    EDIT_CASE("replace2", SP_REPLACE, 2, "foo", "bar",
+        "x\n\tfoo\n\ty\n\tfoo\n\tz\n",
+        "x\n\t//===witcher2-enginefix=== BEGIN X\n\tbar\n\t//===witcher2-enginefix=== END X\n\ty\n\t//===witcher2-enginefix=== BEGIN X\n\tbar\n\t//===witcher2-enginefix=== END X\n\tz\n");
+    EDIT_CASE("end", SP_END, 0, "", "ins;", "a\n\tb\n",
+        "a\n\tb\n\n//===witcher2-enginefix=== BEGIN X\nins;\n//===witcher2-enginefix=== END X\n");
+    EDIT_CASE("crlf", SP_BEFORE, 1, "b", "ins;", "a\r\n\tb\r\n",
+        "a\r\n\t//===witcher2-enginefix=== BEGIN X\r\n\tins;\r\n\t//===witcher2-enginefix=== END X\r\n\tb\r\n");
+    // The anchor is written with single spaces and matches a tab-aligned line, like
+    // $PreviewIcon in the reference (Count 2 there, 1 here for the sample).
+    EDIT_CASE("preview", SP_REPLACE, 1,
+        "theHud.SetString( \"Icon\", \"img://globals/gui/icons/items/\" + StrReplaceAll(itemName, \" \", \"\") + \"_64x64.dds\", AS_item );",
+        "theHud.SetString( \"Icon\", W2EF_ReadIcon( inventory, itemId, \"img://globals/gui/icons/items/\" + StrReplaceAll(itemName, \" \", \"\") + \"_64x64.dds\" ), AS_item );",
+        "\t\tif ( x )\n\t\t{\n\t\t\ttheHud.SetString( \"Icon\",\t\"img://globals/gui/icons/items/\" + StrReplaceAll(itemName, \" \", \"\") + \"_64x64.dds\",\tAS_item );\n\t\t}\n",
+        "\t\tif ( x )\n\t\t{\n\t\t\t//===witcher2-enginefix=== BEGIN X\n\t\t\ttheHud.SetString( \"Icon\", W2EF_ReadIcon( inventory, itemId, \"img://globals/gui/icons/items/\" + StrReplaceAll(itemName, \" \", \"\") + \"_64x64.dds\" ), AS_item );\n\t\t\t//===witcher2-enginefix=== END X\n\t\t}\n");
+    EDIT_CASE("body-crlf", SP_BODY, 1, "function F() {", "ins;",
+        "x\r\n\tfunction F()\r\n\t{\r\n\t\tbody();\r\n\t}\r\n",
+        "x\r\n\tfunction F()\r\n\t{\r\n\t\t//===witcher2-enginefix=== BEGIN X\r\n\t\tins;\r\n\t\t//===witcher2-enginefix=== END X\r\n\t\tbody();\r\n\t}\r\n");
+    EDIT_CASE("empty-line", SP_AFTER, 1, "b", "one;\n\ntwo;", "a\n\tb\n\tc\n",
+        "a\n\tb\n\t//===witcher2-enginefix=== BEGIN X\n\tone;\n\n\ttwo;\n\t//===witcher2-enginefix=== END X\n\tc\n");
+done:
+    return why;
+}
+
+// An anchor that does not match as declared is refused, and a feature is all or nothing.
+static const char* test_script_failures(void)
+{
+    const char* why = NULL;
+    sp_edit e[2];
+    sp_text t;
+    char whytxt[512];
+    const char* input = "a\n\tb\n\tc\n";
+
+    CHECK(run_edit_fail("none", SP_AFTER, 1, "nope", "ins;", input) == NULL);
+    CHECK(run_edit_fail("twice", SP_AFTER, 1, "b", "ins;", "a\n\tb\n\tb\n") == NULL);
+    CHECK(run_edit_fail("replace-none", SP_REPLACE, 2, "foo", "bar", "x\n\tfoo\n") == NULL);
+    CHECK(run_edit_fail("mid-line", SP_REPLACE, 1, "b", "bar", "a\n\txbx\n") == NULL);
+    CHECK(run_edit_fail("last-line", SP_AFTER, 1, "c", "ins;", "a\nc") == NULL);
+
+    memset(e, 0, sizeof e);
+    e[0].feature = "X"; e[0].entry = "e"; e[0].where = SP_AFTER; e[0].count = 1;
+    e[0].anchor = "b"; e[0].code = "ins;";
+    e[1].feature = "X"; e[1].entry = "e"; e[1].where = SP_AFTER; e[1].count = 1;
+    e[1].anchor = "zzz"; e[1].code = "ins;";
+    memset(&t, 0, sizeof t);
+    t.name = "e";
+    t.text = buf_from_str(input);
+    CHECK(t.text.p != NULL);
+    whytxt[0] = 0;
+    CHECK(!sp_script_apply_edits(e, 2, "X", &t, 1, NULL, whytxt, sizeof whytxt));
+    CHECK(strstr(whytxt, "found 0 times") != NULL);
+    CHECK(text_is_str(&t.text, input));
+    sp_free(&t.text);
+done:
+    return why;
+}
+
+// Two features may write to the same file one after the other; the same feature twice is
+// refused, and sp_script_marked reports the marker.
+static const char* test_script_guard(void)
+{
+    const char* why = NULL;
+    sp_edit e[2];
+    sp_text t;
+    char whytxt[512];
+    sp_buf both = { NULL, 0 };
+
+    memset(e, 0, sizeof e);
+    e[0].feature = "A"; e[0].entry = "e"; e[0].where = SP_AFTER; e[0].count = 1;
+    e[0].anchor = "b"; e[0].code = "a;";
+    e[1].feature = "B"; e[1].entry = "e"; e[1].where = SP_AFTER; e[1].count = 1;
+    e[1].anchor = "b"; e[1].code = "b;";
+    memset(&t, 0, sizeof t);
+    t.name = "e";
+    t.text = buf_from_str("a\n\tb\n");
+    CHECK(t.text.p != NULL);
+    CHECK(sp_script_apply_edits(e, 2, "A", &t, 1, NULL, whytxt, sizeof whytxt));
+    CHECK(count_in_text(&t.text, "BEGIN A") == 1);
+    CHECK(sp_script_marked(&t.text));
+    CHECK(sp_script_apply_edits(e, 2, "B", &t, 1, NULL, whytxt, sizeof whytxt));
+    CHECK(count_in_text(&t.text, "BEGIN A") == 1);
+    CHECK(count_in_text(&t.text, "BEGIN B") == 1);
+    both.p = (unsigned char*)malloc(t.text.n ? t.text.n : 1);
+    CHECK(both.p != NULL);
+    if (t.text.n) memcpy(both.p, t.text.p, t.text.n);
+    both.n = t.text.n;
+    whytxt[0] = 0;
+    CHECK(!sp_script_apply_edits(e, 2, "A", &t, 1, NULL, whytxt, sizeof whytxt));
+    CHECK(strstr(whytxt, "already holds") != NULL);
+    CHECK(t.text.n == both.n && memcmp(t.text.p, both.p, both.n) == 0);
+done:
+    sp_free(&both);
+    sp_free(&t.text);
+    return why;
+}
+
+// The RCDATA table: 14 rows in $FeatureList order, 8 BookMarker, 2 Continue, 4 PauseQuit.
+static const char* test_script_data(void)
+{
+    static const char* const frags[] = {
+        "book_helpers.ws", "book_texts.ws", "continue_button.ws", "continue_input.ws",
+        "quit_button.ws", "quit_input.ws", "quit_members.ws", "quit_box.ws",
+        "inventory_refill.ws"
+    };
+    const sp_edit* e = NULL;
+    const char* why = NULL;
+    int n = 0, i, book = 0, cont = 0, quit = 0, ends = 0;
+
+    if (!sp_edits_load(&e, &n)) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "sp_edits_load: %s", sp_script_error());
+        why = g_why;
+        goto done;
+    }
+    CHECK(n == 14);
+    for (i = 0; i < n; i++) {
+        if (strcmp(e[i].feature, "BookMarker") == 0) book++;
+        else if (strcmp(e[i].feature, "Continue") == 0) cont++;
+        else if (strcmp(e[i].feature, "PauseQuit") == 0) quit++;
+        if (e[i].where == SP_END) ends++;
+    }
+    CHECK(book == 8 && cont == 2 && quit == 4 && ends == 2);
+    CHECK(strcmp(e[0].feature, "BookMarker") == 0);
+    CHECK(strcmp(e[0].entry, "game\\gui\\guiutils.ws") == 0);
+    CHECK(e[0].where == SP_AFTER && e[0].count == 1);
+    CHECK(strstr(e[0].anchor, "fullDescTootlip") != NULL);
+    CHECK(strcmp(e[0].code, "W2EF_MarkItem( inventory, itemId, AS_item, custom );") == 0);
+    CHECK(e[1].where == SP_END && e[1].count == 0 && e[1].anchor[0] == 0);
+    CHECK(strcmp(e[1].code, "@book_helpers.ws") == 0);
+    CHECK(e[7].where == SP_AFTER && strcmp(e[7].code, "W2EF_RefillAfterReading();") == 0);
+    CHECK(e[9].where == SP_BODY && strcmp(e[9].code, "@continue_input.ws") == 0);
+    for (i = 0; i < (int)(sizeof frags / sizeof frags[0]); i++) {
+        CHECK(sp_fragment(frags[i]) != NULL);
+    }
+    CHECK(strlen(sp_fragment("book_texts.ws")) > 1000);
+done:
+    return why;
+}
+
+// The book helpers block: the fragment, the three substitutions and the generated
+// W2EF_HasReadIcon with the context's books.
+static const char* test_script_helpers(void)
+{
+    static const char* books[1] = { "Book of Nekkers" };
+    const char* why = NULL;
+    sp_edit e[2];
+    sp_text t;
+    sp_ctx ctx;
+    char whytxt[512];
+    const char* input =
+        "class C\n{\n\tfunction Fill()\n\t{\n"
+        "\t\ttheHud.SetString( \"DescFull\", GetLocStringByKeyExt( \"Tooltip\" + itemName ) + descFull + \"<br>\" + fullDescTootlip, AS_item );\n"
+        "\t}\n}\n";
+
+    ctx.collect_body = "{\n\tif ( itemName == 'Book of Nekkers' )  Knowledge( 4, 100 );\n\tif ( x ) Journal( 1, 'x' );\n}";
+    ctx.books = books;
+    ctx.nbooks = 1;
+    memset(e, 0, sizeof e);
+    e[0].feature = "X"; e[0].entry = "e"; e[0].where = SP_AFTER; e[0].count = 1;
+    e[0].anchor = "theHud.SetString( \"DescFull\", GetLocStringByKeyExt( \"Tooltip\" + itemName ) + descFull + \"<br>\" + fullDescTootlip, AS_item );";
+    e[0].code = "W2EF_MarkItem( inventory, itemId, AS_item, custom );";
+    e[1].feature = "X"; e[1].entry = "e"; e[1].where = SP_END; e[1].count = 0;
+    e[1].anchor = ""; e[1].code = "@book_helpers.ws";
+    memset(&t, 0, sizeof t);
+    t.name = "e";
+    t.text = buf_from_str(input);
+    CHECK(t.text.p != NULL);
+    CHECK(sp_script_apply_edits(e, 2, "X", &t, 1, &ctx, whytxt, sizeof whytxt));
+    CHECK(count_in_text(&t.text, "BEGIN X") == 2);
+    CHECK(count_in_text(&t.text, "W2EF_MarkItem( inventory, itemId, AS_item, custom );") == 1);
+    CHECK(count_in_text(&t.text, "class W2EFBookGrants") == 1);
+    CHECK(count_in_text(&t.text, "Knowledge( 4, 100 )") == 1);
+    CHECK(count_in_text(&t.text, "Journal( 1, 'x' )") == 1);
+    CHECK(count_in_text(&t.text, "thePlayer.MaxKnowledgeAccumulator") == 0);
+    CHECK(count_in_text(&t.text, "__COLLECT_BODY__") == 0);
+    CHECK(count_in_text(&t.text, "__TEXT_FUNCTION__") == 0);
+    CHECK(count_in_text(&t.text, "__READ_ICONS__") == 0);
+    CHECK(count_in_text(&t.text, "function W2EF_Text( id : int ) : string") == 1);
+    CHECK(count_in_text(&t.text, "function W2EF_HasReadIcon( itemName : name ) : bool") == 1);
+    CHECK(count_in_text(&t.text, "\tif ( book == \"Book of Nekkers\" ) { return true; }") == 1);
+    // Without the context the same feature is refused and the text stays as it was.
+    sp_free(&t.text);
+    t.text = buf_from_str(input);
+    CHECK(t.text.p != NULL);
+    whytxt[0] = 0;
+    CHECK(!sp_script_apply_edits(e, 2, "X", &t, 1, NULL, whytxt, sizeof whytxt));
+    CHECK(text_is_str(&t.text, input));
+done:
+    sp_free(&t.text);
+    return why;
+}
+
+// Get-CollectBody: the AddBookKnowledge body with its rewards redirected, CRLF -> LF.
+static const char* test_script_collect(void)
+{
+    const char* why = NULL;
+    sp_buf inv = { NULL, 0 }, body = { NULL, 0 };
+    char whytxt[512];
+
+    inv = buf_from_str(
+        "function AddBookKnowledge( itemName : name )\r\n\t{\r\n"
+        "\t\tif ( a )  thePlayer.MaxKnowledgeAccumulator( 2, 100 );\r\n"
+        "\t\tif ( b ) thePlayer.AddJournalEntry( 1, 'x', '0', 'c' );\r\n\t}\r\n");
+    CHECK(inv.p != NULL);
+    CHECK(sp_script_collect_body(&inv, &body, whytxt, sizeof whytxt));
+    CHECK(text_is_str(&body, "{\n\t\tif ( a )  Knowledge( 2, 100 );\n\t\tif ( b ) Journal( 1, 'x', '0', 'c' );\n\t}"));
+    sp_free(&inv);
+    sp_free(&body);
+
+    inv = buf_from_str(
+        "function AddBookKnowledge( itemName : name )\n{\n"
+        "\tif ( a ) thePlayer.MaxKnowledgeAccumulator( 2, 100 );\n"
+        "\tif ( b ) thePlayer.AddJournalEntry( 1, 'x', '0', 'c' );\n"
+        "\tthePlayer.SetLastBook( 0 );\n}\n");
+    CHECK(inv.p != NULL);
+    CHECK(!sp_script_collect_body(&inv, &body, whytxt, sizeof whytxt));
+    CHECK(body.p == NULL);
+    sp_free(&inv);
+
+    inv = buf_from_str(
+        "function AddBookKnowledge( itemName : name )\n{ }\n"
+        "function AddBookKnowledge( itemName : name )\n{ }\n");
+    CHECK(inv.p != NULL);
+    CHECK(!sp_script_collect_body(&inv, &body, whytxt, sizeof whytxt));
+done:
+    sp_free(&inv);
+    sp_free(&body);
+    return why;
+}
+
+// Every edit applies to the real 3.5.0.26 scripts (from the old patcher's backup, because
+// the live files may already carry the 0.5 patches), producing the expected block counts.
+static const char* test_script_real(void)
+{
+    static const char* const entries[5] = {
+        "game\\gui\\guiutils.ws",
+        "game\\gui\\guishop.ws",
+        "game\\gui\\guimainmenu.ws",
+        "game\\gameplay\\container_class.ws",
+        "game\\gui\\guiinventory.ws"
+    };
+    static const int want[5] = { 2, 1, 6, 6, 2 };
+    static const char* books[2] = { "Book of Nekkers", "Book of Drowners" };
+    const char* why = NULL;
+    wchar_t zip[MAX_PATH], backup[MAX_PATH], cc[MAX_PATH];
+    sp_text texts[5];
+    sp_buf body = { NULL, 0 };
+    sp_ctx ctx;
+    char whytxt[512];
+    int i, patched = 0;
+
+    memset(texts, 0, sizeof texts);
+    if (!path_join(cc, MAX_PATH, g_game, L"CookedPC") ||
+        !path_join(backup, MAX_PATH, g_game, L"Witcher2EngineFix_Optional\\ScriptPatches\\backup\\base_scripts.dzip") ||
+        !path_join(zip, MAX_PATH, cc, L"base_scripts.dzip"))
+        return "path too long";
+    if (GetFileAttributesW(backup) != INVALID_FILE_ATTRIBUTES) {
+        wcscpy_s(zip, MAX_PATH, backup);            // the unpatched originals
+    }
+    for (i = 0; i < 5; i++) {
+        const char* err = read_dzip_entry(zip, entries[i], &texts[i].text);
+
+        if (err) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%s: %s", entries[i], err);
+            why = g_why;
+            goto done;
+        }
+        texts[i].name = entries[i];
+        if (sp_script_marked(&texts[i].text)) patched = 1;
+    }
+    if (patched) {
+        printf("  (base_scripts.dzip already carries witcher2-enginefix changes - skipped)\n");
+        goto done;
+    }
+    CHECK(sp_script_collect_body(&texts[4].text, &body, whytxt, sizeof whytxt));
+    ctx.collect_body = (const char*)body.p;
+    ctx.books = books;
+    ctx.nbooks = 2;
+    CHECK(sp_script_apply("BookMarker", texts, 5, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("Continue", texts, 5, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("PauseQuit", texts, 5, &ctx, whytxt, sizeof whytxt));
+    for (i = 0; i < 5; i++) {
+        int got = count_in_text(&texts[i].text, "//===witcher2-enginefix=== BEGIN");
+
+        if (got != want[i]) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%s: %d blocks, expected %d", entries[i],
+                        got, want[i]);
+            why = g_why;
+            goto done;
+        }
+    }
+    printf("  markers 2 1 6 6 2, %d bytes of scripts\n",
+           (int)(texts[0].text.n + texts[1].text.n + texts[2].text.n + texts[3].text.n +
+                 texts[4].text.n));
+done:
+    for (i = 0; i < 5; i++) sp_free(&texts[i].text);
+    sp_free(&body);
+    return why;
+}
+
 // ---- harness ------------------------------------------------------------
 
 typedef const char* (*test_fn)(void);
@@ -919,10 +1364,17 @@ static const test_case k_tests[] = {
     { "dds_decode_dxt5",   test_dds_decode_dxt5,   0 },
     { "dds_roundtrip",     test_dds_roundtrip,     0 },
     { "dds_over",          test_dds_over,          0 },
+    { "script_where",      test_script_where,      0 },
+    { "script_failures",   test_script_failures,   0 },
+    { "script_guard",      test_script_guard,      0 },
+    { "script_data",       test_script_data,       0 },
+    { "script_helpers",    test_script_helpers,    0 },
+    { "script_collect",    test_script_collect,    0 },
     { "dzip_real_hash",    test_dzip_real_hash,    1 },
     { "dzip_real_extract", test_dzip_real_extract, 1 },
     { "swf_real",          test_swf_real,          1 },
     { "dds_real_overlay",  test_dds_real_overlay,  1 },
+    { "script_real",       test_script_real,       1 },
 };
 
 static int run_tests(void)

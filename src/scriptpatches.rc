@@ -1,0 +1,17 @@
+// Script-patch data for src/sp_script.c: the edit table and the WitcherScript fragments from
+// tools/script-patches/ScriptPatches.ps1, embedded as RCDATA so dinput8.dll and
+// build\sptest.exe carry them (nothing to install next to the DLL). The IDs live in
+// sp_script_ids.h and are what sp_fragment() looks up; the file names are not resource
+// names because rc wraps quoted names into the name itself.
+#include "sp_script_ids.h"
+
+SP_RC_EDITS            RCDATA "scriptpatches\\edits.txt"
+SP_RC_BOOK_HELPERS     RCDATA "scriptpatches\\book_helpers.ws"
+SP_RC_BOOK_TEXTS       RCDATA "scriptpatches\\book_texts.ws"
+SP_RC_CONTINUE_BUTTON  RCDATA "scriptpatches\\continue_button.ws"
+SP_RC_CONTINUE_INPUT   RCDATA "scriptpatches\\continue_input.ws"
+SP_RC_QUIT_BUTTON      RCDATA "scriptpatches\\quit_button.ws"
+SP_RC_QUIT_INPUT       RCDATA "scriptpatches\\quit_input.ws"
+SP_RC_QUIT_MEMBERS     RCDATA "scriptpatches\\quit_members.ws"
+SP_RC_QUIT_BOX         RCDATA "scriptpatches\\quit_box.ws"
+SP_RC_INVENTORY_REFILL RCDATA "scriptpatches\\inventory_refill.ws"

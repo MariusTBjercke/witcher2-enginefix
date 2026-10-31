@@ -1,8 +1,9 @@
 # Script patches applied by the DLL
 
-Status: Task 1 (research spike) of
-`docs/plans/2026-10-31-dll-script-patches.md`, done 2026-10-31 on branch `dll-script-patches`.
-Passive tracing only; nothing is redirected yet. Target: Steam Enhanced Edition 3.5.0.26.
+Status: Tasks 1-5 of `docs/plans/2026-10-31-dll-script-patches.md` done 2026-10-31 on branch
+`dll-script-patches`. Task 1 traced file access passively; Task 5 added the offline script
+edit engine (below), so nothing is redirected or hooked in the game yet. Target: Steam
+Enhanced Edition 3.5.0.26.
 
 ## Why
 
@@ -228,3 +229,59 @@ file calls come from one game thread (`tid=25300`); the loading screens use `tid
 * A patched SWF or archive has a different size than the original. That is safe for the movie
   loader (it asks the opened handle with `GetFileSize`), but the find data of a redirected
   archive should still report the cached size.
+
+## Script edit engine (Task 5)
+
+`src/sp_script.c` is the C port of `ScriptPatches.ps1`'s `Add-Edit`, `ConvertTo-Tabs`,
+`Get-CollectBody` and `New-ReadIconFunction`; the patch data moved out of the script into
+`src/scriptpatches/` and is embedded as RCDATA, so neither `dinput8.dll` nor `build\sptest.exe`
+needs a file next to it:
+
+| Piece | Where | Notes |
+|---|---|---|
+| edit table, 14 rows, `$FeatureList` order | `src/scriptpatches/edits.txt` | tab-separated; a row is one `Add-Edit` call |
+| fragments (`book_helpers.ws`, `continue_*.ws`, `quit_*.ws`, `inventory_refill.ws`) | `src/scriptpatches/` | the `.ps1` here-strings verbatim (four-space indentation, no trailing newline) |
+| `book_texts.ws` | `src/scriptpatches/` | generated once by `New-TextFunction` from `$BookTexts` (12 languages), no trailing newline; it is inserted mid-block, so an added newline would change the game script |
+| resource IDs | `src/sp_script_ids.h` | shared by the `.rc` and the C code; rc does not accept the file names themselves as resource names |
+
+Behaviour, matching the reference:
+
+* An anchor is the game's script text as a literal. Since `edits.txt` is not regex, every run
+  of whitespace in the anchor matches any run of whitespace in the script - that covers the
+  escaped literals plus the three regex anchors (`$PreviewIcon`'s tab-aligned line,
+  `$InputMainMenu + "\s*\{"`, `$InputMainInGame + "\s*\{"`). Anchors must not begin or end with
+  whitespace (the loader refuses that), because a leading run would make the reference's
+  literal whitespace match more than it does.
+* `Before`, `After`, `Body`, `Replace` and `End` do exactly what `Add-Edit` does, including the
+  begin/end marker lines, the file's own CRLF or LF, indentation taken from the line the code
+  lands at, and the blank-line handling that differs between `Replace` and the other
+  positions.
+* All or nothing per feature: a feature whose anchor is missing or matches the wrong number of
+  times leaves every text unchanged and reports the first failing anchor; the other features
+  still apply. A text that already carries that feature's marker is refused, so features can
+  be applied one after another to the same file while a second run cannot double-patch. The
+  `.ps1` refuses *any* marker in the archive before installing; the overlay will do that check
+  once on the source archive (Task 6).
+* `sp_script_collect_body` is `Get-CollectBody`: `CGuiInventory.AddBookKnowledge`'s body with
+  `thePlayer.MaxKnowledgeAccumulator(`/`thePlayer.AddJournalEntry(` redirected, CRLF to LF,
+  and the same refusals (found twice, touches `thePlayer` elsewhere, grants nothing known).
+
+### Verification (2026-10-31)
+
+`build\sptest.exe test --game "<game>"`: 20 tests, 0 failures. The new offline tests cover each
+`where`, Replace with Count 2, blank lines, CRLF files, a tab-aligned anchor, the failure cases
+(0 or 2 matches, mid-line anchor, anchor on the last line), the all-or-nothing restore, the two
+features on one file and the double-apply guard, the text/read-icon substitutions, and
+`Get-CollectBody` on a sample. Expected outputs were produced by the reference `Add-Edit` with
+the same inputs (a scratch script, not committed).
+
+`script_real` applies all three features to the five real scripts of the 3.5.0.26 install
+(taken from the old patcher's unpatched backup) and checks the block count per entry
+(`guiutils.ws` 2, `guishop.ws` 1, `guimainmenu.ws` 6, `container_class.ws` 6,
+`guiinventory.ws` 2).
+
+Byte equality with the reference was checked once on this machine: the same five entries,
+patched by `ScriptPatches.ps1`'s own `Add-Edit`/`BookHelpers`/`New-TextFunction`/
+`New-ReadIconFunction` with the same 14 rows and read-icon book list (Latin-1 in and out), are
+identical to this port's output - 224 019 bytes over the five files. That is a local check, not
+a committed test; Task 6's `golden.py` makes it a permanent one at archive level.

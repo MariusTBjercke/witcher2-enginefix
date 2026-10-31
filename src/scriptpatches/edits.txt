@@ -1,0 +1,22 @@
+# Script edits: one row per Add-Edit call of the reference (ScriptPatches.ps1, $FeatureList
+# lines 1064-1107), in that order. Tab-separated.
+# feature	entry	where	count	anchor	code
+# where: Before, After, Body, Replace or End (End needs count 0 and an empty anchor).
+# count: the exact number of anchor matches (Replace may match on several lines); End = 0.
+# anchor: the game's script text as a literal. Every run of whitespace in it matches any run
+#         of whitespace in the script, so tab-aligned lines and ")\r\n{" forms are covered.
+# code: the text to insert, or @<fragment>.ws for a file in this folder.
+BookMarker	game\gui\guiutils.ws	After	1	theHud.SetString( "DescFull", GetLocStringByKeyExt( "Tooltip" + itemName ) + descFull + "<br>" + fullDescTootlip, AS_item );	W2EF_MarkItem( inventory, itemId, AS_item, custom );
+BookMarker	game\gui\guiutils.ws	End	0		@book_helpers.ws
+BookMarker	game\gui\guishop.ws	Replace	1	theHud.m_utils.FillItemObject( m_merchantInventory, m_playerStats, itemId, i, AS_item, slotItems ); // TODO: slotItems?	theHud.m_utils.FillItemObject( m_merchantInventory, m_playerStats, itemId, i, AS_item, slotItems, 'merchant' ); // TODO: slotItems?
+BookMarker	game\gameplay\container_class.ws	Replace	2	args.PushBack( FlashValueFromString( GetLocStringByKeyExt( itemName ) ) );	args.PushBack( FlashValueFromString( W2EF_LootName( inventory, itemId, GetLocStringByKeyExt( itemName ) ) ) );
+BookMarker	game\gameplay\container_class.ws	Replace	2	args.PushBack( FlashValueFromString( "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) ;	args.PushBack( FlashValueFromString( W2EF_ReadIcon( inventory, itemId, "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) );
+BookMarker	game\gameplay\container_class.ws	Replace	2	theHud.SetString( "Icon", "img://globals/gui/icons/items/" + StrReplaceAll(itemName, " ", "") + "_64x64.dds", AS_item );	theHud.SetString( "Icon", W2EF_ReadIcon( inventory, itemId, "img://globals/gui/icons/items/" + StrReplaceAll(itemName, " ", "") + "_64x64.dds" ), AS_item );
+BookMarker	game\gui\guiinventory.ws	Before	1	private final function ExamineItem( itemIdxF : float ) : bool	@inventory_refill.ws
+BookMarker	game\gui\guiinventory.ws	After	1	theHud.InvokeOneArg("SetBookText", FlashValueFromString(str), AS_inventory );	W2EF_RefillAfterReading();
+Continue	game\gui\guimainmenu.ws	Before	1	InsertMenuButton( AS_MenuItems, MM_BTN_ARENA,	@continue_button.ws
+Continue	game\gui\guimainmenu.ws	Body	1	private final function InputMainMenu( button : int ) {	@continue_input.ws
+PauseQuit	game\gui\guimainmenu.ws	After	1	InsertMenuButton( AS_MenuItems, MM_BTN_EXIT_GAME,	@quit_button.ws
+PauseQuit	game\gui\guimainmenu.ws	Body	1	private final function InputMainInGame( button : int ) {	@quit_input.ws
+PauseQuit	game\gui\guimainmenu.ws	Before	1	private final function InputMainMenu( button : int )	@quit_members.ws
+PauseQuit	game\gui\guimainmenu.ws	End	0		@quit_box.ws

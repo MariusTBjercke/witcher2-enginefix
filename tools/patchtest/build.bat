@@ -30,5 +30,9 @@ for %%f in (src\third_party\tinf\*.c) do (
     set "TINF=!TINF! build\%%~nf.obj"
 )
 
-cl /nologo /O2 /W4 /MT /Isrc tools\patchtest\patchtest.c !SP! !TINF! /Fobuild\ /Fe:build\sptest.exe || exit /b 1
+rem The script-patch data (edits.txt and the .ws fragments) is embedded as RCDATA; see
+rem src\scriptpatches.rc. FindResource/LoadResource live in kernel32, no extra lib needed.
+rc /nologo /fo build\scriptpatches.res src\scriptpatches.rc || exit /b 1
+
+cl /nologo /O2 /W4 /MT /Isrc tools\patchtest\patchtest.c !SP! !TINF! build\scriptpatches.res /Fobuild\ /Fe:build\sptest.exe || exit /b 1
 echo Built build\sptest.exe
