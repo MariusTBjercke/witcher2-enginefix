@@ -302,6 +302,12 @@ Steps inside `sp_overlay_build`, mirroring the `.ps1` main flow (lines 1486-1620
 4. SWFs: only if ORIGINAL; a movie that is not (another UI mod) is left alone and logged, and only the tick on that screen is lost - the `$swfSkipped` behaviour of the `.ps1` (lines 1503-1520). BookMarker's script edits still apply.
 5. Cache key file `cache.key`: DLL version, features, and size + last-write time of `base_scripts.dzip`, `abetterui.dzip`, every `CookedPC\*.dzip` (icons), the loose SWFs. Same key → reuse the files, no rebuild.
 
+**Reading the archives:** `sp_dzip_open` takes the archive in memory, but `pack0.dzip` is
+10.5 GB and holds 1 099 item icons and 63 `def_*.xml` (`z_emc_data.dzip` adds 64 more, `ZZ_UPatch.dzip`
+16), so Task 6 needs a file-backed reader beside the buffer API - header and table from disk, then seek
+and read one entry, like the `DzipFile` class in the `.ps1` - and must never load a whole large archive.
+(`abetterui.dzip`, 61 MB, holds the `alreadyread_64x64.dds` overlay and can go through the buffer API.)
+
 `golden.py <game> <scratch>`: makes `<scratch>\ref` and `<scratch>\dll` game layouts (copies of
 `base_scripts.dzip` and the loose SWFs **from the old patcher's backup**, because the owner's
 live files are patched; hard links for the other dzips, so `<scratch>` must be on the game's
