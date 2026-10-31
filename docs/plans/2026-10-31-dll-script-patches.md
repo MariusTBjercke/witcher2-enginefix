@@ -36,7 +36,7 @@ See `docs/local/nexus.md` (scan results).
 ## Execution notes (read first)
 
 - **Branch:** work on `dll-script-patches`, not `main`; `main` holds the released 0.5.1. Merge only after Task 7's in-game check passes.
-- **Hard stops, wait for the owner:** Task 1 Step 4 and Task 7 Steps 2-3 (start tests, a human must press *Launch game*), Task 8 Step 5, Task 9 Step 3 and any push/release. Before Task 7, the three decisions below must be answered.
+- **Hard stops, wait for the owner:** Task 1 Step 4 and Task 7 Steps 2-3 (start tests, a human must press *Launch game*), Task 8 Step 5, Task 9 Step 3 and any push/release. The three decisions below are answered.
 - **If Task 1 shows the hook comes too late (Q2) or a size query cannot be redirected (Q3), stop** and report; do not improvise an on-disk patch.
 - **Inputs for the golden test** are on the owner's machine: the unpatched originals are in `<game>\Witcher2EngineFix_Optional\ScriptPatches\backup\` (`base_scripts.dzip` = Project Mersey's, `ui_trade.swf`, `ui_storage.swf` = HD UI's), because the live `CookedPC` files carry the 0.5 patches. Never write to `<game>`; `<scratch>` must be on the same volume as `<game>` for hard links.
 - The installed game currently has the 0.5 on-disk patches. They stay until Task 7 Step 2 (the owner runs the old `Uninstall.bat`).
@@ -44,11 +44,11 @@ See `docs/local/nexus.md` (scan results).
 - Leave the untracked `docs/fixes/world-map-readability.md` alone (unrelated work).
 - Commit per task as in `docs/conventions.md` (plain English subject, no prefixes).
 
-## Decisions for the owner (answer before Task 7)
+## Owner decisions (decided 2026-10-31)
 
-1. **Defaults.** Proposed: `book_marker=1`, `continue=1`, `pause_quit=1` in the shipped ini (the user gets everything from the DLL; any one can be switched off). Alternative: all `0`, opt-in as today.
-2. **Cache folder.** Proposed: `<game>\bin\witcher2_enginefix_cache\` (next to the DLL, removed together with it, no write outside the game folder). Alternative: `%LOCALAPPDATA%\witcher2_enginefix\`.
-3. **Old installs.** Proposed: the DLL restores 0.4/0.5 on-disk patches once from `Witcher2EngineFix_Optional\ScriptPatches\backup` (Task 8). Alternative: tell users to run the old `Uninstall.bat` before upgrading.
+1. **Defaults: all on.** `book_marker=1`, `continue=1`, `pause_quit=1` in the shipped ini (the user gets everything from the DLL; any one can be switched off).
+2. **Cache folder:** `<game>\bin\witcher2_enginefix_cache\` (next to the DLL, removed together with it, no write outside the game folder).
+3. **Old installs: the DLL cleans them up.** It restores 0.4/0.5 on-disk patches once from `Witcher2EngineFix_Optional\ScriptPatches\backup` (Task 8).
 
 ## File structure
 
