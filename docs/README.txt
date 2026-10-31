@@ -53,12 +53,21 @@ Optional, off until you run it - script patches:
   Uninstall.bat restores them. If another mod later replaces one of these
   files, run Install.bat again.
 
+Antivirus warnings:
+Some scanners flag this mod. That is a false positive, common for mods
+like this. dinput8.dll is a proxy DLL that the game loads by itself, reads
+the hotkey state and patches values in the game's memory - the same things
+heuristics look for. Install.bat starts PowerShell with "-ExecutionPolicy
+Bypass" so that ScriptPatches.ps1 (plain text, read it first if you like)
+can run. Nothing is downloaded or sent anywhere. The full source is on
+GitHub (link above) if you prefer to build the DLL yourself.
+
 Install:
 Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
   ...\steamapps\common\the witcher 2\bin\dinput8.dll
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix 0.5.0 loaded".
+"witcher2_enginefix 0.5.1 loaded".
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level

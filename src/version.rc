@@ -1,0 +1,33 @@
+// File properties for dinput8.dll (Explorer > Properties > Details). An unsigned DLL
+// without any version metadata scores worse in antivirus heuristics.
+#include <winver.h>
+#include "version.h"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     ENGINEFIX_VERSION_BIN
+PRODUCTVERSION  ENGINEFIX_VERSION_BIN
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_DLL
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "MariusTBjercke"
+            VALUE "FileDescription",  "Witcher 2 Engine Fix (dinput8 proxy, open source: github.com/MariusTBjercke/witcher2-enginefix)"
+            VALUE "FileVersion",      ENGINEFIX_VERSION
+            VALUE "InternalName",     "witcher2_enginefix"
+            VALUE "LegalCopyright",   "Copyright (c) 2026 MariusTBjercke. MIT License."
+            VALUE "OriginalFilename", "dinput8.dll"
+            VALUE "ProductName",      "Witcher 2 Engine Fix"
+            VALUE "ProductVersion",   ENGINEFIX_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

@@ -53,7 +53,7 @@ The higher levels cost GPU time. They do not change how far away the game spawns
    `...\steamapps\common\the witcher 2\bin\dinput8.dll`
 3. Start the game as usual (through Steam and the launcher).
 
-To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.5.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
+To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.5.1 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
 
 | File | Purpose |
 |---|---|
@@ -94,6 +94,7 @@ responds to hover. The button still works; this is a known minor issue.
 - **Other `dinput8.dll` mods**: only one `dinput8.dll` can sit in `bin\`. This mod loads the system `dinput8.dll` itself.
 - **Other map mods**: a mod that ships its own `CookedPC\globals\map_scales.csv` conflicts with the interior maps; whichever was copied last wins. UI mods that replace `ui_nav.swf` (A Better UI, HD UI upscales) are fine.
 - **Steam Cloud**: no effect on the fix; saves and previews are written through the game's own Steam storage interface.
+- **Antivirus**: some scanners flag the release as suspicious. This is a false positive: `dinput8.dll` is an unsigned proxy DLL that reads hotkey state and patches values in the game's memory, and `Install.bat` runs `ScriptPatches.ps1` with `-ExecutionPolicy Bypass`. Both patterns trip heuristics. Nothing is downloaded or sent anywhere; build the DLL yourself from this source if you prefer (see below).
 
 ## Building from source
 
@@ -110,7 +111,7 @@ python tools\build-interior-maps.py "<game>\CookedPC\pack0.dzip"
 powershell -ExecutionPolicy Bypass -File tools\package-release.ps1
 ```
 
-which writes `dist\Witcher2EngineFix-<version>.zip` (version from `CHANGELOG.md`, checked against `ENGINEFIX_VERSION` in `src\enginefix.c`).
+which writes `dist\Witcher2EngineFix-<version>.zip` (version from `CHANGELOG.md`, checked against `ENGINEFIX_VERSION` in `src\version.h`).
 
 Research tooling (unpacking the game exe for Ghidra, probes) is described in [AGENTS.md](AGENTS.md#research-setup). None of it is needed to build the mod.
 

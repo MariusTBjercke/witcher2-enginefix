@@ -29,8 +29,8 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include "distance_patch.h"
+#include "version.h"
 
-#define ENGINEFIX_VERSION   "0.5.0"   // keep in sync with CHANGELOG.md
 #define IMAGE_BASE          0x00400000u
 #define RVA_SETTINGS        0x02180E28u   // 0x02580E28 - IMAGE_BASE
 #define OFF_MESH_DOWNSCALE  0x34

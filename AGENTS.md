@@ -22,7 +22,7 @@ Sibling project with the same architecture:
 | Renderer distance hooks | `src/distance_patch.h` |
 | Shipped settings | `dist-files/witcher2_enginefix.ini` |
 | Interior maps (data, not DLL) | `tools/build-interior-maps.py <pack0.dzip>` -> `build/interior-maps/` (game assets, never committed; `package-release.ps1` requires it) |
-| Version | `ENGINEFIX_VERSION` in `src/enginefix.c` = top entry of `CHANGELOG.md` |
+| Version | `ENGINEFIX_VERSION` (+ `_BIN`) in `src/version.h` = top entry of `CHANGELOG.md` |
 | Release zip | `tools/package-release.ps1` -> `dist/Witcher2EngineFix-<version>.zip` |
 | Validation evidence | `docs/validation/` |
 

@@ -12,9 +12,12 @@ if (-not $Version) {
     $Version = (Select-String -Path (Join-Path $root "CHANGELOG.md") -Pattern '^## (\d+\.\d+\.\d+)' |
         Select-Object -First 1).Matches[0].Groups[1].Value
 }
-$src = Get-Content (Join-Path $root "src\enginefix.c") -Raw
+$src = Get-Content (Join-Path $root "src\version.h") -Raw
 if ($src -notmatch "#define ENGINEFIX_VERSION\s+`"$([regex]::Escape($Version))`"") {
-    throw "ENGINEFIX_VERSION in src\enginefix.c does not match $Version from CHANGELOG.md"
+    throw "ENGINEFIX_VERSION in src\version.h does not match $Version from CHANGELOG.md"
+}
+if ($src -notmatch "#define ENGINEFIX_VERSION_BIN\s+$($Version.Replace('.', ',')),0\b") {
+    throw "ENGINEFIX_VERSION_BIN in src\version.h does not match $Version"
 }
 
 if (-not $NoBuild) {

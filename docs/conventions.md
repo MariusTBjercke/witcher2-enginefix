@@ -17,8 +17,8 @@ branch only for an experiment that may be thrown away.
 ## Versions and releases
 
 - Semantic versions. The version lives in two places that must match:
-  the top `## x.y.z` heading of `CHANGELOG.md` and `ENGINEFIX_VERSION` in
-  `src/enginefix.c`. `tools/package-release.ps1` refuses to package if they differ.
+  the top `## x.y.z` heading of `CHANGELOG.md` and `ENGINEFIX_VERSION` /
+  `ENGINEFIX_VERSION_BIN` in `src/version.h`. `tools/package-release.ps1` refuses to package if they differ.
 - Tag `v<version>`; GitHub release title `Witcher 2 Engine Fix <version>`, with
   `dist/Witcher2EngineFix-<version>.zip` attached. The zip extracts straight into
   the game folder (`bin/dinput8.dll`, `bin/witcher2_enginefix.ini`, plus
