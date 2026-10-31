@@ -139,13 +139,13 @@ def run(cmd, what, cwd=None, encoding="oem"):
     return text
 
 
-def make_layout(layout, game, source, backup):
+def make_layout(layout, game, source, from_backup):
     cooked = layout / "CookedPC"
     gui = cooked / "globals" / "gui"
     gui.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "base_scripts.dzip", cooked / "base_scripts.dzip")
     for name in ("ui_trade.swf", "ui_storage.swf"):
-        src = (source / name) if backup else (source / "globals" / "gui" / name)
+        src = (source / name) if from_backup else (source / "globals" / "gui" / name)
         if src.is_file():
             shutil.copy2(src, gui / name)
     for dzip in sorted((game / "CookedPC").glob("*.dzip")):
@@ -171,6 +171,12 @@ def snapshot(root):
 
 # ---- comparison ----------------------------------------------------------
 
+# The DLL's carriers for the read icons, in its order (sp_overlay.c, k_carriers). Never
+# base_scripts.dzip: the game compiles every entry of that archive as a script.
+CARRIERS = ("dlc_finishers.dzip", "alchemy_suit.dzip", "magical_suit.dzip", "roche_jacket.dzip",
+            "swordsman_suit.dzip")
+
+
 def compare(ref_zip, our_zip, ref_cooked, out):
     ref_data, ref_entries = dzip_read(ref_zip)
     our_data, our_entries = dzip_read(our_zip)
@@ -188,32 +194,42 @@ def compare(ref_zip, our_zip, ref_cooked, out):
             continue
         compared += 1
 
-    icons = 0
+    # base_scripts.dzip gets script entries only; anything else stops the game's compiler.
     for key, entry in ours.items():
-        if key in ref:
-            continue
+        if key not in ref:
+            problems.append(f"base_scripts.dzip has an entry the reference has not: {entry[0]}")
+
+    carrier = next((out / name for name in CARRIERS if (out / name).is_file()), None)
+    carried = {}
+    if carrier:
+        carrier_data, carrier_entries = dzip_read(carrier)
+        carried = by_name(carrier_entries)
+
+    icons = 0
+    for key, entry in carried.items():
         if entry[0].lower().startswith("globals\\gui\\icons\\items\\w2ef_read\\"):
             loose = ref_cooked / entry[0]
             icons += 1
         elif entry[0].lower() in ("globals\\gui\\ui_trade.swf", "globals\\gui\\ui_storage.swf"):
             loose = ref_cooked / entry[0]
         else:
-            problems.append(f"unexpected entry: {entry[0]}")
-            continue
+            continue                                    # the carrier's own entries
         if not loose.is_file():
             problems.append(f"{entry[0]}: the reference wrote no loose file")
-        elif dzip_extract(our_data, entry) != loose.read_bytes():
+        elif dzip_extract(carrier_data, entry) != loose.read_bytes():
             problems.append(f"{entry[0]}: differs from the reference's loose file")
 
-    # The icon folder from the other direction: every reference icon must be in our archive.
+    # The icon folder from the other direction: every reference icon must be in the carrier.
     ref_icons = ref_cooked / "globals" / "gui" / "icons" / "items" / "w2ef_read"
     if ref_icons.is_dir():
-        for dds in sorted(ref_icons.glob("*.dds")):
+        if not carrier:
+            problems.append("the reference wrote read icons, the DLL build no carrier archive")
+        for dds in sorted(ref_icons.glob("*.dds")) if carrier else ():
             name = f"globals\\gui\\icons\\items\\w2ef_read\\{dds.name}".lower()
-            if name not in ours:
-                problems.append(f"read icon missing from the archive: {dds.name}")
+            if name not in carried:
+                problems.append(f"read icon missing from {carrier.name}: {dds.name}")
                 continue
-            if dzip_extract(our_data, ours[name]) != dds.read_bytes():
+            if dzip_extract(carrier_data, carried[name]) != dds.read_bytes():
                 problems.append(f"read icon differs: {dds.name}")
 
     # The movies, loose in both layouts (the reference always leaves them loose).
@@ -221,13 +237,13 @@ def compare(ref_zip, our_zip, ref_cooked, out):
     for name in ("ui_trade.swf", "ui_storage.swf"):
         ref_swf = ref_cooked / "globals" / "gui" / name
         our_swf = out / name
-        entry = ours.get(f"globals\\gui\\{name}".lower())
+        entry = carried.get(f"globals\\gui\\{name}".lower())
         if not ref_swf.is_file():
             problems.append(f"{name}: the reference wrote no loose file")
             continue
         want = ref_swf.read_bytes()
         got = our_swf.read_bytes() if our_swf.is_file() else (
-            dzip_extract(our_data, entry) if entry else None)
+            dzip_extract(carrier_data, entry) if entry else None)
         if got is None:
             problems.append(f"{name}: the DLL build produced nothing")
             continue
@@ -236,7 +252,7 @@ def compare(ref_zip, our_zip, ref_cooked, out):
             continue
         movies.append((name, len(got), "loose" if our_swf.is_file() else "archive"))
 
-    return compared, icons, movies, problems
+    return compared, icons, carrier.name if carrier else "-", movies, problems
 
 
 # ---- main ----------------------------------------------------------------
@@ -278,8 +294,8 @@ def main(argv):
     scratch.mkdir(parents=True, exist_ok=True)
 
     # Two identical layouts: one for the reference, one for the DLL build.
-    make_layout(ref, game, source, backup)
-    make_layout(dll, game, source, backup)
+    make_layout(ref, game, source, source == backup)
+    make_layout(dll, game, source, source == backup)
 
     print("\n== reference: ScriptPatches.ps1 -Action Install -Features All ==")
     ref_copy = scratch / "ref-patch.ps1"
@@ -296,11 +312,11 @@ def main(argv):
         print("  " + line)
 
     print("\n== compare ==")
-    compared, icons, movies, problems = compare(
+    compared, icons, carrier, movies, problems = compare(
         ref / "CookedPC" / "base_scripts.dzip", out / "base_scripts.dzip",
         ref / "CookedPC", out)
     print(f"  {compared} base_scripts.dzip entries identical")
-    print(f"  {icons} read-book icons identical")
+    print(f"  {icons} read-book icons identical (in {carrier})")
     for name, size, where in movies:
         print(f"  {name} identical ({size} bytes, {where})")
 

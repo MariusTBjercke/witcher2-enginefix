@@ -21,8 +21,9 @@ int sp_hooks_start(const wchar_t* game, const wchar_t* cache, int book_marker, i
 int sp_hooks_path(const wchar_t* path, wchar_t* out, size_t cap);
 
 // FindFirstFileW/FindNextFileW support: builds the overlay when the game lists
-// `<cooked>\*.dzip` (that find data carries base_scripts.dzip's size) and answers the cached
-// file's size and times for a `base_scripts.dzip` entry. `pattern` is NULL for FindNextFileW.
+// `<cooked>\*.dzip` (that find data carries the archives' sizes) and answers the cached file's
+// size and times for an entry named like a redirected archive (base_scripts.dzip, the icon
+// carrier). `pattern` is NULL for FindNextFileW.
 // 1 = data adjusted.
 int sp_hooks_find(LPCWSTR pattern, WIN32_FIND_DATAW* data);
 

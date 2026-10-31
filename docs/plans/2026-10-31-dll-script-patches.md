@@ -388,6 +388,16 @@ Hook behaviour:
   `script overlay: read icons: 152 books, 152 icons`, `script patches: book_marker=on
   continue=on pause_quit=on cache=built N ms`, and one `script patches: CreateFileW "... ->
   cached copy` per target.
+
+  Start test 1 (2026-10-31): hooks and redirects worked, but the game stopped at *Script
+  compilation error*: the icons were entries of `base_scripts.dzip`, and the engine compiles
+  every entry of that archive. Fixed by moving them into a cached copy of `dlc_finishers.dzip`
+  (the carrier; see "Not in `base_scripts.dzip`" in `docs/fixes/dll-script-patches.md`).
+  Start test 2: delete `<game>\bin\witcher2_enginefix_cache` (the cache key now carries a layout
+  number, but deleting it is the clean start), copy the new `build\dinput8.dll`, launch. Expected
+  extra lines: `script overlay: base_scripts.dzip: 5 entries replaced or added`,
+  `script overlay: dlc_finishers.dzip: 152 entries replaced or added`, and a `-> cached copy`
+  line for `CookedPC\dlc_finishers.dzip` besides the two for `base_scripts.dzip`.
 - [ ] **Step 3: Owner in-game check** (same as `docs/fixes/shop-book-read-marker.md` "Final form" and `menu-buttons.md`): inventory statuses/tooltip/refresh after reading; trade and storage ticks both sides; loot window icon + `(Nothing new)`; container preview icon; Continue; pause-menu Quit. Then each ini key `0` → that feature gone, others still there. Then delete `bin\dinput8.dll` → vanilla game (uninstall check).
 - [x] **Step 4: Commit** `0.6.0 work: script patches applied by the DLL`.
 

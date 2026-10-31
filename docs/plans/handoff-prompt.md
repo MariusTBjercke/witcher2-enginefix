@@ -5,7 +5,7 @@
 Ship 0.6.0 of `witcher2-enginefix` with the optional script patches (BookMarker, Continue,
 PauseQuit) applied by `bin\dinput8.dll` itself: no `.bat`/`.ps1` in the release, no game file
 written, uninstall = delete the DLL. All code is implemented and committed on branch
-`dll-script-patches`; what is left is the owner's start test (Task 7 Steps 2-3), then Tasks 8-9
+`dll-script-patches`; what is left is the owner's start test 2 (Task 7 Steps 2-3), then Tasks 8-9
 of `docs/plans/2026-10-31-dll-script-patches.md`. `main` holds the released 0.5.1 and stays
 untouched until the in-game check passes.
 
@@ -37,32 +37,39 @@ Works (verified 2026-10-31 on this machine; commits `bdd1f6a`, `873d337`, `ff691
   the redirected find size (4 508 633 = the cached archive), the three redirects, untouched
   unrelated paths, case-insensitive matching and cache reuse.
 
-Not verified: the game itself has never run with this DLL. `bin\dinput8.dll` in the install is
-still the released 0.5.1 build and `bin\witcher2_enginefix_cache` does not exist yet.
+Start test 1 (2026-10-31, owner, 0.5 on-disk patches uninstalled with the old `Uninstall.bat`):
+hooks in after 0 ms (3/3), overlay built in 125 ms, both `base_scripts.dzip` opens served from
+the cache - then the game's *Script compilation error*, one `parse error, near 'DDS'` per read
+icon. The engine compiles **every** entry of `base_scripts.dzip`, so the icons cannot live there.
+Fixed: icons and an abetterui-only patched movie now go into a cached copy of the carrier
+`dlc_finishers.dzip` (fallbacks in `k_carriers`, `src/sp_overlay.c`); `sp_hooks_find` covers any redirected `CookedPC\*.dzip`; the cache key has
+`OV_CACHE_LAYOUT 2`; `golden.py` fails on any non-reference entry in `base_scripts.dzip`.
+Offline after the fix: 22 tests, `GOLDEN OK` (460 entries, 152 icons in `dlc_finishers.dzip`).
+
+The install now has: clean `CookedPC` (0.5 patches restored, backup folder deleted by
+`Uninstall.bat`), the Task 7 DLL from start test 1 and its broken cache in
+`bin\witcher2_enginefix_cache`.
 
 ## Next item
 
-Task 7 Steps 2-3, the owner start test and in-game check (hard stop; verify as in
-`progress.json`). Give the owner exactly this:
+Task 7 start test 2 and Step 3 (hard stop; verify as in `progress.json`). Owner steps:
 
 1. Close the game and the launcher.
-2. Run `<game>\Witcher2EngineFix_Optional\ScriptPatches\Uninstall.bat` once (restores the 0.5
-   on-disk patches; the DLL refuses to patch a marked archive). Check `CookedPC\base_scripts.dzip`
-   is back to ~1.67 MB and `CookedPC\globals\gui\icons\items\w2ef_read` is gone.
-3. Copy `build\dinput8.dll` to `<game>\bin` (the existing ini is fine: `[scriptpatches]`
-   defaults to 1, or copy `dist-files\witcher2_enginefix.ini`).
+2. Delete `<game>\bin\witcher2_enginefix_cache`.
+3. Copy `build\dinput8.dll` to `<game>\bin`.
 4. Start the game through Steam and press *Launch game*. Main menu = start test; then check
    BookMarker (inventory status/tooltip/refresh, trade + storage ticks, loot window, container
    preview), Continue, pause-Quit, then each ini key `0` (that feature gone, others intact),
    then delete the DLL for the vanilla check.
-5. Send `<game>\bin\witcher2_enginefix.log`. Expected: `scriptpatches: book_marker=1
-   continue=1 pause_quit=1`, `script patches: hooks installed after N ms (3/3 slots)`,
-   `script overlay: read icons: 152 books, 152 icons`, `script patches: book_marker=on
-   continue=on pause_quit=on cache=built N ms`, and one `script patches: CreateFileW
-   "...\CookedPC\base_scripts.dzip" -> cached copy` (same for both movies).
+5. Send `<game>\bin\witcher2_enginefix.log`. Expected: `script patches: hooks installed after N
+   ms (3/3 slots)`, `script overlay: base_scripts.dzip: 5 entries replaced or added`,
+   `script overlay: dlc_finishers.dzip: 152 entries replaced or added`, `script patches:
+   book_marker=on continue=on pause_quit=on cache=built N ms`, and `-> cached copy` lines for
+   `base_scripts.dzip` (twice), `dlc_finishers.dzip` and both movies.
 
 A silent crash at startup means a wrong hook: delete the DLL, report, do not retry. After a
-passing test, go to Task 8 (one-time restore of 0.5 on-disk patches, offline tests first); Task 9
+passing test, go to Task 8 (one-time restore of 0.5 on-disk patches, offline tests first; the
+owner must reinstall 0.5's patches with the old `Install.bat` for its Step 5); Task 9
 is the release and needs the owner's go-ahead.
 
 ## Critical constraints
@@ -82,11 +89,13 @@ is the release and needs the owner's go-ahead.
 - The redirect only fires for paths recognised as absolute (or resolvable relative) and
   containing `CookedPC`; Task 1 saw absolute backslash paths. No `-> cached copy` line in the
   log means the path form differs - then log with `[diagnostics] file_trace=1` and compare.
-- The find-data redirect matches the entry name `base_scripts.dzip` (the game has one). If a
-  listing ever carried that name for another file, its size would come from the cache too.
-- Branch B: icons only exist as entries of the redirected `base_scripts.dzip`; making them
-  loose files in the cache would hide them (the engine never opens a loose file it did not see
-  in its startup walk).
+- The find-data redirect matches the entry name of a redirected `CookedPC\*.dzip`. If a
+  listing elsewhere ever carried that name, its size would come from the cache too.
+- Branch B: icons only exist as entries of the redirected carrier archive; making them loose
+  files in the cache would hide them (the engine never opens a loose file it did not see in its
+  startup walk), and putting them into `base_scripts.dzip` stops the game (script compiler).
+- An abetterui-only patched movie in the carrier relies on "last archive in name order wins"
+  (`dlc_finishers` > `abetterui`); unverified in game, the owner's movies are loose.
 - Cache key = DLL version + the three features + size/mtime of every `CookedPC\*.dzip` and
   loose movie. Bump `ENGINEFIX_VERSION` in Task 9; delete `bin\witcher2_enginefix_cache` when
   testing by hand.

@@ -296,15 +296,39 @@ game directory is written.
 
 | Cache file | What it is |
 |---|---|
-| `base_scripts.dzip` | the script archive with the 5 patched entries, plus the read-book icons and any patched movie that only exists inside `abetterui.dzip` |
+| `base_scripts.dzip` | the script archive with the 5 patched entries, nothing else |
+| `dlc_finishers.dzip` (the carrier) | that DLC archive's own entry plus the 152 read-book icons and any patched movie that only exists inside `abetterui.dzip` |
 | `ui_trade.swf`, `ui_storage.swf` | patched uncompressed (FWS) copies, only when the game has that movie loose |
 | `cache.key` | the input key; written last, so an interrupted build is rebuilt next start |
+| `cache.status` | the per-feature outcome, for the log line on a cache hit |
 
 **Branch B is implemented:** Task 1 showed that the engine never opens a loose file it did not
 see in its startup walk, so a file the DLL invents would be invisible. The generated icons
 (`globals\gui\icons\items\w2ef_read\*.dds`) and a patched movie that exists only in
-`abetterui.dzip` therefore become entries of the redirected `base_scripts.dzip`; loose movies
-are served through a `CreateFileW` redirect to the cached copy instead.
+`abetterui.dzip` therefore become entries of a redirected archive; loose movies are served
+through a `CreateFileW` redirect to the cached copy instead.
+
+**Not in `base_scripts.dzip`.** The first build put the icons into the redirected
+`base_scripts.dzip`. The owner's start test (2026-10-31) stopped at the game's *Script
+compilation error* dialog, one line per icon:
+`globals\gui\icons\items\w2ef_read\bookofarachases_64x64.dds[1]: parse error, near 'DDS'`.
+The engine compiles **every** entry of
+that archive as WitcherScript, whatever its extension. The golden test could not see it (it
+compares bytes, not where they live), so it now fails when `base_scripts.dzip` holds any entry
+the reference archive does not.
+
+**The carrier.** The icons go into a cached copy of a tiny DLC archive that every Enhanced
+Edition install has, redirected like `base_scripts.dzip`: the first present of
+`dlc_finishers.dzip` (one 128-byte archive, one `.csv`), `alchemy_suit.dzip`,
+`magical_suit.dzip`, `roche_jacket.dzip`, `swordsman_suit.dzip`. Its own entry keeps its bytes
+and place; the icons are added at the end. All 23 archives are mounted by the same startup loop
+(Task 1), so the carrier is a resource archive like any other, and the `w2ef_read` names are
+unique, so archive precedence does not matter for them. A patched movie that exists only in
+`abetterui.dzip` also goes there; `dlc_finishers` sorts after `abetterui`, so under the
+reference's "last archive in name order wins" assumption ours is the one loaded (unverified
+in game: the owner's install has both movies loose). No carrier present: no icons and no
+read-icon list in the scripts, so they never name an icon that does not exist; the status
+texts keep working.
 
 **Source selection** matches `Get-Target`/`Get-ReadIcons`: a loose file under `CookedPC` wins,
 then the last archive in case-insensitive name order that holds the entry. Def files are the
@@ -312,7 +336,9 @@ archives' `(^|\\)def_[^\\]*\.xml$` entries (66 on this install), sorted case-ins
 deduplicated; books are the items tagged `SortTypeBook` with a usable icon, in first-seen order,
 so the generated `W2EF_HasReadIcon` lists them exactly as the reference does.
 
-**Cache key:** DLL version, the three feature flags, then size and last-write time of every
+**Cache key:** DLL version, a cache layout number (`OV_CACHE_LAYOUT`, 2 since the carrier;
+bump it whenever the cache's contents change, or a rebuilt DLL of the same version serves the
+old cache), the three feature flags, then size and last-write time of every
 `CookedPC\*.dzip` and of the two loose movies (or `missing`). A matching key reuses the files
 and logs `cache: reused`; a cached file that has gone missing is not redirected (the game gets
 the originals) rather than serving a path that does not exist.
@@ -337,7 +363,8 @@ other 22 archives, so `<scratch>` must be on the game's volume), runs the refere
 other, then compares with an independent Python DZIP/LZF reader (table hash verified):
 
 * every entry of `base_scripts.dzip` decompressed: **460 entries identical**;
-* the read-book icons: **152 identical**, name and bytes (our archive entries against the
+* `base_scripts.dzip` holds no entry the reference's has not (the start-test regression);
+* the read-book icons: **152 identical**, name and bytes (the carrier's entries against the
   reference's loose files, both directions);
 * `ui_trade.swf` (2 207 423 bytes) and `ui_storage.swf` (1 451 496 bytes): **identical**;
 * a second build on unchanged inputs: `cache: reused`, cache files untouched (sizes and
@@ -375,11 +402,12 @@ must never be patched by two owners).
   `script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy`.
 * **Build trigger.** The overlay is built on the first hit of a target, under a critical
   section, once per session: normally the game's startup `FindFirstFileW
-  "<game>\CookedPC\*.dzip"` (its find data carries `base_scripts.dzip`'s size), or the first
-  `CreateFileW` of the archive or a loose movie if that listing never happens. The game waits
+  "<game>\CookedPC\*.dzip"` (its find data carries the archives' sizes), or the first
+  `CreateFileW` of a `CookedPC\*.dzip` or a loose movie if that listing never happens. The game waits
   for that one build (~110 ms; later starts reuse the cache in ~16 ms).
-* **Find data.** For a `base_scripts.dzip` entry `FindFirstFileW`/`FindNextFileW` return the
-  cached file's attributes, sizes and times, name kept: the engine must see the archive it is
+* **Find data.** For an entry named like a redirected archive (`base_scripts.dzip`, the
+  carrier) `FindFirstFileW`/`FindNextFileW` return the cached file's attributes, sizes and
+  times, name kept: the engine must see the archive it is
   about to open, and its "have the scripts changed?" check reads that timestamp. No attribute
   or size query needs a hook - Task 1 showed `GetFileAttributesW` carries no size and
   `GetFileSize` follows the handle.
@@ -396,5 +424,11 @@ cached archive's size (4 508 633 bytes), the archive and both loose movies resol
 cached copies, other archives and files outside `CookedPC` stay untouched, matching is
 case-insensitive, and the second session reuses the cache.
 
-The in-game check is pending: see the plan's Task 7 Steps 2-3 (owner start test with the old
-0.5 patches uninstalled once, then each feature and each ini key).
+**Start test 1 (2026-10-31, owner).** Hooks in after 0 ms (3/3 slots), overlay built in 125 ms
+with all three features `on`, both opens of `base_scripts.dzip` served from the cache, archive
+accepted with its new size - then the script compilation error above (icons in
+`base_scripts.dzip`). Fixed with the carrier; offline after the fix: 22 tests pass, `GOLDEN OK`
+(460 entries, 152 icons in `dlc_finishers.dzip`, both movies), `base_scripts.dzip` holds only
+the 5 `.ws` changes, the carrier keeps its `.csv` byte for byte.
+
+The in-game check is pending: start test 2 and the plan's Task 7 Step 3.

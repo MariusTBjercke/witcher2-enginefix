@@ -56,15 +56,25 @@ static const wchar_t* lookup(const wchar_t* full)
     return NULL;
 }
 
-// Only these three paths can be redirected; a build is worth starting when one of them is
-// touched even if the game never listed CookedPC\*.dzip first.
+// CookedPC\<name>.dzip (no subfolder): the redirected archives are base_scripts.dzip and the
+// icon carrier.
+static int is_cooked_archive(const wchar_t* full)
+{
+    size_t n = wcslen(g_cooked), len = wcslen(full);
+
+    return len > n + 6 && !_wcsnicmp(full, g_cooked, n) && full[n] == L'\\' &&
+           !wcschr(full + n + 1, L'\\') && !_wcsicmp(full + len - 5, L".dzip");
+}
+
+// Only an archive or one of the two movies can be redirected; a build is worth starting when
+// one of them is touched even if the game never listed CookedPC\*.dzip first.
 static int candidate_target(const wchar_t* full)
 {
     wchar_t p[MAX_PATH];
     int i;
 
     if (!full || !full[0]) return 0;
-    if (path_join(p, MAX_PATH, g_cooked, L"base_scripts.dzip") && !_wcsicmp(p, full)) return 1;
+    if (is_cooked_archive(full)) return 1;
     for (i = 0; i < 2; i++) {
         if (path_join(p, MAX_PATH, g_cooked, k_swf_paths[i]) && !_wcsicmp(p, full)) return 1;
     }
@@ -155,11 +165,13 @@ int sp_hooks_find(LPCWSTR pattern, WIN32_FIND_DATAW* data)
     if (g_build != 1) {
         if (!is_archive_glob(pattern) || !build_once()) return 0;
     }
-    // The only file of that name under CookedPC is the archive being redirected; the game's
-    // startup walk lists it from the *.dzip glob, whose data must report the cached size and
-    // times so the engine treats it as the file it is about to open.
-    if (_wcsicmp(data->cFileName, L"base_scripts.dzip") != 0) return 0;
-    if (!path_join(target, MAX_PATH, g_cooked, L"base_scripts.dzip")) return 0;
+    // A redirected archive (base_scripts.dzip, the icon carrier) is listed by the *.dzip glob,
+    // whose data must report the cached size and times so the engine treats it as the file it
+    // is about to open. FindNextFileW has no pattern, so the entry name decides; no other
+    // folder the game lists holds a .dzip of those names.
+    if (!path_join(target, MAX_PATH, g_cooked, data->cFileName) || !is_cooked_archive(target)) {
+        return 0;
+    }
     cached = lookup(target);
     if (!cached) return 0;
     if (!GetFileAttributesExW(cached, GetFileExInfoStandard, &d)) return 0;

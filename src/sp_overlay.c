@@ -17,6 +17,9 @@
 
 // The two movies BookMarker patches; the only feature with Swf = true.
 static const char* const k_swf_names[2] = { "ui_trade.swf", "ui_storage.swf" };
+static const char* const k_swf_entries[2] = {
+    "globals\\gui\\ui_trade.swf", "globals\\gui\\ui_storage.swf"
+};
 
 static const char* const k_script_entries[5] = {
     "game\\gui\\guiutils.ws",
@@ -27,6 +30,20 @@ static const char* const k_script_entries[5] = {
 };
 
 static const char* const k_icon_folder = "globals\\gui\\icons\\items\\w2ef_read\\";
+
+// The archives that can carry the read icons and a patched movie that only exists inside
+// abetterui.dzip. Never base_scripts.dzip: the game compiles every entry of that archive as a
+// script, and a .dds there stops it with "parse error, near 'DDS'" (Task 7 start test). These
+// are tiny DLC archives of every Enhanced Edition install; the first one present is used.
+static const wchar_t* const k_carriers[] = {
+    L"dlc_finishers.dzip", L"alchemy_suit.dzip", L"magical_suit.dzip", L"roche_jacket.dzip",
+    L"swordsman_suit.dzip"
+};
+#define OV_NCARRIERS ((int)(sizeof k_carriers / sizeof k_carriers[0]))
+
+// Part of the cache key: bump it whenever the cache's contents or layout change, so an older
+// cache built by the same ENGINEFIX_VERSION is never served. 2 = icons in a carrier archive.
+#define OV_CACHE_LAYOUT 2
 
 // ---- logging -----------------------------------------------------------
 
@@ -42,7 +59,6 @@ static void vlogf(sp_log_fn log, const char* fmt, ...)
     va_end(ap);
     log("%s", buf);
 }
-
 
 
 // ---- growable text buffer ----------------------------------------------
@@ -440,7 +456,8 @@ static int build_key(ov_ctx* c, sp_features f, obuf* key)
     int i;
 
     ob_clear(key);
-    if (!ob_printf(key, "witcher2-enginefix %s\n", ENGINEFIX_VERSION) ||
+    if (!ob_printf(key, "witcher2-enginefix %s layout %d\n", ENGINEFIX_VERSION,
+                   OV_CACHE_LAYOUT) ||
         !ob_printf(key, "features book_marker=%d continue=%d pause_quit=%d\n",
                    f.book_marker, f.cont, f.pause_quit)) {
         return 0;
@@ -702,9 +719,10 @@ static int decode_def(const sp_buf* raw, obuf* text)
     return 1;
 }
 
-// Get-ReadIcons: every book's icon with the inventory's alreadyread overlay at 0.9, as archive
-// entries under w2ef_read (Branch B: the engine never looks up a loose file it did not see in
-// its startup walk). Sets icons->why when there are none; other failures are logged too.
+// Get-ReadIcons: every book's icon with the inventory's alreadyread overlay at 0.9, as entries
+// under w2ef_read for the carrier archive (Branch B: the engine never looks up a loose file it
+// did not see in its startup walk). Sets icons->why when there are none; other failures are
+// logged too.
 static void read_icons(ov_ctx* c, ov_icons* icons)
 {
     sp_buf tick_raw = { NULL, 0 };
@@ -923,6 +941,64 @@ static void remove_cache_outputs(const wchar_t* cache_dir)
 
         if (path_join(path, MAX_PATH, cache_dir, leaves[i])) DeleteFileW(path);
     }
+    for (i = 0; i < OV_NCARRIERS; i++) {
+        wchar_t path[MAX_PATH];
+
+        if (path_join(path, MAX_PATH, cache_dir, k_carriers[i])) DeleteFileW(path);
+    }
+}
+
+// The carrier for this install (index into ctx->arch), or -1 when none is present.
+static int find_carrier(const ov_ctx* c)
+{
+    int i, a;
+
+    for (i = 0; i < OV_NCARRIERS; i++) {
+        a = find_archive(c, k_carriers[i]);
+        if (a >= 0) return a;
+    }
+    return -1;
+}
+
+// Writes `src` with `l`'s entries replaced or added to cache_dir\<leaf> and redirects
+// CookedPC\<leaf> there.
+static int write_archive(const sp_dzip* src, const entry_list* l, long long filetime,
+                         const wchar_t* cache_dir, const wchar_t* cooked, const wchar_t* leaf,
+                         sp_redirect* r, int* nr, int maxr, sp_log_fn log)
+{
+    const char** names = (const char**)malloc((size_t)l->count * sizeof *names);
+    sp_buf* datas = (sp_buf*)malloc((size_t)l->count * sizeof *datas);
+    sp_buf archive = { NULL, 0 };
+    wchar_t cached[MAX_PATH], target[MAX_PATH];
+    int i, ok = 0;
+
+    if (!names || !datas) {
+        vlogf(log, "script overlay: out of memory");
+        goto out;
+    }
+    for (i = 0; i < l->count; i++) {
+        names[i] = l->v[i].name;
+        datas[i] = *l->v[i].data;
+    }
+    if (!sp_dzip_write(src, l->count, names, datas, filetime, &archive)) {
+        vlogf(log, "script overlay: cannot write the patched %ls", leaf);
+        goto out;
+    }
+    if (!path_join(cached, MAX_PATH, cache_dir, leaf) || !sp_write_file_atomic(cached, &archive)) {
+        vlogf(log, "script overlay: cannot write %ls\\%ls", cache_dir, leaf);
+        goto out;
+    }
+    if (!path_join(target, MAX_PATH, cooked, leaf) || !add_redirect(r, nr, maxr, target, cached)) {
+        vlogf(log, "script overlay: game path too long");
+        goto out;
+    }
+    vlogf(log, "script overlay: %ls: %d entries replaced or added", leaf, l->count);
+    ok = 1;
+out:
+    free(names);
+    free(datas);
+    sp_free(&archive);
+    return ok;
 }
 
 static int write_key(const wchar_t* cache_dir, const obuf* key)
@@ -951,6 +1027,13 @@ static void reuse_redirects(ov_ctx* c, const wchar_t* cache_dir, sp_features f,
         vlogf(log, "script overlay: cache: no base_scripts.dzip in it - serving the originals");
     }
     if (!f.book_marker) return;
+    for (i = 0; i < OV_NCARRIERS; i++) {
+        if (!path_join(cached, MAX_PATH, cache_dir, k_carriers[i]) || !file_exists(cached)) continue;
+        if (find_archive(c, k_carriers[i]) < 0) continue;
+        if (path_join(target, MAX_PATH, c->cooked, k_carriers[i])) {
+            add_redirect(r, nr, maxr, target, cached);
+        }
+    }
     for (i = 0; i < 2; i++) {
         wchar_t name[MAX_PATH];
 
@@ -969,11 +1052,12 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     ov_icons icons;
     obuf key = { 0 };
     wchar_t cooked[MAX_PATH], scripts_path[MAX_PATH];
-    sp_buf scripts_raw = { NULL, 0 }, collect = { NULL, 0 }, archive = { NULL, 0 };
-    sp_dzip scripts;
+    sp_buf scripts_raw = { NULL, 0 }, collect = { NULL, 0 }, carrier_raw = { NULL, 0 };
+    sp_dzip scripts, carrier_z;
     sp_text texts[5];
     sp_buf orig[5];
-    entry_list entries;
+    entry_list entries, carried;
+    int carrier = -1;
     sp_buf swf_data[2];
     int swf_kind[2] = { 0, 0 };
     sp_ctx sctx;
@@ -988,7 +1072,9 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     memset(texts, 0, sizeof texts);
     memset(orig, 0, sizeof orig);
     memset(&entries, 0, sizeof entries);
+    memset(&carried, 0, sizeof carried);
     memset(&scripts, 0, sizeof scripts);
+    memset(&carrier_z, 0, sizeof carrier_z);
     memset(swf_data, 0, sizeof swf_data);
     memset(&sctx, 0, sizeof sctx);
     if (nr) *nr = 0;
@@ -1089,7 +1175,16 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         ok = 1;
         goto done;
     }
+    // The icons need an archive to live in; without one the scripts get no read-icon list,
+    // so they never name an icon that does not exist.
     if (f.book_marker) {
+        carrier = find_carrier(&ctx);
+        if (carrier < 0) {
+            vlogf(log, "script overlay: read icons: off - no archive to carry them (%ls and the "
+                       "other DLC archives are missing); the marker keeps working", k_carriers[0]);
+        }
+    }
+    if (f.book_marker && carrier >= 0) {
         read_icons(&ctx, &icons);
         if (icons.nfiles > 0) {
             vlogf(log, "script overlay: read icons: %d books, %d icons", icons.books.count,
@@ -1149,9 +1244,17 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     if (book_ok) {
         for (i = 0; i < 2; i++) {
             char why[400];
+            int patched;
 
             why[0] = 0;
-            if (patch_swf(&ctx, i, &swf_kind[i], &swf_data[i], why, sizeof why)) {
+            patched = patch_swf(&ctx, i, &swf_kind[i], &swf_data[i], why, sizeof why);
+            if (patched && swf_kind[i] == 2 && carrier < 0) {
+                sp_free(&swf_data[i]);
+                swf_kind[i] = 0;
+                vlogf(log, "script overlay: %s: left as it is (only in abetterui.dzip and no "
+                           "archive to carry the patched copy); the book marker works without "
+                           "that part", k_swf_names[i]);
+            } else if (patched) {
                 vlogf(log, "script overlay: %s: patched (%s)", k_swf_names[i],
                       swf_kind[i] == 1 ? "loose" : "abetterui.dzip");
             } else {
@@ -1162,8 +1265,9 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         }
     }
 
-    // Everything the cached archive gets: the changed script entries, the read icons and any
-    // patched movie that only exists inside abetterui.dzip (Branch B).
+    // What the cached archives get. base_scripts.dzip: only the changed script entries, because
+    // the game compiles every entry in it. The carrier: the read icons and any patched movie
+    // that only exists inside abetterui.dzip.
     for (i = 0; i < 5; i++) {
         if (texts[i].text.n != orig[i].n ||
             (orig[i].n && memcmp(texts[i].text.p, orig[i].p, orig[i].n) != 0)) {
@@ -1174,59 +1278,35 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         }
     }
     for (i = 0; i < icons.nfiles; i++) {
-        if (!entry_list_add(&entries, icons.files[i].name, &icons.files[i].dds)) {
+        if (!entry_list_add(&carried, icons.files[i].name, &icons.files[i].dds)) {
             vlogf(log, "script overlay: out of memory");
             goto done;
         }
     }
     for (i = 0; i < 2; i++) {
-        char entry[MAX_PATH];
-
         if (swf_kind[i] != 2) continue;
-        if (_snprintf_s(entry, sizeof entry, _TRUNCATE, "globals\\gui\\%s", k_swf_names[i]) < 0) {
-            continue;
-        }
-        if (!entry_list_add(&entries, entry, &swf_data[i])) {
+        if (!entry_list_add(&carried, k_swf_entries[i], &swf_data[i])) {
             vlogf(log, "script overlay: out of memory");
             goto done;
         }
     }
 
-    if (entries.count > 0) {
-        const char** names = (const char**)malloc((size_t)entries.count * sizeof *names);
-        sp_buf* datas = (sp_buf*)malloc((size_t)entries.count * sizeof *datas);
-        wchar_t cached[MAX_PATH], target[MAX_PATH];
-        int wrote = 0;
+    if (entries.count > 0 &&
+        !write_archive(&scripts, &entries, filetime, cache_dir, cooked, L"base_scripts.dzip", r,
+                       nr, maxr, log)) {
+        goto done;
+    }
+    if (carried.count > 0) {
+        const ov_archive* a = &ctx.arch[carrier];
 
-        if (!names || !datas) {
-            free(names);
-            free(datas);
-            vlogf(log, "script overlay: out of memory");
+        if (!sp_read_file(a->path, &carrier_raw) || !sp_dzip_open(&carrier_raw, &carrier_z)) {
+            vlogf(log, "script overlay: cannot read %ls", a->path);
             goto done;
         }
-        for (i = 0; i < entries.count; i++) {
-            names[i] = entries.v[i].name;
-            datas[i] = *entries.v[i].data;
-        }
-        wrote = sp_dzip_write(&scripts, entries.count, names, datas, filetime, &archive);
-        free(names);
-        free(datas);
-        if (!wrote) {
-            vlogf(log, "script overlay: cannot write the patched archive");
+        if (!write_archive(&carrier_z, &carried, filetime, cache_dir, cooked, a->name, r, nr,
+                           maxr, log)) {
             goto done;
         }
-        if (!path_join(cached, MAX_PATH, cache_dir, L"base_scripts.dzip") ||
-            !sp_write_file_atomic(cached, &archive)) {
-            vlogf(log, "script overlay: cannot write %ls\\base_scripts.dzip", cache_dir);
-            goto done;
-        }
-        if (!path_join(target, MAX_PATH, cooked, L"base_scripts.dzip")) {
-            vlogf(log, "script overlay: game path too long");
-            goto done;
-        }
-        add_redirect(r, nr, maxr, target, cached);
-        vlogf(log, "script overlay: base_scripts.dzip: %d entries replaced or added",
-              entries.count);
     }
 
     for (i = 0; i < 2; i++) {
@@ -1274,10 +1354,12 @@ done:
     for (i = 0; i < 5; i++) sp_free(&orig[i]);
     for (i = 0; i < 2; i++) sp_free(&swf_data[i]);
     entry_list_free(&entries);
+    entry_list_free(&carried);
     sp_dzip_close(&scripts);
+    sp_dzip_close(&carrier_z);
     sp_free(&scripts_raw);
+    sp_free(&carrier_raw);
     sp_free(&collect);
-    sp_free(&archive);
     icons_free(&icons);
     ob_free(&key);
     close_archives(&ctx);
