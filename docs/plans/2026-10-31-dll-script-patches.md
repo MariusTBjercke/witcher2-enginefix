@@ -377,7 +377,7 @@ Hook behaviour:
   redirects and that unrelated paths are untouched. Details in
   `docs/fixes/dll-script-patches.md`. Not yet committed separately: Step 4's commit below.
 
-- [ ] **Step 2: Owner start test** (hook rule) with the on-disk 0.5 patches *uninstalled first*
+- [x] **Step 2: Owner start test** (hook rule) with the on-disk 0.5 patches *uninstalled first*
   (owner runs the old `Uninstall.bat` once; Task 8 handles this for users). Expected: game
   reaches the main menu; log shows the line above with all three `ok` and `cache=built`.
   Owner steps: close the game, run
@@ -398,7 +398,15 @@ Hook behaviour:
   extra lines: `script overlay: base_scripts.dzip: 5 entries replaced or added`,
   `script overlay: dlc_finishers.dzip: 152 entries replaced or added`, and a `-> cached copy`
   line for `CookedPC\dlc_finishers.dzip` besides the two for `base_scripts.dzip`.
-- [ ] **Step 3: Owner in-game check** (same as `docs/fixes/shop-book-read-marker.md` "Final form" and `menu-buttons.md`): inventory statuses/tooltip/refresh after reading; trade and storage ticks both sides; loot window icon + `(Nothing new)`; container preview icon; Continue; pause-menu Quit. Then each ini key `0` → that feature gone, others still there. Then delete `bin\dinput8.dll` → vanilla game (uninstall check).
+
+  Start test 2 passed (2026-10-31, commit `d1dcb26`): main menu reached; hooks after 0 ms
+  (3/3), cache built in 109 ms (5 script entries, 152 icons in `dlc_finishers.dzip`, both
+  movies), all three features `on`; `base_scripts.dzip` (twice), `dlc_finishers.dzip` and
+  `ui_trade.swf` served from the cache. `CookedPC` unchanged since the old `Uninstall.bat`.
+- [ ] **Step 3: Owner in-game check.** Partly done in start test 2: the owner checked the book
+  markers and the menu buttons and saved a few times (thumbnails reloaded). Still open:
+  storage (`ui_storage.swf` was never opened that session), each ini key `0`, deleting the DLL.
+  Original step (same as `docs/fixes/shop-book-read-marker.md` "Final form" and `menu-buttons.md`): inventory statuses/tooltip/refresh after reading; trade and storage ticks both sides; loot window icon + `(Nothing new)`; container preview icon; Continue; pause-menu Quit. Then each ini key `0` → that feature gone, others still there. Then delete `bin\dinput8.dll` → vanilla game (uninstall check).
 - [x] **Step 4: Commit** `0.6.0 work: script patches applied by the DLL`.
 
   Committed as `ff69149` after the offline verification (build, 22 tests, `GOLDEN OK`, local
