@@ -8,6 +8,7 @@
 #ifndef SP_DZIP_H
 #define SP_DZIP_H
 
+#include <windows.h>
 #include "sp_common.h"
 
 typedef struct {
@@ -38,5 +39,21 @@ int sp_dzip_write(const sp_dzip* z, int n, const char* const* names, const sp_bu
                   long long filetime, sp_buf* out);
 
 void sp_dzip_close(sp_dzip* z);
+
+// ---- file-backed access -------------------------------------------------
+// For archives too large to load (pack0.dzip is ~10 GB): the 32-byte header and the entry
+// table are read into `table` (so sp_dzip_find works), and one entry is extracted with
+// reads from the file, a 64 KiB block at a time. The archive is opened for shared read and
+// the handle stays open until sp_dzip_file_close. `path` is the .dzip file.
+typedef struct {
+    HANDLE    h;            // INVALID_HANDLE_VALUE unless open
+    long long size;         // file size, for offset validation
+    sp_buf    table;        // header (table offset rewritten to 32) + entry table
+    sp_dzip   z;            // opened on `table`
+} sp_dzip_file;
+
+int  sp_dzip_file_open(const wchar_t* path, sp_dzip_file* out);
+int  sp_dzip_file_extract(sp_dzip_file* f, int i, sp_buf* out);
+void sp_dzip_file_close(sp_dzip_file* f);
 
 #endif

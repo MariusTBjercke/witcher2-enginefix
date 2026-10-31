@@ -1,9 +1,10 @@
 # Script patches applied by the DLL
 
-Status: Tasks 1-5 of `docs/plans/2026-10-31-dll-script-patches.md` done 2026-10-31 on branch
-`dll-script-patches`. Task 1 traced file access passively; Task 5 added the offline script
-edit engine (below), so nothing is redirected or hooked in the game yet. Target: Steam
-Enhanced Edition 3.5.0.26.
+Status: Tasks 1-6 of `docs/plans/2026-10-31-dll-script-patches.md` done 2026-10-31 on branch
+`dll-script-patches`. Task 1 traced file access passively; Task 5 added the offline script edit
+engine (below); Task 6 builds the patched files into a cache folder and proves the result equal
+to `ScriptPatches.ps1`. Nothing is hooked in the game yet (Task 7). Target: Steam Enhanced
+Edition 3.5.0.26.
 
 ## Why
 
@@ -285,3 +286,65 @@ patched by `ScriptPatches.ps1`'s own `Add-Edit`/`BookHelpers`/`New-TextFunction`
 `New-ReadIconFunction` with the same 14 rows and read-icon book list (Latin-1 in and out), are
 identical to this port's output - 224 019 bytes over the five files. That is a local check, not
 a committed test; Task 6's `golden.py` makes it a permanent one at archive level.
+
+## Cache and overlay build (Task 6)
+
+`src/sp_overlay.c` ports the install flow: it reads the game's own files and writes the patched
+copies into `cache_dir` (decision 2: `<game>\bin\witcher2_enginefix_cache\`). Nothing under the
+game directory is written.
+
+| Cache file | What it is |
+|---|---|
+| `base_scripts.dzip` | the script archive with the 5 patched entries, plus the read-book icons and any patched movie that only exists inside `abetterui.dzip` |
+| `ui_trade.swf`, `ui_storage.swf` | patched uncompressed (FWS) copies, only when the game has that movie loose |
+| `cache.key` | the input key; written last, so an interrupted build is rebuilt next start |
+
+**Branch B is implemented:** Task 1 showed that the engine never opens a loose file it did not
+see in its startup walk, so a file the DLL invents would be invisible. The generated icons
+(`globals\gui\icons\items\w2ef_read\*.dds`) and a patched movie that exists only in
+`abetterui.dzip` therefore become entries of the redirected `base_scripts.dzip`; loose movies
+are served through a `CreateFileW` redirect to the cached copy instead.
+
+**Source selection** matches `Get-Target`/`Get-ReadIcons`: a loose file under `CookedPC` wins,
+then the last archive in case-insensitive name order that holds the entry. Def files are the
+archives' `(^|\\)def_[^\\]*\.xml$` entries (66 on this install), sorted case-insensitively and
+deduplicated; books are the items tagged `SortTypeBook` with a usable icon, in first-seen order,
+so the generated `W2EF_HasReadIcon` lists them exactly as the reference does.
+
+**Cache key:** DLL version, the three feature flags, then size and last-write time of every
+`CookedPC\*.dzip` and of the two loose movies (or `missing`). A matching key reuses the files
+and logs `cache: reused`; a cached file that has gone missing is not redirected (the game gets
+the originals) rather than serving a path that does not exist.
+
+**Guard:** when any of the five script entries already carries
+`//===witcher2-enginefix===`, the overlay logs `script patches off - run the old Uninstall.bat
+once` and serves nothing; Task 8 replaces that with the automatic restore. Movies are patched
+only when BookMarker's script edits applied, so the UI never gets the tick no-op without the
+script side.
+
+**File-backed DZIP reader:** `sp_dzip_file_open`/`sp_dzip_file_extract` (Task 6) read the header
+and the entry table from disk and one entry's 64 KiB blocks on demand; nothing loads
+`pack0.dzip` (10.5 GB). Both the icons and the tests use it; `build\sptest.exe test` now also
+compares the file-backed decoder with the in-memory one over all 23 archives (`dzip_file`).
+
+### Golden test
+
+`tools/patchtest/golden.py "<game>" "<scratch>"` makes two identical scratch game layouts (the
+old patcher's unpatched backup for `base_scripts.dzip` and the loose movies, hard links for the
+other 22 archives, so `<scratch>` must be on the game's volume), runs the reference
+`ScriptPatches.ps1 -Action Install -Features All` on one and `build\sptest.exe build` on the
+other, then compares with an independent Python DZIP/LZF reader (table hash verified):
+
+* every entry of `base_scripts.dzip` decompressed: **460 entries identical**;
+* the read-book icons: **152 identical**, name and bytes (our archive entries against the
+  reference's loose files, both directions);
+* `ui_trade.swf` (2 207 423 bytes) and `ui_storage.swf` (1 451 496 bytes): **identical**;
+* a second build on unchanged inputs: `cache: reused`, cache files untouched (sizes and
+  timestamps).
+
+Result on 2026-10-31: `GOLDEN OK` on the owner's install. The reference inputs were the old
+patcher's backup, i.e. **Project Mersey's `base_scripts.dzip` plus HD UI's two movies**; no
+vanilla `base_scripts.dzip` was at hand on this machine, so the vanilla case still rests on the
+dry runs recorded in `docs/fixes/shop-book-read-marker.md`. Overlay build time on this machine:
+~110 ms with all three features (the archive open reads 23 tables including `pack0.dzip`'s), and
+16 ms when the cache is reused.

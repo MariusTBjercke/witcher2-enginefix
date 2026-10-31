@@ -325,11 +325,21 @@ then compares: every `base_scripts.dzip` entry decompressed (own Python LZF read
 independent check of the C one), each SWF byte for byte, the icon set name for name and byte
 for byte. Prints `GOLDEN OK` or each difference.
 
-- [ ] **Step 1:** write `golden.py`; run it → fails (no `build` command yet).
-- [ ] **Step 2:** implement `sp_overlay.c` and `patchtest build`.
-- [ ] **Step 3:** `python -I tools\patchtest\golden.py "<game>" "<scratch>"` → `GOLDEN OK` on the owner's Mersey + HD UI install. If a vanilla `base_scripts.dzip` is at hand (the earlier dry runs used one), run it there too; otherwise note "Mersey only" in the fix doc.
-- [ ] **Step 4:** second `patchtest build` with unchanged inputs → log `cache: reused`, files untouched (timestamps equal).
-- [ ] **Step 5: Commit** `script patches in DLL: overlay build, golden test equal to ScriptPatches.ps1`.
+- [x] **Step 1:** write `golden.py`; run it → fails (no `build` command yet).
+- [x] **Step 2:** implement `sp_overlay.c` and `patchtest build`.
+- [x] **Step 3:** `python -I tools\patchtest\golden.py "<game>" "<scratch>"` → `GOLDEN OK` on the owner's Mersey + HD UI install. If a vanilla `base_scripts.dzip` is at hand (the earlier dry runs used one), run it there too; otherwise note "Mersey only" in the fix doc.
+- [x] **Step 4:** second `patchtest build` with unchanged inputs → log `cache: reused`, files untouched (timestamps equal).
+- [x] **Step 5: Commit** `script patches in DLL: overlay build, golden test equal to ScriptPatches.ps1`.
+
+  Done 2026-10-31: `src/sp_overlay.{c,h}` (cache key, Get-ReadIcons, Build-Scripts, Get-PatchedSwf,
+  Branch B archive entries, redirect table), the file-backed DZIP reader in `sp_dzip.{c,h}`
+  (`sp_dzip_file_*`, used for `pack0.dzip` and covered by the new `dzip_file` test), the
+  harness `build <game> <out>` command and `tools\patchtest\golden.py`. `GOLDEN OK`: 460
+  `base_scripts.dzip` entries, 152 icons and both movies byte-identical to the reference; the
+  second build logs `cache: reused` and touches nothing. The reference inputs were the old
+  patcher's backup (Project Mersey + HD UI), no vanilla archive at hand: "Mersey only" in the
+  fix doc. `golden.py` was written together with the build command, so step 1's failing run did
+  not happen in that order. Overlay build ~110 ms, cached start 16 ms.
 
 ### Task 7: Redirect in the DLL (owner start test)
 

@@ -1,0 +1,1210 @@
+// Overlay build; see sp_overlay.h. The reference is the install flow of
+// tools/script-patches/ScriptPatches.ps1: Get-Target / Get-ReadIcons / Build-Scripts /
+// Get-PatchedSwf and the final writes, with the cache in place of the backup manifest.
+#include "sp_overlay.h"
+#include "sp_dds.h"
+#include "sp_dzip.h"
+#include "sp_script.h"
+#include "sp_swf.h"
+#include "version.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define OV_MAX_ARCHIVES 64
+#define OV_NAME          128
+
+// The two movies BookMarker patches; the only feature with Swf = true.
+static const char* const k_swf_names[2] = { "ui_trade.swf", "ui_storage.swf" };
+
+static const char* const k_script_entries[5] = {
+    "game\\gui\\guiutils.ws",
+    "game\\gui\\guishop.ws",
+    "game\\gui\\guimainmenu.ws",
+    "game\\gameplay\\container_class.ws",
+    "game\\gui\\guiinventory.ws"
+};
+
+static const char* const k_icon_folder = "globals\\gui\\icons\\items\\w2ef_read\\";
+
+// ---- logging -----------------------------------------------------------
+
+// The log sink is printf-like but cannot take a va_list, so the line is formatted here.
+static void vlogf(sp_log_fn log, const char* fmt, ...)
+{
+    char buf[1024];
+    va_list ap;
+
+    if (!log) return;
+    va_start(ap, fmt);
+    _vsnprintf_s(buf, sizeof buf, _TRUNCATE, fmt, ap);
+    va_end(ap);
+    log("%s", buf);
+}
+
+// ---- growable text buffer ----------------------------------------------
+
+typedef struct { char* p; size_t n, cap; } obuf;
+
+static void ob_free(obuf* b)
+{
+    free(b->p);
+    b->p = NULL;
+    b->n = b->cap = 0;
+}
+
+static void ob_clear(obuf* b)
+{
+    b->n = 0;
+    if (b->p) b->p[0] = 0;
+}
+
+static int ob_reserve(obuf* b, size_t extra)
+{
+    size_t need, cap;
+    char* p;
+
+    if (extra > (size_t)-1 - b->n - 1) return 0;
+    need = b->n + extra + 1;
+    if (need <= b->cap) return 1;
+    cap = b->cap ? b->cap : 512;
+    while (cap < need) {
+        if (cap > ((size_t)-1) / 2) return 0;
+        cap *= 2;
+    }
+    p = (char*)realloc(b->p, cap);
+    if (!p) return 0;
+    b->p = p;
+    b->cap = cap;
+    return 1;
+}
+
+static int ob_put(obuf* b, const void* p, size_t n)
+{
+    if (!ob_reserve(b, n)) return 0;
+    if (n) memcpy(b->p + b->n, p, n);
+    b->n += n;
+    b->p[b->n] = 0;
+    return 1;
+}
+
+static int ob_puts(obuf* b, const char* s)
+{
+    return ob_put(b, s, strlen(s));
+}
+
+static int ob_printf(obuf* b, const char* fmt, ...)
+{
+    char tmp[1024];
+    va_list ap;
+
+    va_start(ap, fmt);
+    _vsnprintf_s(tmp, sizeof tmp, _TRUNCATE, fmt, ap);
+    va_end(ap);
+    return ob_puts(b, tmp);
+}
+
+// ---- string list -------------------------------------------------------
+
+typedef struct { char** v; int count, cap; } strlist;
+
+static void strlist_free(strlist* l)
+{
+    int i;
+
+    for (i = 0; i < l->count; i++) free(l->v[i]);
+    free(l->v);
+    memset(l, 0, sizeof *l);
+}
+
+static int strlist_index_ci(const strlist* l, const char* s)
+{
+    int i;
+
+    for (i = 0; i < l->count; i++) {
+        if (_stricmp(l->v[i], s) == 0) return i;
+    }
+    return -1;
+}
+
+static int strlist_add(strlist* l, const char* s)
+{
+    size_t n;
+    char* copy;
+
+    if (l->count == l->cap) {
+        int cap = l->cap ? l->cap * 2 : 16;
+        char** grown = (char**)realloc(l->v, (size_t)cap * sizeof *l->v);
+
+        if (!grown) return 0;
+        l->v = grown;
+        l->cap = cap;
+    }
+    n = strlen(s);
+    copy = (char*)malloc(n + 1);
+    if (!copy) return 0;
+    memcpy(copy, s, n + 1);
+    l->v[l->count++] = copy;
+    return 1;
+}
+
+static int strlist_add_unique(strlist* l, const char* s)
+{
+    if (strlist_index_ci(l, s) >= 0) return 1;
+    return strlist_add(l, s);
+}
+
+static int str_ci_cmp(const char* a, const char* b)
+{
+    for (;;) {
+        unsigned char ca = (unsigned char)*a, cb = (unsigned char)*b;
+
+        if (ca >= 'A' && ca <= 'Z') ca = (unsigned char)(ca - 'A' + 'a');
+        if (cb >= 'A' && cb <= 'Z') cb = (unsigned char)(cb - 'A' + 'a');
+        if (ca != cb) return ca < cb ? -1 : 1;
+        if (!ca) break;
+        a++;
+        b++;
+    }
+    return strcmp(a, b) == 0 ? 0 : (strcmp(a, b) < 0 ? -1 : 1);
+}
+
+static int cmp_str_ci(const void* pa, const void* pb)
+{
+    return str_ci_cmp(*(const char* const*)pa, *(const char* const*)pb);
+}
+
+// ---- entry list (what the cached archive gets) -------------------------
+
+typedef struct { const char* name; const sp_buf* data; } entry_ref;
+typedef struct { entry_ref* v; int count, cap; } entry_list;
+
+static void entry_list_free(entry_list* l)
+{
+    free(l->v);
+    memset(l, 0, sizeof *l);
+}
+
+static int entry_list_add(entry_list* l, const char* name, const sp_buf* data)
+{
+    if (l->count == l->cap) {
+        int cap = l->cap ? l->cap * 2 : 16;
+        entry_ref* grown = (entry_ref*)realloc(l->v, (size_t)cap * sizeof *l->v);
+
+        if (!grown) return 0;
+        l->v = grown;
+        l->cap = cap;
+    }
+    l->v[l->count].name = name;
+    l->v[l->count].data = data;
+    l->count++;
+    return 1;
+}
+
+// ---- paths and files ---------------------------------------------------
+
+static int path_join(wchar_t* out, size_t cap, const wchar_t* base, const wchar_t* rest)
+{
+    size_t n = base ? wcslen(base) : 0;
+    int sep = n > 0 && base[n - 1] != L'\\' && base[n - 1] != L'/';
+
+    return _snwprintf_s(out, cap, _TRUNCATE, L"%s%s%s", base ? base : L"",
+                        sep ? L"\\" : L"", rest ? rest : L"") >= 0;
+}
+
+static int ascii_to_wide(const char* s, wchar_t* out, size_t cap)
+{
+    size_t i;
+
+    if (!s || !out || cap == 0) return 0;
+    for (i = 0; s[i]; i++) {
+        if (i + 1 >= cap) return 0;
+        out[i] = (wchar_t)(unsigned char)s[i];
+    }
+    out[i] = 0;
+    return 1;
+}
+
+static int wide_to_ascii(const wchar_t* s, char* out, size_t cap)
+{
+    size_t i;
+
+    if (!s || !out || cap == 0) return 0;
+    for (i = 0; s[i]; i++) {
+        if (i + 1 >= cap || s[i] < 0x20 || s[i] > 0x7E) return 0;
+        out[i] = (char)s[i];
+    }
+    out[i] = 0;
+    return 1;
+}
+
+static int file_exists(const wchar_t* path)
+{
+    return GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES;
+}
+
+static int file_size_time(const wchar_t* path, unsigned long long* size,
+                          unsigned long long* mtime)
+{
+    WIN32_FILE_ATTRIBUTE_DATA d;
+
+    if (!GetFileAttributesExW(path, GetFileExInfoStandard, &d)) return 0;
+    if (size) *size = ((unsigned long long)d.nFileSizeHigh << 32) | d.nFileSizeLow;
+    if (mtime) {
+        *mtime = ((unsigned long long)d.ftLastWriteTime.dwHighDateTime << 32) |
+                 d.ftLastWriteTime.dwLowDateTime;
+    }
+    return 1;
+}
+
+static int ensure_dir(const wchar_t* path)
+{
+    wchar_t tmp[MAX_PATH];
+    size_t i, n;
+
+    if (!path || (n = wcslen(path)) == 0 || n >= MAX_PATH) return 0;
+    wcscpy_s(tmp, MAX_PATH, path);
+    i = (n > 1 && tmp[1] == L':') ? 3 : 1;
+    for (; i < n; i++) {
+        if (tmp[i] == L'\\' || tmp[i] == L'/') {
+            wchar_t save = tmp[i];
+
+            tmp[i] = 0;
+            CreateDirectoryW(tmp, NULL);
+            tmp[i] = save;
+        }
+    }
+    if (!CreateDirectoryW(tmp, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return 0;
+    return 1;
+}
+
+// ---- the game's archives -----------------------------------------------
+
+typedef struct {
+    wchar_t      path[MAX_PATH];
+    wchar_t      name[OV_NAME];
+    sp_dzip_file f;
+} ov_archive;
+
+typedef struct { wchar_t name[OV_NAME]; } ov_sort_name;
+
+typedef struct {
+    wchar_t    cooked[MAX_PATH];
+    ov_archive arch[OV_MAX_ARCHIVES];
+    int        narch;
+    sp_log_fn  log;
+} ov_ctx;
+
+static int cmp_name_ci(const void* pa, const void* pb)
+{
+    const wchar_t* a = ((const ov_sort_name*)pa)->name;
+    const wchar_t* b = ((const ov_sort_name*)pb)->name;
+
+    for (;;) {
+        wchar_t ca = *a, cb = *b;
+
+        if (ca >= L'A' && ca <= L'Z') ca = (wchar_t)(ca - L'A' + L'a');
+        if (cb >= L'A' && cb <= L'Z') cb = (wchar_t)(cb - L'A' + L'a');
+        if (ca != cb) return ca < cb ? -1 : 1;
+        if (!ca) return 0;
+        a++;
+        b++;
+    }
+}
+
+static int open_archives(ov_ctx* c, const wchar_t* cooked)
+{
+    ov_sort_name names[OV_MAX_ARCHIVES];
+    WIN32_FIND_DATAW fd;
+    HANDLE find;
+    wchar_t pattern[MAX_PATH];
+    int n = 0, i;
+
+    wcscpy_s(c->cooked, MAX_PATH, cooked);
+    if (!path_join(pattern, MAX_PATH, cooked, L"*.dzip")) return 0;
+    find = FindFirstFileW(pattern, &fd);
+    if (find == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (n < OV_MAX_ARCHIVES && wcslen(fd.cFileName) < OV_NAME) {
+            wcscpy_s(names[n].name, OV_NAME, fd.cFileName);
+            n++;
+        }
+    } while (FindNextFileW(find, &fd));
+    FindClose(find);
+    qsort(names, (size_t)n, sizeof names[0], cmp_name_ci);
+    for (i = 0; i < n; i++) {
+        ov_archive* a = &c->arch[c->narch];
+
+        if (!path_join(a->path, MAX_PATH, cooked, names[i].name)) continue;
+        wcscpy_s(a->name, OV_NAME, names[i].name);
+        if (sp_dzip_file_open(a->path, &a->f)) {
+            c->narch++;
+        } else {
+            vlogf(c->log, "script overlay: %ls: not readable as DZIP v2, skipped", names[i].name);
+        }
+    }
+    return c->narch > 0;
+}
+
+static void close_archives(ov_ctx* c)
+{
+    int i;
+
+    for (i = 0; i < c->narch; i++) sp_dzip_file_close(&c->arch[i].f);
+    c->narch = 0;
+}
+
+static int find_archive(const ov_ctx* c, const wchar_t* name)
+{
+    int i;
+
+    for (i = 0; i < c->narch; i++) {
+        if (_wcsicmp(c->arch[i].name, name) == 0) return i;
+    }
+    return -1;
+}
+
+// Get-ReadIcons' $find: a loose file under CookedPC wins, then the last archive in name
+// order that holds the entry.
+static int find_file(ov_ctx* c, const char* name, sp_buf* out)
+{
+    wchar_t wname[MAX_PATH], path[MAX_PATH];
+    int i;
+
+    memset(out, 0, sizeof *out);
+    if (!ascii_to_wide(name, wname, MAX_PATH)) return 0;
+    if (path_join(path, MAX_PATH, c->cooked, wname) && sp_read_file(path, out)) return 1;
+    for (i = c->narch - 1; i >= 0; i--) {
+        int idx = sp_dzip_find(&c->arch[i].f.z, name);
+
+        if (idx < 0) continue;
+        if (sp_dzip_file_extract(&c->arch[i].f, idx, out)) return 1;
+        vlogf(c->log, "script overlay: %ls: cannot read '%s'", c->arch[i].name, name);
+        return 0;
+    }
+    return 0;
+}
+
+// ---- cache key ---------------------------------------------------------
+
+static int loose_swf_path(const ov_ctx* c, int i, wchar_t* out, size_t cap)
+{
+    wchar_t rel[MAX_PATH];
+
+    return _snwprintf_s(rel, MAX_PATH, _TRUNCATE, L"globals\\gui\\%hs", k_swf_names[i]) >= 0 &&
+           path_join(out, cap, c->cooked, rel);
+}
+
+static int build_key(ov_ctx* c, sp_features f, obuf* key)
+{
+    int i;
+
+    ob_clear(key);
+    if (!ob_printf(key, "witcher2-enginefix %s\n", ENGINEFIX_VERSION) ||
+        !ob_printf(key, "features book_marker=%d continue=%d pause_quit=%d\n",
+                   f.book_marker, f.cont, f.pause_quit)) {
+        return 0;
+    }
+    for (i = 0; i < c->narch; i++) {
+        unsigned long long size = 0, time = 0;
+        char name[OV_NAME];
+
+        if (!wide_to_ascii(c->arch[i].name, name, sizeof name)) return 0;
+        if (!file_size_time(c->arch[i].path, &size, &time)) {
+            if (!ob_printf(key, "dzip\t%s\tmissing\n", name)) return 0;
+        } else if (!ob_printf(key, "dzip\t%s\t%llu\t%llu\n", name, size, time)) {
+            return 0;
+        }
+    }
+    for (i = 0; i < 2; i++) {
+        wchar_t path[MAX_PATH];
+        unsigned long long size = 0, time = 0;
+
+        if (!loose_swf_path(c, i, path, MAX_PATH)) return 0;
+        if (!file_size_time(path, &size, &time)) {
+            if (!ob_printf(key, "swf\t%s\tmissing\n", k_swf_names[i])) return 0;
+        } else if (!ob_printf(key, "swf\t%s\t%llu\t%llu\n", k_swf_names[i], size, time)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int key_matches(const wchar_t* cache_dir, const obuf* key)
+{
+    wchar_t path[MAX_PATH];
+    sp_buf on_disk;
+    int same;
+
+    if (!path_join(path, MAX_PATH, cache_dir, L"cache.key")) return 0;
+    if (!sp_read_file(path, &on_disk)) return 0;
+    same = on_disk.n == key->n && (key->n == 0 || memcmp(on_disk.p, key->p, key->n) == 0);
+    sp_free(&on_disk);
+    return same;
+}
+
+// ---- read-book icons (Get-ReadIcons) -----------------------------------
+
+typedef struct { char* name; sp_buf dds; } ov_icon;
+
+typedef struct {
+    strlist  books;         // books whose icon was written, Get-ReadIcons order
+    ov_icon* files;         // archive entry name -> DDS bytes
+    int      nfiles, capfiles;
+    char     why[300];
+} ov_icons;
+
+static void icons_free(ov_icons* ic)
+{
+    int i;
+
+    strlist_free(&ic->books);
+    for (i = 0; i < ic->nfiles; i++) {
+        free(ic->files[i].name);
+        sp_free(&ic->files[i].dds);
+    }
+    free(ic->files);
+    memset(ic, 0, sizeof *ic);
+}
+
+static int icons_add(ov_icons* ic, const char* archive_name, const sp_buf* dds)
+{
+    int i;
+    char* name;
+
+    for (i = 0; i < ic->nfiles; i++) {
+        if (_stricmp(ic->files[i].name, archive_name) == 0) {
+            sp_buf copy = { NULL, 0 };
+
+            copy.p = (unsigned char*)malloc(dds->n ? dds->n : 1);
+            if (!copy.p) return 0;
+            if (dds->n) memcpy(copy.p, dds->p, dds->n);
+            copy.n = dds->n;
+            sp_free(&ic->files[i].dds);
+            ic->files[i].dds = copy;
+            return 1;
+        }
+    }
+    if (ic->nfiles == ic->capfiles) {
+        int cap = ic->capfiles ? ic->capfiles * 2 : 32;
+        ov_icon* grown = (ov_icon*)realloc(ic->files, (size_t)cap * sizeof *ic->files);
+
+        if (!grown) return 0;
+        ic->files = grown;
+        ic->capfiles = cap;
+    }
+    name = (char*)malloc(strlen(archive_name) + 1);
+    if (!name) return 0;
+    strcpy_s(name, strlen(archive_name) + 1, archive_name);
+    memset(&ic->files[ic->nfiles], 0, sizeof ic->files[0]);
+    ic->files[ic->nfiles].name = name;
+    ic->files[ic->nfiles].dds.p = (unsigned char*)malloc(dds->n ? dds->n : 1);
+    if (!ic->files[ic->nfiles].dds.p) {
+        free(name);
+        return 0;
+    }
+    if (dds->n) memcpy(ic->files[ic->nfiles].dds.p, dds->p, dds->n);
+    ic->files[ic->nfiles].dds.n = dds->n;
+    ic->nfiles++;
+    return 1;
+}
+
+static int is_ws(unsigned char c)
+{
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+}
+
+static int ci_equal(unsigned char a, unsigned char b)
+{
+    if (a >= 'A' && a <= 'Z') a = (unsigned char)(a - 'A' + 'a');
+    if (b >= 'A' && b <= 'Z') b = (unsigned char)(b - 'A' + 'a');
+    return a == b;
+}
+
+static int ci_starts(const unsigned char* p, size_t n, const char* lit)
+{
+    size_t i, l = strlen(lit);
+
+    if (n < l) return 0;
+    for (i = 0; i < l; i++) {
+        if (!ci_equal(p[i], (unsigned char)lit[i])) return 0;
+    }
+    return 1;
+}
+
+static int ci_find(const unsigned char* p, size_t n, size_t from, const char* lit, size_t* at)
+{
+    size_t i, l = strlen(lit);
+
+    for (i = from; i + l <= n; i++) {
+        if (ci_starts(p + i, n - i, lit)) {
+            *at = i;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// (^|\\)def_[^\\]*\.xml$, as Get-ReadIcons filters the archives' entry names.
+static int is_def_name(const char* name)
+{
+    const char* leaf = name;
+    const char* s;
+    size_t len;
+
+    for (s = name; *s; s++) {
+        if (*s == '\\') leaf = s + 1;
+    }
+    len = strlen(leaf);
+    return len >= 8 && ci_starts((const unsigned char*)leaf, len, "def_") &&
+           ci_starts((const unsigned char*)leaf + len - 4, 4, ".xml");
+}
+
+// <tags>[^<]*SortTypeBook anywhere in the item element.
+static int has_book_tag(const unsigned char* body, size_t n)
+{
+    static const char tag[] = "<tags>";
+    static const char wanted[] = "SortTypeBook";
+    size_t at, i, k, wl = strlen(wanted);
+
+    if (!ci_find(body, n, 0, tag, &at)) return 0;
+    for (i = at + strlen(tag); i < n && body[i] != '<'; i++) {
+        if (i + wl > n) break;
+        for (k = 0; k < wl; k++) {
+            if (!ci_equal(body[i + k], (unsigned char)wanted[k])) break;
+        }
+        if (k == wl) return 1;
+    }
+    return 0;
+}
+
+// <item\s+name\s*=\s*"([^"]+)"(.*?)</item> with Singleline, collecting the names whose element
+// has SortTypeBook in its tags.
+static int scan_def(const sp_buf* text, strlist* books)
+{
+    size_t i = 0;
+
+    while (i < text->n) {
+        size_t at, p, name_start, name_end, body_end;
+
+        if (!ci_find(text->p, text->n, i, "<item", &at)) break;
+        p = at + 5;
+        if (p >= text->n || !is_ws(text->p[p])) {
+            i = p;
+            continue;
+        }
+        while (p < text->n && is_ws(text->p[p])) p++;
+        if (!ci_starts(text->p + p, text->n - p, "name")) {
+            i = p;
+            continue;
+        }
+        p += 4;
+        while (p < text->n && is_ws(text->p[p])) p++;
+        if (p >= text->n || text->p[p] != '=') {
+            i = p;
+            continue;
+        }
+        p++;
+        while (p < text->n && is_ws(text->p[p])) p++;
+        if (p >= text->n || text->p[p] != '"') {
+            i = p;
+            continue;
+        }
+        p++;
+        name_start = p;
+        while (p < text->n && text->p[p] != '"') p++;
+        if (p >= text->n || p == name_start) {
+            i = p;
+            continue;
+        }
+        name_end = p;
+        p++;
+        if (!ci_find(text->p, text->n, p, "</item>", &body_end)) break;
+        if (has_book_tag(text->p + p, body_end - p)) {
+            char name[256];
+            size_t n = name_end - name_start;
+
+            if (n < sizeof name) {
+                memcpy(name, text->p + name_start, n);
+                name[n] = 0;
+                if (!strlist_add_unique(books, name)) return 0;
+            }
+        }
+        i = body_end + 7;
+    }
+    return 1;
+}
+
+// A def file is UTF-16LE, UTF-16BE (BOM) or Latin-1; non-ASCII becomes 0x80 so a name that
+// carries such a character fails the printable-ASCII filter, as it does in the reference.
+static int decode_def(const sp_buf* raw, obuf* text)
+{
+    size_t i;
+
+    ob_clear(text);
+    if (raw->n >= 2 && raw->p[0] == 0xFF && raw->p[1] == 0xFE) {
+        for (i = 2; i + 1 < raw->n; i += 2) {
+            unsigned int u = (unsigned int)raw->p[i] | ((unsigned int)raw->p[i + 1] << 8);
+            char c = (char)(u < 0x80 ? u : 0x80u);
+
+            if (!ob_put(text, &c, 1)) return 0;
+        }
+    } else if (raw->n >= 2 && raw->p[0] == 0xFE && raw->p[1] == 0xFF) {
+        for (i = 2; i + 1 < raw->n; i += 2) {
+            unsigned int u = ((unsigned int)raw->p[i] << 8) | (unsigned int)raw->p[i + 1];
+            char c = (char)(u < 0x80 ? u : 0x80u);
+
+            if (!ob_put(text, &c, 1)) return 0;
+        }
+    } else if (!ob_put(text, raw->p, raw->n)) {
+        return 0;
+    }
+    return 1;
+}
+
+// Get-ReadIcons: every book's icon with the inventory's alreadyread overlay at 0.9, as archive
+// entries under w2ef_read (Branch B: the engine never looks up a loose file it did not see in
+// its startup walk). Sets icons->why when there are none; other failures are logged too.
+static void read_icons(ov_ctx* c, ov_icons* icons)
+{
+    sp_buf tick_raw = { NULL, 0 };
+    obuf text = { 0 };
+    strlist defs = { 0 }, books = { 0 };
+    unsigned* tick = NULL;
+    unsigned* px = NULL;
+    int i;
+
+    memset(icons, 0, sizeof *icons);
+    tick = (unsigned*)malloc(SP_DDS_PIXELS * sizeof *tick);
+    px = (unsigned*)malloc(SP_DDS_PIXELS * sizeof *px);
+    if (!tick || !px) {
+        _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "out of memory");
+        goto done;
+    }
+    if (!find_file(c, "globals\\gui\\icons\\tooltip\\alreadyread_64x64.dds", &tick_raw)) {
+        _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "alreadyread_64x64.dds not found");
+        goto done;
+    }
+    if (!sp_dds_decode64(&tick_raw, tick)) {
+        _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE,
+                    "alreadyread_64x64.dds is not a 64x64 icon");
+        goto done;
+    }
+    for (i = 0; i < c->narch; i++) {
+        int k;
+
+        for (k = 0; k < c->arch[i].f.z.count; k++) {
+            const char* name = c->arch[i].f.z.e[k].name;
+
+            if (is_def_name(name) && !strlist_add_unique(&defs, name)) {
+                _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "out of memory");
+                goto done;
+            }
+        }
+    }
+    qsort(defs.v, (size_t)defs.count, sizeof defs.v[0], cmp_str_ci);
+
+    for (i = 0; i < defs.count; i++) {
+        sp_buf raw = { NULL, 0 };
+        sp_buf plain;
+
+        if (!find_file(c, defs.v[i], &raw)) continue;
+        if (!decode_def(&raw, &text)) {
+            sp_free(&raw);
+            _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "out of memory");
+            goto done;
+        }
+        sp_free(&raw);
+        plain.p = (unsigned char*)text.p;
+        plain.n = text.n;
+        if (!scan_def(&plain, &books)) {
+            _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "out of memory");
+            goto done;
+        }
+    }
+
+    for (i = 0; i < books.count; i++) {
+        const char* book = books.v[i];
+        char icon[300], path[400], archive_name[500];
+        sp_buf raw = { NULL, 0 }, out = { NULL, 0 };
+        size_t k, w = 0;
+        int bad = 0;
+
+        for (k = 0; book[k]; k++) {
+            unsigned char ch = (unsigned char)book[k];
+
+            if (ch < 0x20 || ch > 0x7E || ch == '"' || ch == '\\') {
+                bad = 1;
+                break;
+            }
+        }
+        if (bad || !book[0]) continue;
+        for (k = 0; book[k]; k++) {
+            unsigned char ch = (unsigned char)book[k];
+
+            if (ch == ' ' || ch == '\'') continue;
+            if (ch >= 'A' && ch <= 'Z') ch = (unsigned char)(ch - 'A' + 'a');
+            if (w + 1 >= sizeof icon) {
+                bad = 1;
+                break;
+            }
+            icon[w++] = (char)ch;
+        }
+        if (bad) continue;
+        icon[w] = 0;
+        if (_snprintf_s(path, sizeof path, _TRUNCATE, "globals\\gui\\icons\\items\\%s_64x64.dds",
+                        icon) < 0) {
+            continue;
+        }
+        if (!find_file(c, path, &raw)) continue;
+        if (!sp_dds_decode64(&raw, px)) {
+            sp_free(&raw);
+            continue;
+        }
+        sp_free(&raw);
+        sp_dds_over(px, tick, 0.9);
+        if (!sp_dds_encode64(px, &out)) {
+            _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "out of memory");
+            goto done;
+        }
+        if (_snprintf_s(archive_name, sizeof archive_name, _TRUNCATE, "%s%s_64x64.dds",
+                        k_icon_folder, icon) < 0) {
+            sp_free(&out);
+            continue;
+        }
+        if (!icons_add(icons, archive_name, &out) ||
+            !strlist_add_unique(&icons->books, book)) {
+            sp_free(&out);
+            _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "out of memory");
+            goto done;
+        }
+        sp_free(&out);
+    }
+    if (icons->nfiles == 0 && !icons->why[0]) {
+        _snprintf_s(icons->why, sizeof icons->why, _TRUNCATE, "no book icons found");
+    }
+done:
+    free(tick);
+    free(px);
+    sp_free(&tick_raw);
+    ob_free(&text);
+    strlist_free(&defs);
+    strlist_free(&books);
+}
+
+// ---- the two UI movies -------------------------------------------------
+
+// 1 = patched, `kind` 1 for a loose source (write a cached file) or 2 for an archive-only
+// source (add an archive entry); 0 = skipped, with the reason in why.
+static int patch_swf(ov_ctx* c, int which, int* kind, sp_buf* out, char* why, size_t whylen)
+{
+    sp_buf raw = { NULL, 0 }, fws = { NULL, 0 };
+    wchar_t loose[MAX_PATH];
+    char entry[MAX_PATH];
+    int ab, idx;
+
+    *kind = 0;
+    memset(out, 0, sizeof *out);
+    if (!loose_swf_path(c, which, loose, MAX_PATH)) {
+        _snprintf_s(why, whylen, _TRUNCATE, "path too long");
+        return 0;
+    }
+    if (sp_read_file(loose, &raw)) {
+        *kind = 1;
+    } else {
+        ab = find_archive(c, L"abetterui.dzip");
+        if (ab < 0) {
+            _snprintf_s(why, whylen, _TRUNCATE,
+                        "not found, neither loose nor in abetterui.dzip");
+            return 0;
+        }
+        if (_snprintf_s(entry, sizeof entry, _TRUNCATE, "globals\\gui\\%s",
+                        k_swf_names[which]) < 0) {
+            _snprintf_s(why, whylen, _TRUNCATE, "path too long");
+            return 0;
+        }
+        idx = sp_dzip_find(&c->arch[ab].f.z, entry);
+        if (idx < 0) {
+            _snprintf_s(why, whylen, _TRUNCATE,
+                        "not found, neither loose nor in abetterui.dzip");
+            return 0;
+        }
+        if (!sp_dzip_file_extract(&c->arch[ab].f, idx, &raw)) {
+            _snprintf_s(why, whylen, _TRUNCATE, "cannot read from abetterui.dzip");
+            return 0;
+        }
+        *kind = 2;
+    }
+    if (!sp_swf_uncompressed(&raw, &fws)) {
+        sp_free(&raw);
+        _snprintf_s(why, whylen, _TRUNCATE, "not a SWF file");
+        return 0;
+    }
+    sp_free(&raw);
+    why[0] = 0;
+    if (sp_swf_state(&fws, SP_SWF_COMPARE, 2, NULL, why, whylen) != SP_SWF_ORIGINAL) {
+        char reason[400];
+
+        _snprintf_s(reason, sizeof reason, _TRUNCATE, "%s (another UI mod?)", why);
+        _snprintf_s(why, whylen, _TRUNCATE, "%s", reason);
+        sp_free(&fws);
+        return 0;
+    }
+    if (!sp_swf_apply(&fws, SP_SWF_COMPARE, 2, out)) {
+        sp_free(&fws);
+        _snprintf_s(why, whylen, _TRUNCATE, "cannot patch the movie");
+        return 0;
+    }
+    sp_free(&fws);
+    return 1;
+}
+
+// ---- redirects ---------------------------------------------------------
+
+static int add_redirect(sp_redirect* r, int* nr, int maxr, const wchar_t* target,
+                        const wchar_t* cached)
+{
+    if (*nr >= maxr) return 0;
+    wcscpy_s(r[*nr].target, MAX_PATH, target);
+    wcscpy_s(r[*nr].cached, MAX_PATH, cached);
+    (*nr)++;
+    return 1;
+}
+
+static void remove_cache_outputs(const wchar_t* cache_dir)
+{
+    static const wchar_t* const leaves[4] = {
+        L"cache.key", L"base_scripts.dzip", L"ui_trade.swf", L"ui_storage.swf"
+    };
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        wchar_t path[MAX_PATH];
+
+        if (path_join(path, MAX_PATH, cache_dir, leaves[i])) DeleteFileW(path);
+    }
+}
+
+static int write_key(const wchar_t* cache_dir, const obuf* key)
+{
+    wchar_t path[MAX_PATH];
+    sp_buf b;
+
+    b.p = (unsigned char*)key->p;
+    b.n = key->n;
+    if (!path_join(path, MAX_PATH, cache_dir, L"cache.key")) return 0;
+    return sp_write_file_atomic(path, &b);
+}
+
+// A reused cache: serve what is there, but never a path that no longer exists.
+static void reuse_redirects(ov_ctx* c, const wchar_t* cache_dir, sp_features f,
+                            sp_redirect* r, int* nr, int maxr, sp_log_fn log)
+{
+    wchar_t cached[MAX_PATH], target[MAX_PATH];
+    int i;
+
+    if (path_join(cached, MAX_PATH, cache_dir, L"base_scripts.dzip") && file_exists(cached)) {
+        if (path_join(target, MAX_PATH, c->cooked, L"base_scripts.dzip")) {
+            add_redirect(r, nr, maxr, target, cached);
+        }
+    } else {
+        vlogf(log, "script overlay: cache: no base_scripts.dzip in it - serving the originals");
+    }
+    if (!f.book_marker) return;
+    for (i = 0; i < 2; i++) {
+        wchar_t name[MAX_PATH];
+
+        if (!ascii_to_wide(k_swf_names[i], name, MAX_PATH)) continue;
+        if (!path_join(cached, MAX_PATH, cache_dir, name) || !file_exists(cached)) continue;
+        if (loose_swf_path(c, i, target, MAX_PATH)) add_redirect(r, nr, maxr, target, cached);
+    }
+}
+
+// ---- the overlay -------------------------------------------------------
+
+int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features f,
+                     long long filetime, sp_redirect* r, int* nr, int maxr, sp_log_fn log)
+{
+    ov_ctx ctx;
+    ov_icons icons;
+    obuf key = { 0 };
+    wchar_t cooked[MAX_PATH], scripts_path[MAX_PATH];
+    sp_buf scripts_raw = { NULL, 0 }, collect = { NULL, 0 }, archive = { NULL, 0 };
+    sp_dzip scripts;
+    sp_text texts[5];
+    sp_buf orig[5];
+    entry_list entries;
+    sp_buf swf_data[2];
+    int swf_kind[2] = { 0, 0 };
+    sp_ctx sctx;
+    sp_ctx* pctx = NULL;
+    int i, ok = 0, skip_scripts = 0, have_collect = 0, book_ok = 0, any;
+    DWORD started = GetTickCount();
+
+    memset(&ctx, 0, sizeof ctx);
+    memset(&icons, 0, sizeof icons);
+    memset(texts, 0, sizeof texts);
+    memset(orig, 0, sizeof orig);
+    memset(&entries, 0, sizeof entries);
+    memset(&scripts, 0, sizeof scripts);
+    memset(swf_data, 0, sizeof swf_data);
+    memset(&sctx, 0, sizeof sctx);
+    if (nr) *nr = 0;
+    if (!game || !cache_dir || !nr || !r || maxr <= 0) {
+        vlogf(log, "script overlay: bad arguments");
+        return 0;
+    }
+    ctx.log = log;
+    any = f.book_marker || f.cont || f.pause_quit;
+    if (!any) {
+        vlogf(log, "script overlay: no feature enabled");
+        return 1;
+    }
+    if (!path_join(cooked, MAX_PATH, game, L"CookedPC") ||
+        !path_join(scripts_path, MAX_PATH, cooked, L"base_scripts.dzip")) {
+        vlogf(log, "script overlay: game path too long");
+        return 0;
+    }
+    vlogf(log, "script overlay: cache %ls", cache_dir);
+    if (!open_archives(&ctx, cooked)) {
+        vlogf(log, "script overlay: no readable archive under %ls", cooked);
+        return 0;
+    }
+    if (!build_key(&ctx, f, &key)) {
+        vlogf(log, "script overlay: cannot build the cache key");
+        goto done;
+    }
+    if (key_matches(cache_dir, &key)) {
+        reuse_redirects(&ctx, cache_dir, f, r, nr, maxr, log);
+        vlogf(log, "script overlay: cache: reused (%d redirects)", *nr);
+        ok = 1;
+        goto done;
+    }
+    if (!ensure_dir(cache_dir)) {
+        vlogf(log, "script overlay: cannot create %ls", cache_dir);
+        goto done;
+    }
+    remove_cache_outputs(cache_dir);
+
+    // The five script entries; a marked archive means another copy of the patcher is on disk.
+    if (!sp_read_file(scripts_path, &scripts_raw)) {
+        vlogf(log, "script overlay: cannot read %ls", scripts_path);
+        goto done;
+    }
+    if (!sp_dzip_open(&scripts_raw, &scripts)) {
+        vlogf(log, "script overlay: base_scripts.dzip is not a DZIP v2 archive");
+        goto done;
+    }
+    for (i = 0; i < 5; i++) {
+        int idx = sp_dzip_find(&scripts, k_script_entries[i]);
+
+        if (idx < 0) {
+            vlogf(log, "script overlay: %s not in base_scripts.dzip", k_script_entries[i]);
+            goto done;
+        }
+        if (!sp_dzip_extract(&scripts, idx, &orig[i])) {
+            vlogf(log, "script overlay: cannot extract %s", k_script_entries[i]);
+            goto done;
+        }
+        texts[i].name = k_script_entries[i];
+        texts[i].text.p = (unsigned char*)malloc(orig[i].n ? orig[i].n : 1);
+        if (!texts[i].text.p) {
+            vlogf(log, "script overlay: out of memory");
+            goto done;
+        }
+        if (orig[i].n) memcpy(texts[i].text.p, orig[i].p, orig[i].n);
+        texts[i].text.n = orig[i].n;
+        if (sp_script_marked(&texts[i].text)) {
+            vlogf(log, "script overlay: %s already holds witcher2-enginefix changes - run the "
+                       "old Uninstall.bat once (Task 8 automates this); script patches off",
+                  k_script_entries[i]);
+            skip_scripts = 1;
+            break;
+        }
+    }
+    if (skip_scripts) {
+        if (!write_key(cache_dir, &key)) {
+            vlogf(log, "script overlay: cannot write the cache key");
+        }
+        ok = 1;
+        goto done;
+    }
+    if (f.book_marker) {
+        read_icons(&ctx, &icons);
+        if (icons.nfiles > 0) {
+            vlogf(log, "script overlay: read icons: %d books, %d icons", icons.books.count,
+                  icons.nfiles);
+        } else {
+            vlogf(log, "script overlay: read icons: none (%s) - the marker keeps working",
+                  icons.why[0] ? icons.why : "not built");
+        }
+    }
+
+    if (f.book_marker) {
+        if (!sp_script_collect_body(&texts[4].text, &collect, NULL, 0)) {
+            vlogf(log, "script overlay: book marker: %s", sp_script_error());
+        } else {
+            have_collect = 1;
+        }
+    }
+    sctx.collect_body = have_collect ? (const char*)collect.p : NULL;
+    sctx.books = (const char* const*)icons.books.v;
+    sctx.nbooks = icons.books.count;
+    pctx = &sctx;
+
+    if (f.book_marker) {
+        if (!have_collect) {
+            vlogf(log, "script overlay: book_marker=skipped: %s", sp_script_error());
+        } else if (!sp_script_apply("BookMarker", texts, 5, pctx, NULL, 0)) {
+            vlogf(log, "script overlay: book_marker=skipped: %s", sp_script_error());
+        } else {
+            book_ok = 1;
+            vlogf(log, "script overlay: book_marker=on");
+        }
+    }
+    if (f.cont) {
+        if (!sp_script_apply("Continue", texts, 5, pctx, NULL, 0)) {
+            vlogf(log, "script overlay: continue=skipped: %s", sp_script_error());
+        } else {
+            vlogf(log, "script overlay: continue=on");
+        }
+    }
+    if (f.pause_quit) {
+        if (!sp_script_apply("PauseQuit", texts, 5, pctx, NULL, 0)) {
+            vlogf(log, "script overlay: pause_quit=skipped: %s", sp_script_error());
+        } else {
+            vlogf(log, "script overlay: pause_quit=on");
+        }
+    }
+
+    // The movies: only BookMarker has Swf = true in the reference, and a half-patched marker
+    // (scripts without the tick no-op) must not be served.
+    if (book_ok) {
+        for (i = 0; i < 2; i++) {
+            char why[400];
+
+            why[0] = 0;
+            if (patch_swf(&ctx, i, &swf_kind[i], &swf_data[i], why, sizeof why)) {
+                vlogf(log, "script overlay: %s: patched (%s)", k_swf_names[i],
+                      swf_kind[i] == 1 ? "loose" : "abetterui.dzip");
+            } else {
+                swf_kind[i] = 0;
+                vlogf(log, "script overlay: %s: left as it is (%s); the book marker works "
+                           "without that part", k_swf_names[i], why);
+            }
+        }
+    }
+
+    // Everything the cached archive gets: the changed script entries, the read icons and any
+    // patched movie that only exists inside abetterui.dzip (Branch B).
+    for (i = 0; i < 5; i++) {
+        if (texts[i].text.n != orig[i].n ||
+            (orig[i].n && memcmp(texts[i].text.p, orig[i].p, orig[i].n) != 0)) {
+            if (!entry_list_add(&entries, k_script_entries[i], &texts[i].text)) {
+                vlogf(log, "script overlay: out of memory");
+                goto done;
+            }
+        }
+    }
+    for (i = 0; i < icons.nfiles; i++) {
+        if (!entry_list_add(&entries, icons.files[i].name, &icons.files[i].dds)) {
+            vlogf(log, "script overlay: out of memory");
+            goto done;
+        }
+    }
+    for (i = 0; i < 2; i++) {
+        char entry[MAX_PATH];
+
+        if (swf_kind[i] != 2) continue;
+        if (_snprintf_s(entry, sizeof entry, _TRUNCATE, "globals\\gui\\%s", k_swf_names[i]) < 0) {
+            continue;
+        }
+        if (!entry_list_add(&entries, entry, &swf_data[i])) {
+            vlogf(log, "script overlay: out of memory");
+            goto done;
+        }
+    }
+
+    if (entries.count > 0) {
+        const char** names = (const char**)malloc((size_t)entries.count * sizeof *names);
+        sp_buf* datas = (sp_buf*)malloc((size_t)entries.count * sizeof *datas);
+        wchar_t cached[MAX_PATH], target[MAX_PATH];
+        int wrote = 0;
+
+        if (!names || !datas) {
+            free(names);
+            free(datas);
+            vlogf(log, "script overlay: out of memory");
+            goto done;
+        }
+        for (i = 0; i < entries.count; i++) {
+            names[i] = entries.v[i].name;
+            datas[i] = *entries.v[i].data;
+        }
+        wrote = sp_dzip_write(&scripts, entries.count, names, datas, filetime, &archive);
+        free(names);
+        free(datas);
+        if (!wrote) {
+            vlogf(log, "script overlay: cannot write the patched archive");
+            goto done;
+        }
+        if (!path_join(cached, MAX_PATH, cache_dir, L"base_scripts.dzip") ||
+            !sp_write_file_atomic(cached, &archive)) {
+            vlogf(log, "script overlay: cannot write %ls\\base_scripts.dzip", cache_dir);
+            goto done;
+        }
+        if (!path_join(target, MAX_PATH, cooked, L"base_scripts.dzip")) {
+            vlogf(log, "script overlay: game path too long");
+            goto done;
+        }
+        add_redirect(r, nr, maxr, target, cached);
+        vlogf(log, "script overlay: base_scripts.dzip: %d entries replaced or added",
+              entries.count);
+    }
+
+    for (i = 0; i < 2; i++) {
+        wchar_t cached[MAX_PATH], target[MAX_PATH], name[MAX_PATH];
+
+        if (swf_kind[i] != 1) continue;
+        if (!ascii_to_wide(k_swf_names[i], name, MAX_PATH) ||
+            !path_join(cached, MAX_PATH, cache_dir, name)) {
+            vlogf(log, "script overlay: cache path too long");
+            goto done;
+        }
+        if (!sp_write_file_atomic(cached, &swf_data[i])) {
+            vlogf(log, "script overlay: cannot write %ls", cached);
+            goto done;
+        }
+        if (!loose_swf_path(&ctx, i, target, MAX_PATH) ||
+            !add_redirect(r, nr, maxr, target, cached)) {
+            vlogf(log, "script overlay: game path too long");
+            goto done;
+        }
+    }
+
+    if (!write_key(cache_dir, &key)) {
+        vlogf(log, "script overlay: cannot write the cache key");
+        goto done;
+    }
+    vlogf(log, "script overlay: cache: built in %lu ms (%d redirects)",
+          (unsigned long)(GetTickCount() - started), *nr);
+    ok = 1;
+done:
+    for (i = 0; i < 5; i++) sp_free(&texts[i].text);
+    for (i = 0; i < 5; i++) sp_free(&orig[i]);
+    for (i = 0; i < 2; i++) sp_free(&swf_data[i]);
+    entry_list_free(&entries);
+    sp_dzip_close(&scripts);
+    sp_free(&scripts_raw);
+    sp_free(&collect);
+    sp_free(&archive);
+    icons_free(&icons);
+    ob_free(&key);
+    close_archives(&ctx);
+    if (!ok) {
+        *nr = 0;
+        vlogf(log, "script overlay: build failed - serving the original files");
+    }
+    return ok;
+}

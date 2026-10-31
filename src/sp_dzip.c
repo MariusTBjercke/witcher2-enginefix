@@ -369,3 +369,128 @@ void sp_dzip_close(sp_dzip* z)
     z->table = 0;
     memset(&z->data, 0, sizeof z->data);   // borrowed, never freed here
 }
+
+// ---- file-backed access -------------------------------------------------
+
+// Table cap: pack0.dzip's table is ~2 MB; 64 MB leaves room without risking a bad header
+// pulling a huge allocation out of a 10 GB file.
+#define DZIP_MAX_TABLE (64u * 1024u * 1024u)
+
+static int read_at(HANDLE h, long long at, void* dst, size_t n)
+{
+    LARGE_INTEGER pos;
+    size_t done = 0;
+
+    pos.QuadPart = at;
+    if (!SetFilePointerEx(h, pos, NULL, FILE_BEGIN)) return 0;
+    while (done < n) {
+        DWORD got = 0;
+        DWORD want = (DWORD)((n - done) > 0x1000000 ? 0x1000000 : (n - done));
+        if (!ReadFile(h, (unsigned char*)dst + done, want, &got, NULL) || got == 0) return 0;
+        done += got;
+    }
+    return 1;
+}
+
+int sp_dzip_file_open(const wchar_t* path, sp_dzip_file* out)
+{
+    LARGE_INTEGER size;
+    unsigned char head[DZIP_HEAD];
+    long long table;
+    size_t tail;
+
+    memset(out, 0, sizeof *out);
+    out->h = INVALID_HANDLE_VALUE;
+    if (!path) return 0;
+    out->h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (out->h == INVALID_HANDLE_VALUE) return 0;
+    if (!GetFileSizeEx(out->h, &size) || size.QuadPart < DZIP_HEAD) goto bad;
+    out->size = (long long)size.QuadPart;
+    if (!read_at(out->h, 0, head, DZIP_HEAD)) goto bad;
+    if (rd32(head) != DZIP_MAGIC || rd32(head + 4) != DZIP_VERSION) goto bad;
+    table = (long long)rd64(head + 16);
+    if (table < DZIP_HEAD || table > out->size) goto bad;
+    tail = (size_t)(out->size - table);
+    if (tail == 0 || tail > DZIP_MAX_TABLE) goto bad;
+    out->table.n = DZIP_HEAD + tail;
+    out->table.p = (unsigned char*)malloc(out->table.n);
+    if (!out->table.p) {
+        out->table.n = 0;
+        goto bad;
+    }
+    memcpy(out->table.p, head, DZIP_HEAD);
+    wr64(out->table.p + 16, DZIP_HEAD);             // sp_dzip_open: table follows the header
+    if (!read_at(out->h, table, out->table.p + DZIP_HEAD, tail)) goto bad;
+    if (!sp_dzip_open(&out->table, &out->z)) goto bad;
+    return 1;
+bad:
+    sp_dzip_file_close(out);
+    return 0;
+}
+
+int sp_dzip_file_extract(sp_dzip_file* f, int i, sp_buf* out)
+{
+    const sp_dzip_entry* e;
+    long long blocks, outPos = 0, k;
+    unsigned char* dst = NULL;
+    unsigned char* offs = NULL;
+    unsigned char* comp = NULL;
+    size_t compcap = 0;
+
+    memset(out, 0, sizeof *out);
+    if (!f || f->h == INVALID_HANDLE_VALUE || !f->z.count || i < 0 || i >= f->z.count) return 0;
+    e = &f->z.e[i];
+    if (e->usize == 0) return 1;
+    if (e->offset < DZIP_HEAD || e->csize <= 0 || e->usize < 0) return 0;
+    if ((unsigned long long)e->usize > DZIP_MAX_ENTRY ||
+        (unsigned long long)e->offset > (unsigned long long)f->size ||
+        (unsigned long long)e->csize > (unsigned long long)f->size - (unsigned long long)e->offset)
+        return 0;
+    blocks = (e->usize + DZIP_BLOCK - 1) >> 16;
+    if (blocks * 4 > e->csize) return 0;
+    offs = (unsigned char*)malloc((size_t)blocks * 4);
+    dst = (unsigned char*)malloc((size_t)e->usize);
+    if (!offs || !dst) goto bad;
+    if (!read_at(f->h, e->offset, offs, (size_t)blocks * 4)) goto bad;
+    for (k = 0; k < blocks; k++) {
+        long long start = e->offset + (int)rd32(offs + 4 * k);
+        long long end = (k + 1 < blocks) ? e->offset + (int)rd32(offs + 4 * (k + 1))
+                                         : e->offset + e->csize;
+        long long left = e->usize - outPos;
+        long long want = left < DZIP_BLOCK ? left : DZIP_BLOCK;
+        size_t need;
+
+        if (start < e->offset || end < start || end > e->offset + e->csize) goto bad;
+        need = (size_t)(end - start);
+        if (need > compcap) {
+            unsigned char* grown = (unsigned char*)realloc(comp, need ? need : 1);
+            if (!grown) goto bad;
+            comp = grown;
+            compcap = need;
+        }
+        if (need && !read_at(f->h, start, comp, need)) goto bad;
+        outPos += lzf_block(comp, 0, (long long)need, dst, outPos, want);
+    }
+    if (outPos != e->usize) goto bad;
+    free(offs);
+    free(comp);
+    out->p = dst;
+    out->n = (size_t)e->usize;
+    return 1;
+bad:
+    free(offs);
+    free(comp);
+    free(dst);
+    return 0;
+}
+
+void sp_dzip_file_close(sp_dzip_file* f)
+{
+    if (!f) return;
+    if (f->h != INVALID_HANDLE_VALUE) CloseHandle(f->h);
+    f->h = INVALID_HANDLE_VALUE;
+    f->size = 0;
+    sp_dzip_close(&f->z);
+    sp_free(&f->table);
+}

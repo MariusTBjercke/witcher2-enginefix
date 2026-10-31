@@ -9,6 +9,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,7 @@
 #include "sp_common.h"
 #include "sp_dds.h"
 #include "sp_dzip.h"
+#include "sp_overlay.h"
 #include "sp_script.h"
 #include "sp_swf.h"
 
@@ -1343,6 +1345,97 @@ done:
     return why;
 }
 
+// One archive through the file-backed reader: every entry must equal the in-memory path's
+// bytes. Archives over 4 MB (pack0.dzip is ~10 GB) only get their first entry, so the test
+// never loads a huge file.
+static const char* check_file_archive(const wchar_t* path, const wchar_t* name, long long size,
+                                      int* entries, int* big)
+{
+    const char* why = NULL;
+    sp_dzip_file f;
+    sp_dzip z;
+    sp_buf raw = { NULL, 0 }, a = { NULL, 0 }, b = { NULL, 0 };
+    int i;
+
+    memset(&f, 0, sizeof f);
+    memset(&z, 0, sizeof z);
+    if (!sp_dzip_file_open(path, &f)) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%ls: sp_dzip_file_open failed", name);
+        return g_why;
+    }
+    if (size > 4LL * 1024 * 1024) {
+        CHECK(f.z.count > 0);
+        CHECK(sp_dzip_file_extract(&f, 0, &b));
+        if ((long long)b.n != f.z.e[0].usize) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%ls: entry 0 is %llu of %lld bytes", name,
+                        (unsigned long long)b.n, f.z.e[0].usize);
+            why = g_why;
+            goto done;
+        }
+        (*big)++;
+        goto done;
+    }
+    CHECK(sp_read_file(path, &raw));
+    CHECK(sp_dzip_open(&raw, &z));
+    CHECK(z.count == f.z.count);
+    for (i = 0; i < z.count; i++) {
+        if (strcmp(z.e[i].name, f.z.e[i].name) != 0) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%ls: entry %d name differs", name, i);
+            why = g_why;
+            goto done;
+        }
+        CHECK(sp_dzip_extract(&z, i, &a));
+        CHECK(sp_dzip_file_extract(&f, i, &b));
+        if (a.n != b.n || (a.n && memcmp(a.p, b.p, a.n) != 0)) {
+            _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "%ls: entry %s differs (%llu of %llu bytes)",
+                        name, z.e[i].name, (unsigned long long)b.n, (unsigned long long)a.n);
+            why = g_why;
+            goto done;
+        }
+        sp_free(&a);
+        sp_free(&b);
+        (*entries)++;
+    }
+done:
+    sp_free(&a);
+    sp_free(&b);
+    sp_free(&raw);
+    sp_dzip_close(&z);
+    sp_dzip_file_close(&f);
+    return why;
+}
+
+static const char* test_dzip_file_reader(void)
+{
+    const char* why = NULL;
+    wchar_t pattern[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE find;
+    int archives = 0, entries = 0, big = 0;
+
+    if (!path_join(dir, MAX_PATH, g_game, L"CookedPC")) return "path too long";
+    if (!path_join(pattern, MAX_PATH, g_game, L"CookedPC\\*.dzip")) return "path too long";
+    find = FindFirstFileW(pattern, &fd);
+    if (find == INVALID_HANDLE_VALUE) return "no CookedPC\\*.dzip found";
+    do {
+        long long size = ((long long)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+
+        if (!path_join(path, MAX_PATH, dir, fd.cFileName)) {
+            why = "path too long";
+            break;
+        }
+        why = check_file_archive(path, fd.cFileName, size, &entries, &big);
+        if (why) break;
+        archives++;
+    } while (FindNextFileW(find, &fd));
+    FindClose(find);
+    if (!why) {
+        printf("  %d archives, %d entries compared with the file reader, %d large archive(s)\n",
+               archives, entries, big);
+    }
+    return why;
+}
+
 // ---- harness ------------------------------------------------------------
 
 typedef const char* (*test_fn)(void);
@@ -1372,6 +1465,7 @@ static const test_case k_tests[] = {
     { "script_collect",    test_script_collect,    0 },
     { "dzip_real_hash",    test_dzip_real_hash,    1 },
     { "dzip_real_extract", test_dzip_real_extract, 1 },
+    { "dzip_file",         test_dzip_file_reader,  1 },
     { "swf_real",          test_swf_real,          1 },
     { "dds_real_overlay",  test_dds_real_overlay,  1 },
     { "script_real",       test_script_real,       1 },
@@ -1402,8 +1496,54 @@ static int usage(void)
 {
     fprintf(stderr,
             "usage: patchtest test [--game \"<game>\"]\n"
-            "       patchtest build <game> <out>   (Task 6)\n");
+            "       patchtest build <game> <out>\n");
     return 2;
+}
+
+// The overlay's log sink: one line per message, like the DLL's logf_.
+static void log_line(const char* fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+    putchar('\n');
+    fflush(stdout);
+}
+
+// build <game> <out>: the overlay for all three features, as the golden test runs it.
+static int run_build(const char* game_arg, const char* out_arg)
+{
+    static const int k_redirects = 8;
+    wchar_t game[MAX_PATH], out[MAX_PATH];
+    sp_redirect redirects[8];
+    sp_features f;
+    FILETIME ft;
+    ULARGE_INTEGER now;
+    DWORD started;
+    int nr = 0, i, ok;
+
+    if (MultiByteToWideChar(CP_ACP, 0, game_arg, -1, game, MAX_PATH) <= 0 ||
+        MultiByteToWideChar(CP_ACP, 0, out_arg, -1, out, MAX_PATH) <= 0) {
+        fprintf(stderr, "build: bad path\n");
+        return 2;
+    }
+    f.book_marker = 1;
+    f.cont = 1;
+    f.pause_quit = 1;
+    GetSystemTimeAsFileTime(&ft);
+    now.LowPart = ft.dwLowDateTime;
+    now.HighPart = ft.dwHighDateTime;
+    started = GetTickCount();
+    ok = sp_overlay_build(game, out, f, (long long)now.QuadPart, redirects, &nr, k_redirects,
+                          log_line);
+    for (i = 0; i < nr; i++) {
+        printf("  redirect: %ls -> %ls\n", redirects[i].target, redirects[i].cached);
+    }
+    printf("build: %s, %d redirect%s, %lu ms\n", ok ? "ok" : "failed", nr, nr == 1 ? "" : "s",
+           (unsigned long)(GetTickCount() - started));
+    return ok ? 0 : 1;
 }
 
 int main(int argc, char** argv)
@@ -1426,8 +1566,8 @@ int main(int argc, char** argv)
         return run_tests();
     }
     if (strcmp(argv[1], "build") == 0) {
-        fprintf(stderr, "build: not implemented yet (Task 6)\n");
-        return 2;
+        if (argc != 4) return usage();
+        return run_build(argv[2], argv[3]);
     }
     return usage();
 }
