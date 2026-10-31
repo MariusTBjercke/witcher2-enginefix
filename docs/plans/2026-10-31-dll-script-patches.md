@@ -464,7 +464,7 @@ On start, before hooks serve anything: if `<game>\Witcher2EngineFix_Optional\Scr
   `check_texts.py` was kept by switching it to `src/scriptpatches/book_texts.ws` (it read the
   `.ps1`); the golden test went with the `.ps1` (last pass `397b0dc`).
 - [ ] **Step 3:** owner uploads to Nexus as the new main file; check the scan. Target: at or near the W1 level (≤ 1-2 engines, file not quarantined). Record the result in `docs/local/nexus.md`.
-- [ ] **Step 4: Commit** `0.6.0: script patches built into the DLL, no scripts in the release` and a GitHub release per `docs/conventions.md` (owner's go-ahead for the push and release).
+- [x] **Step 4: Commit** `0.6.0: script patches built into the DLL, no scripts in the release` (`052b8de`; main fast-forwarded and pushed, GitHub release v0.6.0 published 2026-10-31 with the zip, SHA-256 5044fdc9...) and a GitHub release per `docs/conventions.md` (owner's go-ahead for the push and release).
 
 ## Risks
 
