@@ -1689,8 +1689,13 @@ static HANDLE WINAPI hook_FindFirstFileA(LPCSTR pattern, LPWIN32_FIND_DATAA data
 
 static HANDLE WINAPI hook_FindFirstFileW(LPCWSTR pattern, LPWIN32_FIND_DATAW data)
 {
-    HANDLE h = g_origFindFirstFileW(pattern, data);
-    DWORD err = GetLastError();
+    HANDLE h;
+    DWORD err;
+
+    // Before the game's CookedPC\*.dzip listing: restore old on-disk patches, build the overlay.
+    if (g_scriptHooks) sp_hooks_prepare(pattern);
+    h = g_origFindFirstFileW(pattern, data);
+    err = GetLastError();
     if (g_scriptHooks && h != INVALID_HANDLE_VALUE && data) sp_hooks_find(pattern, data);
     if (cfg_file_trace && ft_match(pattern)) {
         ft_log("FindFirstFileW \"%ls\" -> %s handle=%08X name=\"%ls\" size=%lld (err %lu)",

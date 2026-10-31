@@ -431,4 +431,64 @@ accepted with its new size - then the script compilation error above (icons in
 (460 entries, 152 icons in `dlc_finishers.dzip`, both movies), `base_scripts.dzip` holds only
 the 5 `.ws` changes, the carrier keeps its `.csv` byte for byte.
 
-The in-game check is pending: start test 2 and the plan's Task 7 Step 3.
+**Start test 2 (2026-10-31, owner, commit `d1dcb26`)** passed: main menu, cache built in
+109 ms, all three features on, `base_scripts.dzip`, `dlc_finishers.dzip` and `ui_trade.swf`
+served from the cache; book markers, menu buttons and saving checked in game. The rest of
+Step 3 (storage, each ini key `0`, deleting the DLL) is bundled with Task 8's owner check just
+before the release.
+
+## Migration from the old on-disk patches (Task 8)
+
+Owner decision 3: the DLL cleans up a 0.4/0.5 install itself, so a user who once ran the old
+`Install.bat` does not have to run `Uninstall.bat` first (the overlay refuses an archive that
+already carries our markers, so without this they would get the old patches forever).
+
+`src/sp_migrate.c` ports `Read-Manifest` and `Restore-Leaf` from `ScriptPatches.ps1`. The
+manifest (`<game>\Witcher2EngineFix_Optional\ScriptPatches\backup\manifest.txt`, the same
+`leaf<TAB>mode<TAB>sha256` format in 0.4 and 0.5) decides what is written and deleted in the
+game folder, so only the four leaves that patcher ever wrote are accepted:
+
+| Leaf | Mode | Path under `CookedPC` |
+|---|---|---|
+| `base_scripts.dzip` | replaced | `base_scripts.dzip` |
+| `ui_trade.swf`, `ui_storage.swf` | replaced or created | `globals\gui\<leaf>` |
+| `w2ef_read` | folder | `globals\gui\icons\items\w2ef_read` |
+
+Per leaf, as `Restore-Leaf`: a missing file is skipped; the icon folder loses its files and is
+removed; a file whose SHA-256 still equals the manifest's is restored from the backup
+(`sp_write_file_atomic`) or, when the old patcher created it, deleted. A file that equals its
+backup copy already counts as restored (a retry after a failed rename). Anything else - a file
+another mod or an update changed since, a leaf outside the table - is left as it is and logged.
+
+Differences from the reference: the backup is renamed to `backup.restored-by-dll` (a numbered
+variant if that exists) instead of deleted, so unrestored originals stay available and the
+migration runs once; an I/O error keeps the backup so the next start retries. SHA-256 comes from
+`BCryptCreateHash`/`BCryptHashData`/`BCryptFinishHash` (Windows 7 has no `BCryptHash`).
+
+**When it runs.** In `sp_hooks.c`'s `build_once`, before the overlay build, under the build
+lock. `hook_FindFirstFileW` calls `sp_hooks_prepare` before the original `FindFirstFileW`, so
+for the game's first `CookedPC` access (the `*.dzip` listing at ~+235 ms, Task 1) the files are
+restored and the overlay is built before the game lists or opens anything. Restored but
+partial, or failed: `script patches: off for this start - ...`, no redirects at all (a changed
+file may still hold our markers; the overlay's guard would refuse it too). The next start finds
+no manifest and builds normally. When every feature is `0` the hooks are not installed and
+nothing is migrated.
+
+Log on a full migration:
+
+```
+migrate: old script patches found (<game>\Witcher2EngineFix_Optional\ScriptPatches\backup, 4 entries)
+migrate: restored base_scripts.dzip
+migrate: restored ui_trade.swf
+migrate: restored ui_storage.swf
+migrate: removed the read-book icons (152 files)
+migrate: restored 3 files, removed w2ef_read
+migrate: old backup kept as <game>\Witcher2EngineFix_Optional\ScriptPatches\backup.restored-by-dll
+```
+
+Offline verification (2026-10-31): `sptest` test `migrate` (full restore, a second old install,
+already restored, a changed file, a leaf outside the table, no manifest, SHA-256 test vector);
+23 tests pass. `golden.py` now also runs `sptest migrate` on the reference's patched layout with
+the reference's own backup: the three files equal the originals byte for byte, the 152 icons and
+their folder are gone, the backup is renamed - `GOLDEN OK`. The owner check on the real install
+(plan Task 8 Step 5) is pending.

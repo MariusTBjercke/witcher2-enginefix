@@ -9,7 +9,9 @@ layout and build\\sptest.exe's overlay build on another, then compares the resul
   * the generated read-book icons, name for name and byte for byte (archive entries for the
     DLL build, loose files for the reference);
   * ui_trade.swf and ui_storage.swf byte for byte (cached loose file or archive entry);
-  * a second build on unchanged inputs, which must reuse the cache and touch nothing.
+  * a second build on unchanged inputs, which must reuse the cache and touch nothing;
+  * the migration (plan Task 8): `sptest migrate` on the reference's patched layout with the
+    reference's backup must give back the unpatched files and remove the icon folder.
 
 Usage: python -I tools\\patchtest\\golden.py "<game>" "<scratch>"
 
@@ -286,7 +288,8 @@ def main(argv):
     ref = scratch / "ref"
     dll = scratch / "dll"
     out = scratch / "out"
-    for path in (ref, dll, out, scratch / "backup", scratch / "ref-patch.ps1"):
+    for path in (ref, dll, out, scratch / "backup", scratch / "backup.restored-by-dll",
+                 scratch / "ref-patch.ps1"):
         if path.is_dir():
             shutil.rmtree(path)
         elif path.exists():
@@ -296,6 +299,10 @@ def main(argv):
     # Two identical layouts: one for the reference, one for the DLL build.
     make_layout(ref, game, source, source == backup)
     make_layout(dll, game, source, source == backup)
+    gui = pathlib.Path("globals") / "gui"
+    originals = {rel: (ref / "CookedPC" / rel).read_bytes() for rel in (
+        pathlib.Path("base_scripts.dzip"), gui / "ui_trade.swf", gui / "ui_storage.swf")
+        if (ref / "CookedPC" / rel).is_file()}
 
     print("\n== reference: ScriptPatches.ps1 -Action Install -Features All ==")
     ref_copy = scratch / "ref-patch.ps1"
@@ -328,6 +335,22 @@ def main(argv):
     after = snapshot(out)
     if before != after:
         problems.append("the second build changed files under the cache")
+
+    # Migration: the old patcher's install undone by the DLL code, from its own backup.
+    print("\n== migrate: build\\sptest.exe migrate (reference layout, reference backup) ==")
+    text = run([str(SPTEST), "migrate", str(ref), str(scratch / "backup")], "the migration")
+    for line in text.splitlines():
+        print("  " + line)
+    for rel, data in originals.items():
+        if (ref / "CookedPC" / rel).read_bytes() != data:
+            problems.append(f"migrate: {rel} is not the original again")
+    icon_dir = ref / "CookedPC" / gui / "icons" / "items" / "w2ef_read"
+    if icon_dir.exists():
+        problems.append("migrate: the read-icon folder is still there")
+    if (scratch / "backup").exists() or not (scratch / "backup.restored-by-dll").is_dir():
+        problems.append("migrate: the backup was not renamed to backup.restored-by-dll")
+    if not problems:
+        print(f"  {len(originals)} files back to the originals, icon folder removed")
 
     if problems:
         print("\nDIFFERENCES")

@@ -4,6 +4,7 @@
 // Usage:
 //   patchtest test [--game "<game>"]     run the unit tests
 //   patchtest build <game> <out>         build the overlay (Task 6)
+//   patchtest migrate <game> <backup>    restore old on-disk patches from <backup> (Task 8)
 //
 // One PASS/FAIL/SKIP line per test; the exit code is the number of failures.
 
@@ -17,6 +18,7 @@
 #include "sp_common.h"
 #include "sp_dds.h"
 #include "sp_dzip.h"
+#include "sp_migrate.h"
 #include "sp_overlay.h"
 #include "sp_script.h"
 #include "sp_swf.h"
@@ -800,6 +802,198 @@ done:
     return why;
 }
 
+// ---- migration from the old on-disk patches (Task 8) ----------------------
+
+static int mg_mkdirs(const wchar_t* dir)
+{
+    wchar_t p[MAX_PATH];
+    size_t i;
+
+    if (wcscpy_s(p, MAX_PATH, dir) != 0) return 0;
+    for (i = 3; p[i]; i++) {
+        if (p[i] != L'\\') continue;
+        p[i] = 0;
+        CreateDirectoryW(p, NULL);
+        p[i] = L'\\';
+    }
+    return CreateDirectoryW(p, NULL) || GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
+static int mg_put(const wchar_t* root, const wchar_t* rel, const char* text)
+{
+    wchar_t path[MAX_PATH], dir[MAX_PATH], *slash;
+    sp_buf b;
+
+    if (!path_join(path, MAX_PATH, root, rel) || wcscpy_s(dir, MAX_PATH, path) != 0) return 0;
+    slash = wcsrchr(dir, L'\\');
+    if (!slash) return 0;
+    *slash = 0;
+    if (!mg_mkdirs(dir)) return 0;
+    b.p = (unsigned char*)text;
+    b.n = strlen(text);
+    return sp_write_file_atomic(path, &b);
+}
+
+// 1 = the file holds exactly `text`, 0 = different, -1 = missing.
+static int mg_is(const wchar_t* root, const wchar_t* rel, const char* text)
+{
+    wchar_t path[MAX_PATH];
+    sp_buf b;
+    int same;
+
+    if (!path_join(path, MAX_PATH, root, rel) || !sp_read_file(path, &b)) return -1;
+    same = b.n == strlen(text) && (b.n == 0 || memcmp(b.p, text, b.n) == 0);
+    sp_free(&b);
+    return same;
+}
+
+static int mg_exists(const wchar_t* root, const wchar_t* rel)
+{
+    wchar_t path[MAX_PATH];
+
+    return path_join(path, MAX_PATH, root, rel) &&
+           GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES;
+}
+
+// Deletes a scratch tree (only ever called on the temp folder this test made).
+static void mg_rmtree(const wchar_t* dir)
+{
+    wchar_t pattern[MAX_PATH], path[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE find;
+
+    if (!path_join(pattern, MAX_PATH, dir, L"*")) return;
+    find = FindFirstFileW(pattern, &fd);
+    if (find != INVALID_HANDLE_VALUE) {
+        do {
+            if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+            if (!path_join(path, MAX_PATH, dir, fd.cFileName)) continue;
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) mg_rmtree(path);
+            else DeleteFileW(path);
+        } while (FindNextFileW(find, &fd));
+        FindClose(find);
+    }
+    RemoveDirectoryW(dir);
+}
+
+static void mg_quiet(const char* fmt, ...)
+{
+    (void)fmt;
+}
+
+// What the old Install leaves: patched files in CookedPC, originals plus manifest in the
+// backup. `extra` is appended to the manifest as is.
+static int mg_layout(const wchar_t* root, const char* extra)
+{
+    static const char* const patched[3] = { "patched scripts", "patched trade",
+                                            "patched storage" };
+    char hash[3][65], manifest[1024];
+    int i;
+
+    for (i = 0; i < 3; i++) {
+        sp_buf b;
+
+        b.p = (unsigned char*)patched[i];
+        b.n = strlen(patched[i]);
+        if (!sp_sha256_hex(&b, hash[i])) return 0;
+    }
+    if (_snprintf_s(manifest, sizeof manifest, _TRUNCATE,
+                    "base_scripts.dzip\treplaced\t%s\r\nui_trade.swf\treplaced\t%s\r\n"
+                    "ui_storage.swf\tcreated\t%s\r\nw2ef_read\tfolder\t2 files\r\n%s",
+                    hash[0], hash[1], hash[2], extra ? extra : "") < 0) {
+        return 0;
+    }
+    return mg_put(root, L"game\\CookedPC\\base_scripts.dzip", patched[0]) &&
+           mg_put(root, L"game\\CookedPC\\globals\\gui\\ui_trade.swf", patched[1]) &&
+           mg_put(root, L"game\\CookedPC\\globals\\gui\\ui_storage.swf", patched[2]) &&
+           mg_put(root, L"game\\CookedPC\\globals\\gui\\icons\\items\\w2ef_read\\a_64x64.dds",
+                  "a") &&
+           mg_put(root, L"game\\CookedPC\\globals\\gui\\icons\\items\\w2ef_read\\b_64x64.dds",
+                  "b") &&
+           mg_put(root, L"backup\\base_scripts.dzip", "original scripts") &&
+           mg_put(root, L"backup\\ui_trade.swf", "original trade") &&
+           mg_put(root, L"backup\\manifest.txt", manifest);
+}
+
+// sp_migrate_run against Restore-Leaf on a scratch layout: a full restore, a retry after the
+// files were already restored, a file another mod changed since, a leaf the old patcher never
+// writes, and no manifest at all.
+static const char* test_migrate(void)
+{
+    const char* why = NULL;
+    wchar_t tmp[MAX_PATH], root[MAX_PATH], game[MAX_PATH], backup[MAX_PATH];
+    sp_buf abc;
+    char hex[65];
+
+    root[0] = 0;
+    abc.p = (unsigned char*)"abc";
+    abc.n = 3;
+    CHECK(sp_sha256_hex(&abc, hex));
+    CHECK(!strcmp(hex, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
+
+    if (GetTempPathW(MAX_PATH, tmp) == 0) return "GetTempPathW failed";
+    CHECK(_snwprintf_s(root, MAX_PATH, _TRUNCATE, L"%spatchtest-migrate-%lu", tmp,
+                       GetCurrentProcessId()) >= 0);
+    CHECK(path_join(game, MAX_PATH, root, L"game"));
+    CHECK(path_join(backup, MAX_PATH, root, L"backup"));
+
+    // Full restore: replaced files back, the created movie and the icon folder gone, the
+    // backup renamed so the next start does nothing.
+    mg_rmtree(root);
+    CHECK(mg_layout(root, NULL));
+    CHECK(sp_migrate_run(game, backup, mg_quiet) == SP_MIGRATE_DONE);
+    CHECK(mg_is(root, L"game\\CookedPC\\base_scripts.dzip", "original scripts") == 1);
+    CHECK(mg_is(root, L"game\\CookedPC\\globals\\gui\\ui_trade.swf", "original trade") == 1);
+    CHECK(!mg_exists(root, L"game\\CookedPC\\globals\\gui\\ui_storage.swf"));
+    CHECK(!mg_exists(root, L"game\\CookedPC\\globals\\gui\\icons\\items\\w2ef_read"));
+    CHECK(mg_exists(root, L"game\\CookedPC\\globals\\gui\\icons\\items"));
+    CHECK(!mg_exists(root, L"backup"));
+    CHECK(mg_is(root, L"backup.restored-by-dll\\ui_trade.swf", "original trade") == 1);
+    CHECK(sp_migrate_run(game, backup, mg_quiet) == SP_MIGRATE_NONE);
+
+    // A second old install later: the earlier renamed backup is kept, the new one gets -2.
+    CHECK(mg_layout(root, NULL));
+    CHECK(sp_migrate_run(game, backup, mg_quiet) == SP_MIGRATE_DONE);
+    CHECK(mg_exists(root, L"backup.restored-by-dll"));
+    CHECK(mg_exists(root, L"backup.restored-by-dll-2"));
+
+    // A retry after a failed rename: the files are the originals already.
+    mg_rmtree(root);
+    CHECK(mg_layout(root, NULL));
+    CHECK(mg_put(root, L"game\\CookedPC\\base_scripts.dzip", "original scripts"));
+    CHECK(mg_put(root, L"game\\CookedPC\\globals\\gui\\ui_trade.swf", "original trade"));
+    CHECK(sp_migrate_run(game, backup, mg_quiet) == SP_MIGRATE_DONE);
+    CHECK(mg_is(root, L"game\\CookedPC\\base_scripts.dzip", "original scripts") == 1);
+    CHECK(!mg_exists(root, L"game\\CookedPC\\globals\\gui\\ui_storage.swf"));
+
+    // Another mod replaced the trade screen since: it stays, the rest is restored.
+    mg_rmtree(root);
+    CHECK(mg_layout(root, NULL));
+    CHECK(mg_put(root, L"game\\CookedPC\\globals\\gui\\ui_trade.swf", "another mod's trade"));
+    CHECK(sp_migrate_run(game, backup, mg_quiet) == SP_MIGRATE_PARTIAL);
+    CHECK(mg_is(root, L"game\\CookedPC\\globals\\gui\\ui_trade.swf", "another mod's trade") ==
+          1);
+    CHECK(mg_is(root, L"game\\CookedPC\\base_scripts.dzip", "original scripts") == 1);
+    CHECK(mg_exists(root, L"backup.restored-by-dll\\ui_trade.swf"));
+
+    // A leaf the old patcher never writes is never touched.
+    mg_rmtree(root);
+    CHECK(mg_layout(root, "..\\..\\keep.txt\tcreated\t00\r\n"));
+    CHECK(mg_put(root, L"keep.txt", "keep"));
+    CHECK(sp_migrate_run(game, backup, mg_quiet) == SP_MIGRATE_PARTIAL);
+    CHECK(mg_is(root, L"keep.txt", "keep") == 1);
+    CHECK(mg_is(root, L"game\\CookedPC\\base_scripts.dzip", "original scripts") == 1);
+
+    // No manifest: nothing installed, nothing done.
+    mg_rmtree(root);
+    CHECK(mg_put(root, L"game\\CookedPC\\base_scripts.dzip", "patched scripts"));
+    CHECK(sp_migrate_run(game, backup, mg_quiet) == SP_MIGRATE_NONE);
+    CHECK(mg_is(root, L"game\\CookedPC\\base_scripts.dzip", "patched scripts") == 1);
+done:
+    if (root[0]) mg_rmtree(root);
+    return why;
+}
+
 // Every CookedPC\*.dzip of the install opens: magic, version 2 and the entry-table hash.
 // Only the header and the table are read (pack0.dzip is ~10 GB).
 static const char* test_dzip_real_hash(void)
@@ -1451,6 +1645,7 @@ static const test_case k_tests[] = {
     { "dzip_replace",      test_dzip_replace,      0 },
     { "lzf_backrefs",      test_lzf_backrefs,      0 },
     { "common_io",         test_common_io,         0 },
+    { "migrate",           test_migrate,           0 },
     { "swf_state",         test_swf_state,         0 },
     { "swf_unknown",       test_swf_unknown,       0 },
     { "swf_uncompressed",  test_swf_uncompressed,  0 },
@@ -1496,7 +1691,8 @@ static int usage(void)
 {
     fprintf(stderr,
             "usage: patchtest test [--game \"<game>\"]\n"
-            "       patchtest build <game> <out>\n");
+            "       patchtest build <game> <out>\n"
+            "       patchtest migrate <game> <backup>\n");
     return 2;
 }
 
@@ -1569,6 +1765,20 @@ int main(int argc, char** argv)
     if (strcmp(argv[1], "build") == 0) {
         if (argc != 4) return usage();
         return run_build(argv[2], argv[3]);
+    }
+    if (strcmp(argv[1], "migrate") == 0) {
+        wchar_t game[MAX_PATH], backup[MAX_PATH];
+        int r;
+
+        if (argc != 4) return usage();
+        if (MultiByteToWideChar(CP_ACP, 0, argv[2], -1, game, MAX_PATH) <= 0 ||
+            MultiByteToWideChar(CP_ACP, 0, argv[3], -1, backup, MAX_PATH) <= 0) {
+            fprintf(stderr, "migrate: bad path\n");
+            return 2;
+        }
+        r = sp_migrate_run(game, backup, log_line);
+        printf("migrate: result %d\n", r);
+        return r == SP_MIGRATE_DONE ? 0 : 1;
     }
     return usage();
 }

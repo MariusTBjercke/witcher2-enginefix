@@ -20,6 +20,11 @@ int sp_hooks_start(const wchar_t* game, const wchar_t* cache, int book_marker, i
 // with the cached copy when the absolute `path` is redirected. 1 = serve `out` instead.
 int sp_hooks_path(const wchar_t* path, wchar_t* out, size_t cap);
 
+// FindFirstFileW, before the original call: when the game lists `<cooked>\*.dzip` (its first
+// CookedPC access), restores old on-disk patches (sp_migrate) and builds the overlay, so the
+// listing and every later open already see the final files.
+void sp_hooks_prepare(LPCWSTR pattern);
+
 // FindFirstFileW/FindNextFileW support: builds the overlay when the game lists
 // `<cooked>\*.dzip` (that find data carries the archives' sizes) and answers the cached file's
 // size and times for an entry named like a redirected archive (base_scripts.dzip, the icon

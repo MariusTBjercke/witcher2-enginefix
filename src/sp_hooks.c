@@ -2,6 +2,7 @@
 // first hit of a target, under a critical section: the game waits for that one build (a few
 // hundred milliseconds on the first start only) and every later start reuses the cache.
 #include "sp_hooks.h"
+#include "sp_migrate.h"
 #include "sp_overlay.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,20 +97,40 @@ static int build_once(void)
     if (g_build == 0) {
         FILETIME ft;
         ULARGE_INTEGER now;
-        int ok;
+        wchar_t backup[MAX_PATH];
+        int ok, m = SP_MIGRATE_NONE;
 
-        GetSystemTimeAsFileTime(&ft);
-        now.LowPart = ft.dwLowDateTime;
-        now.HighPart = ft.dwHighDateTime;
+        // Old on-disk patches first (plan Task 8): the game has not listed or opened any
+        // archive yet, so the restored originals are what it sees.
+        if (path_join(backup, MAX_PATH, g_game,
+                      L"Witcher2EngineFix_Optional\\ScriptPatches\\backup")) {
+            m = sp_migrate_run(g_game, backup, g_log);
+        }
         g_nredirects = 0;
-        ok = sp_overlay_build(g_game, g_cache, g_features, (long long)now.QuadPart, g_redirects,
-                              &g_nredirects, SP_MAX_REDIRECTS, g_log);
-        g_build = ok ? 1 : -1;
-        if (g_log) {
-            char line[900];
+        if (m == SP_MIGRATE_PARTIAL || m == SP_MIGRATE_FAILED) {
+            g_build = -1;
+            if (g_log) {
+                g_log("script patches: off for this start - %s",
+                      m == SP_MIGRATE_PARTIAL
+                          ? "some files of the old on-disk patches were changed since (see "
+                            "migrate lines); the next start patches what is safe"
+                          : "the old on-disk patches could not be restored (see migrate "
+                            "lines); the next start tries again");
+            }
+        } else {
+            GetSystemTimeAsFileTime(&ft);
+            now.LowPart = ft.dwLowDateTime;
+            now.HighPart = ft.dwHighDateTime;
+            ok = sp_overlay_build(g_game, g_cache, g_features, (long long)now.QuadPart,
+                                  g_redirects, &g_nredirects, SP_MAX_REDIRECTS, g_log);
+            g_build = ok ? 1 : -1;
+            if (g_log) {
+                char line[900];
 
-            _snprintf_s(line, sizeof line, _TRUNCATE, "script patches: %s", sp_overlay_status());
-            g_log("%s", line);
+                _snprintf_s(line, sizeof line, _TRUNCATE, "script patches: %s",
+                            sp_overlay_status());
+                g_log("%s", line);
+            }
         }
     }
     state = g_build;
@@ -153,6 +174,11 @@ int sp_hooks_path(const wchar_t* path, wchar_t* out, size_t cap)
     if (!cached) return 0;
     if (!wide_copy(out, cap, cached)) return 0;
     return 1;
+}
+
+void sp_hooks_prepare(LPCWSTR pattern)
+{
+    if (g_active && g_build == 0 && is_archive_glob(pattern)) build_once();
 }
 
 int sp_hooks_find(LPCWSTR pattern, WIN32_FIND_DATAW* data)

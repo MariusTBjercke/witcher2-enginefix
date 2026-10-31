@@ -419,9 +419,24 @@ Hook behaviour:
 
 On start, before hooks serve anything: if `<game>\Witcher2EngineFix_Optional\ScriptPatches\backup\manifest.txt` exists, port `Restore-Leaf`/Uninstall (ScriptPatches.ps1 lines 1396-1480): for each `replaced` leaf whose current file still has the manifest's SHA-256, copy the backup back (atomic); `created` leaves are deleted; the `w2ef_read` folder is removed; then rename `backup` to `backup.restored-by-dll`. A leaf that changed since (another mod) is left alone, logged, and script patches are switched off for this start (its text may contain our markers; the Task 5 guard also refuses it). SHA-256 via `BCryptHash` (bcrypt.lib), no own crypto.
 
-- [ ] **Step 1: Failing test** in `patchtest` (`migrate` on a scratch layout made by running the old `Install.bat` logic, i.e. `ScriptPatches.ps1 -Action Install -Features All -GameDir <scratch>`): after `sp_migrate_run`, every file equals the pre-install copy byte for byte, `w2ef_read` gone, backup renamed. Second case: one patched file changed afterwards → it stays, result "partial", patches off.
-- [ ] **Step 2-4:** FAIL → implement → PASS.
-- [ ] **Step 5: Owner check** on the real install (owner keeps a manual copy of `CookedPC\base_scripts.dzip` and `CookedPC\globals\gui\ui_trade.swf`/`ui_storage.swf` first): reinstall 0.5's patches with the old `Install.bat`, start with the new DLL → log `migrate: restored 3 files, removed w2ef_read`, game works with the DLL patches.
+- [x] **Step 1: Failing test** in `patchtest` (`migrate` on a scratch layout made by running the old `Install.bat` logic, i.e. `ScriptPatches.ps1 -Action Install -Features All -GameDir <scratch>`): after `sp_migrate_run`, every file equals the pre-install copy byte for byte, `w2ef_read` gone, backup renamed. Second case: one patched file changed afterwards → it stays, result "partial", patches off.
+- [x] **Step 2-4:** FAIL → implement → PASS.
+
+  Done 2026-10-31: `src/sp_migrate.{c,h}` (SHA-256 through `BCryptCreateHash`/`BCryptHashData`/
+  `BCryptFinishHash`, which unlike `BCryptHash` exist on Windows 7; `#pragma comment(lib,
+  "bcrypt.lib")`, so neither build script changed). It accepts only the four leaves the old
+  patcher writes, treats a file that already equals its backup as restored (a retry after a
+  failed rename), keeps the backup on an I/O error so the next start retries, and renames it to
+  `backup.restored-by-dll` (or `-2`, ...) otherwise. `sp_hooks.c` runs it in `build_once` before
+  the overlay build, and `hook_FindFirstFileW` now calls `sp_hooks_prepare` *before* the
+  original call, so the restore and the build happen before the game's first `CookedPC\*.dzip`
+  listing (hook signatures unchanged). Partial or failed: `script patches: off for this start`,
+  no redirects. Tests: `migrate` in `sptest` on a scratch layout (full restore, a second old
+  install, already restored, a changed file, a leaf outside the four, no manifest, and the
+  SHA-256 `"abc"` vector) - 23 tests pass; the step-1 case with the real reference runs in
+  `golden.py` (`sptest migrate` on the reference's patched layout with its own backup: the three
+  files equal the originals, 152 icons removed, backup renamed) - `GOLDEN OK`.
+- [ ] **Step 5: Owner check** (deferred: the owner bundles it with the other in-game checks just before the 0.6.0 release) on the real install (owner keeps a manual copy of `CookedPC\base_scripts.dzip` and `CookedPC\globals\gui\ui_trade.swf`/`ui_storage.swf` first): reinstall 0.5's patches with the old `Install.bat`, start with the new DLL → log `migrate: restored 3 files, removed w2ef_read`, game works with the DLL patches.
 - [ ] **Step 6: Commit** `0.6.0 work: restore old on-disk script patches once`.
 
 ### Task 9: Release 0.6.0 without scripts
