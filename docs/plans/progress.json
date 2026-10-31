@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-31T20:48:00+01:00",
+  "updated": "2026-10-31T19:50:00+01:00",
   "owner": "dsh",
   "items": [
     {
@@ -163,7 +163,7 @@
       "id": "dll-script-patches",
       "title": "Apply the script patches from the DLL (no .bat/.ps1 in the release)",
       "status": "in_progress",
-      "owner": "unassigned",
+      "owner": "owner",
       "files": [
         "docs/plans/2026-10-31-dll-script-patches.md",
         "docs/fixes/dll-script-patches.md",

@@ -389,7 +389,11 @@ Hook behaviour:
   continue=on pause_quit=on cache=built N ms`, and one `script patches: CreateFileW "... ->
   cached copy` per target.
 - [ ] **Step 3: Owner in-game check** (same as `docs/fixes/shop-book-read-marker.md` "Final form" and `menu-buttons.md`): inventory statuses/tooltip/refresh after reading; trade and storage ticks both sides; loot window icon + `(Nothing new)`; container preview icon; Continue; pause-menu Quit. Then each ini key `0` → that feature gone, others still there. Then delete `bin\dinput8.dll` → vanilla game (uninstall check).
-- [ ] **Step 4: Commit** `0.6.0 work: script patches applied by the DLL`.
+- [x] **Step 4: Commit** `0.6.0 work: script patches applied by the DLL`.
+
+  Committed as `ff69149` after the offline verification (build, 22 tests, `GOLDEN OK`, local
+  hooks harness) but before the owner start test; Steps 2-3 are the validation gate and a
+  failing test is fixed forward in a follow-up commit.
 
 ### Task 8: Migration from 0.4/0.5 on-disk patches
 
