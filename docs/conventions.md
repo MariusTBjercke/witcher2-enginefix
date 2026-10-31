@@ -25,6 +25,9 @@ branch only for an experiment that may be thrown away.
   `README_Witcher2EngineFix.txt` and `LICENSE_Witcher2EngineFix.txt`).
 - Release notes: what the player notices, how to turn each part off, how to
   upgrade, and the exact game version tested.
+- Nexus starts at 0.5.0 with one cumulative initial changelog entry. Earlier
+  GitHub versions remain in `CHANGELOG.md`; do not create retrospective Nexus
+  releases for them. Nexus page and file versions must match the uploaded zip.
 
 ## Fixes and evidence
 

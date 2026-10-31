@@ -24,7 +24,7 @@ Each DLL part can be switched off in `witcher2_enginefix.ini`; the interior maps
 
 | | What you notice |
 |---|---|
-| **Shop book marker** | At merchants and in the storage chest the "already read" overlay on a book normally only means "you carry a copy". It now also shows for books you have read and for books whose bestiary knowledge and journal entries you already have. The list says `Read`, `Nothing new` or `Unread` after the item type, and the tooltip lists what the book would still teach you. In 12 languages. |
+| **Book read markers** | Books show `Read`, `Nothing new` or `Unread` in the inventory, trade and storage lists, with a tooltip describing what reading them would still teach you. A tick marks books you have read; at merchants and in storage it also keeps the game's carried-copy meaning. `Nothing new` is text only, since the book itself is still unread. Reading a book refreshes the inventory immediately. Looted books show the read tick too; the loot window shows `(Nothing new)` after the name where applicable. In 12 languages. |
 | **Continue** | The main menu gets a Continue button (the game's own translated label) that loads your newest save. |
 | **Quit in the pause menu** | The pause menu gets the game's Quit button, with a confirmation, next to "Exit to main menu". |
 
@@ -48,12 +48,12 @@ The higher levels cost GPU time. They do not change how far away the game spawns
 
 ## Installation
 
-1. Download `Witcher2EngineFix-<version>.zip` from [Releases](https://github.com/MariusTBjercke/witcher2-enginefix/releases).
+1. Download `Witcher2EngineFix-<version>.zip` from [Nexus Mods](https://www.nexusmods.com/witcher2/mods/1200) or [GitHub Releases](https://github.com/MariusTBjercke/witcher2-enginefix/releases).
 2. Extract it into the game folder (the one that holds `bin\` and `CookedPC\`), so that `dinput8.dll` ends up next to `witcher2.exe` in `bin\`, for example
    `...\steamapps\common\the witcher 2\bin\dinput8.dll`
 3. Start the game as usual (through Steam and the launcher).
 
-To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.4.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
+To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.5.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
 
 | File | Purpose |
 |---|---|
@@ -71,7 +71,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 
 | Section / key | Default | Meaning |
 |---|---|---|
-| `[general] enabled` | 1 | 0 turns every patch off (input still forwarded) |
+| `[general] enabled` | 1 | 0 turns off DLL patches (input still forwarded); map files and installed script patches are removed separately |
 | `[general] log` | 1 | 0 stops writing `witcher2_enginefix.log` |
 | `[presets] default` | extreme | Startup level: baseline, high, ultra or extreme |
 | `[presets] cycle` | Ctrl+F10 | Hotkey that cycles the levels (F9/F10 with Ctrl or Alt) |
@@ -86,6 +86,9 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 The ini file itself documents every key, including the legacy separate hotkeys (`[presets] enabled=0`).
 
 ## Compatibility
+
+The optional pause-menu Quit confirmation currently needs one click before it
+responds to hover. The button still works; this is a known minor issue.
 
 - **DXVK**: works with and without it. The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen.
 - **Other `dinput8.dll` mods**: only one `dinput8.dll` can sit in `bin\`. This mod loads the system `dinput8.dll` itself.

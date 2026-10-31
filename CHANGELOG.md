@@ -1,5 +1,9 @@
 # Changelog
 
+Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
+with all earlier fixes included in one initial Nexus changelog entry; earlier
+versions are not separate Nexus releases.
+
 ## 0.5.0
 
 - Optional script patches, the book marker now covers every item list: the "already read" tick and the `Read` / `Nothing new` / `Unread` status also show in Geralt's own inventory, in the trade screen's player list and in the loot window, and the inventory's item tooltip now ends with the status and, for unread books, what reading them still gives (merchants and the storage chest behave as before). The marking moved from the shop script into the shared item fill that every GUI screen uses, so it follows books wherever the game lists them; the loot window has no tooltip at all, so there `(Nothing new)` goes after the name of a book whose knowledge and journal entries are all known already. A book read in the inventory updates there at once (the list is refilled like after trashing an item, keeping its scroll position) instead of on the next open. The tick now also shows on Geralt's side of the trade and storage screens (they cleared it there; the same kind of same-length no-op as on the merchant side), so a book's status is visible in every window where it can be handled. The tick now means read only (at a merchant and in the storage chest also "you carry one", as before); a book with nothing new keeps its plain icon and says so in its status and tooltip, since its text is still unread. In the loot window and the small preview next to a container, a read book shows its own icon with the inventory's tick drawn on it: Install builds these icons from the game's own files (152 books in a full install) into `CookedPC\globals\gui\icons\items\w2ef_read\`, and Uninstall removes them. If another UI mod replaced the trade or storage screen, the patcher leaves it alone and only the tick there is missing. `Witcher2EngineFix_Optional\ScriptPatches\Install.bat` re-applies it (Uninstall still restores the modded originals byte for byte). See `docs/fixes/shop-book-read-marker.md`. The DLL is unchanged apart from its version.
@@ -24,7 +28,7 @@
 
 ## 0.1.0
 
-First public release, for The Witcher 2: Assassins of Kings - Enhanced Edition 3.5.0.26 (Steam).
+First GitHub release, for The Witcher 2: Assassins of Kings - Enhanced Edition 3.5.0.26 (Steam).
 
 - Save previews: new saves (manual saves and QuickSave) get their screenshot in the Load menu again instead of a purple/blue gradient. The save tick (`009B63DE`) queues an in-memory 640x360 capture and saves in the same frame; the capture finishes about a frame later, after `009B7149` already found no image. The DLL keeps that finished BMP and writes it as `<save>_640x360.bmp` through the game's own Steam storage interface. If the game wrote the image itself, nothing is added. `[saves] fix_thumbnails=0` turns it off. The Load menu also reloads previews that were rewritten during the session (QuickSave, reused AutoSave slots); it kept one picture per file name until a restart (`00B28657`), so a new QuickSave showed the previous one. Existing saves keep their missing previews.
 - Graphics presets: Ctrl+F10 cycles baseline / high / ultra / extreme, each setting mesh LOD distance, foliage distance, the mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. `[presets] default` picks the startup level (extreme).

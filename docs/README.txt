@@ -58,16 +58,21 @@ Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
   ...\steamapps\common\the witcher 2\bin\dinput8.dll
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix 0.4.0 loaded".
+"witcher2_enginefix 0.5.0 loaded".
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
   [saves]   fix_thumbnails=1     0 turns the save-preview fix off
   [saves]   fix_list_leak=1      0 turns the save-list leak fix off
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)
-  [general] enabled=1            0 turns everything off
+  [general] enabled=1            0 turns off DLL patches only
 
-Uninstall: delete bin\dinput8.dll, bin\witcher2_enginefix.ini,
+Known issue: the optional pause-menu Quit confirmation needs one click before
+it responds to hover. The Quit button still works.
+
+Uninstall: if you installed script patches, run
+Witcher2EngineFix_Optional\ScriptPatches\Uninstall.bat first (this also removes
+the generated book icons). Then delete bin\dinput8.dll, bin\witcher2_enginefix.ini,
 CookedPC\globals\map_scales.csv and the *_2048x2048.dds files this zip put in
 CookedPC\globals\gui\maps\ (the game's own maps are inside pack0.dzip).
 A mod that ships its own globals\map_scales.csv conflicts with the interior
