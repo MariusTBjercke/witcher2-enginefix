@@ -21,8 +21,10 @@
 #include <windows.h>
 #define PSAPI_VERSION 2   // GetProcessMemoryInfo from kernel32 (K32...), no psapi.lib
 #include <psapi.h>
+#include <dbghelp.h>   // MINIDUMP_* types only; MiniDumpWriteDump is resolved at runtime
 #include <objbase.h>   // LPUNKNOWN / REFIID for the DirectInput8Create signature
 #include <stdio.h>
+#include <share.h>
 #include <stdarg.h>
 #include <math.h>
 #include <string.h>
@@ -50,6 +52,8 @@ static HINSTANCE g_self;
 static FILE*     g_log;
 static char      g_ini[MAX_PATH];
 static char      g_logPath[MAX_PATH];
+static char      g_prevLogPath[MAX_PATH];
+static char      g_binDir[MAX_PATH];
 static HMODULE   g_realDinput;
 static volatile LONG g_running;
 
@@ -107,6 +111,7 @@ static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens 
 static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
 static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
 static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
+static int cfg_crash_dump = 1;  // [diagnostics] crash_dump: 0 off, 1 log + minidump, 2 full dump
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
 
@@ -138,6 +143,8 @@ static void ini_path(void)
     if (slash) *slash = 0;
     sprintf_s(g_ini, MAX_PATH, "%s\\witcher2_enginefix.ini", dll);
     sprintf_s(g_logPath, MAX_PATH, "%s\\witcher2_enginefix.log", dll);
+    sprintf_s(g_prevLogPath, MAX_PATH, "%s\\witcher2_enginefix.prev.log", dll);
+    strcpy_s(g_binDir, MAX_PATH, dll);
 }
 
 static int ini_int(const char* sec, const char* key, int def)
@@ -313,6 +320,7 @@ static void load_config(void)
     cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
     cfg_continue = ini_int("scriptpatches", "continue", 1);
     cfg_pause_quit = ini_int("scriptpatches", "pause_quit", 1);
+    cfg_crash_dump = ini_int("diagnostics", "crash_dump", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -2050,10 +2058,219 @@ static void save_tick(void)
     }
 }
 
+// ---- crash capture ------------------------------------------------------
+// The game's own top-level filter (installed by the static initializer at 00930D99,
+// handler 00930D4A) is `xor eax,eax; inc eax; ret 4`: EXCEPTION_EXECUTE_HANDLER, so a
+// crash ends the process silently - no WER report, no event log entry, nothing on disk.
+// It runs after DllMain, so the filter set there is replaced; crash_tick() takes the
+// top slot back every worker tick and chains to whatever it displaced, which keeps the
+// game's behaviour (and any overlay's filter) after the log line and the dump are out.
+// Only unhandled exceptions reach a top-level filter: exceptions the game catches
+// itself, and CRT aborts (__report_gsfailure, __call_reportfault clear the filter
+// first), are not seen here. See docs/fixes/crash-capture.md.
+
+#define CRASH_KEEP_DUMPS 5
+
+typedef BOOL (WINAPI *MiniDumpWriteDump_t)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE,
+    PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION,
+    PMINIDUMP_CALLBACK_INFORMATION);
+
+static LPTOP_LEVEL_EXCEPTION_FILTER g_prevFilter;
+static MiniDumpWriteDump_t g_miniDumpWriteDump;
+static volatile LONG g_inCrash;
+
+// logf_ without waiting: the crashing thread may be the one holding the log lock.
+static void crash_logf(const char* fmt, ...)
+{
+    if (!g_log || !cfg_log) return;
+    if (!TryEnterCriticalSection(&g_logLock)) return;
+    SYSTEMTIME st; GetLocalTime(&st);
+    fprintf(g_log, "%02d:%02d:%02d.%03d ", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+    va_list ap; va_start(ap, fmt); vfprintf(g_log, fmt, ap); va_end(ap);
+    fputc('\n', g_log);
+    fflush(g_log);
+    LeaveCriticalSection(&g_logLock);
+}
+
+// "witcher2.exe+0x530D4A" for an address inside a loaded image, "?" otherwise.
+static void crash_where(DWORD addr, char* out, size_t cap)
+{
+    HMODULE mod = NULL;
+    char path[MAX_PATH];
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCSTR)(uintptr_t)addr, &mod) && mod &&
+        GetModuleFileNameA(mod, path, MAX_PATH)) {
+        const char* name = strrchr(path, '\\');
+        sprintf_s(out, cap, "%s+0x%X", name ? name + 1 : path, addr - (DWORD)(uintptr_t)mod);
+    } else {
+        strcpy_s(out, cap, "?");
+    }
+}
+
+static int crash_is_code(DWORD addr)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    if (addr < 0x10000 || !VirtualQuery((LPCVOID)(uintptr_t)addr, &mbi, sizeof mbi)) return 0;
+    return mbi.State == MEM_COMMIT && mbi.Type == MEM_IMAGE &&
+           (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE |
+                           PAGE_EXECUTE_WRITECOPY));
+}
+
+static void crash_write_dump(EXCEPTION_POINTERS* ep)
+{
+    char path[MAX_PATH];
+    SYSTEMTIME st;
+    HANDLE h;
+    MINIDUMP_EXCEPTION_INFORMATION mei;
+    MINIDUMP_TYPE type;
+
+    if (!g_miniDumpWriteDump) { crash_logf("crash: no dump (dbghelp MiniDumpWriteDump not found)"); return; }
+    GetLocalTime(&st);
+    sprintf_s(path, MAX_PATH, "%s\\witcher2_enginefix_crash_%04d-%02d-%02d_%02d-%02d-%02d.dmp",
+              g_binDir, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    h = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) { crash_logf("crash: cannot create %s (%lu)", path, GetLastError()); return; }
+    mei.ThreadId = GetCurrentThreadId();
+    mei.ExceptionPointers = ep;
+    mei.ClientPointers = FALSE;
+    type = cfg_crash_dump >= 2
+        ? (MINIDUMP_TYPE)(MiniDumpWithFullMemory | MiniDumpWithHandleData |
+                          MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules)
+        : (MINIDUMP_TYPE)(MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithProcessThreadData |
+                          MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules);
+    if (g_miniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, type, &mei, NULL, NULL)) {
+        LARGE_INTEGER size; size.QuadPart = 0;
+        GetFileSizeEx(h, &size);
+        crash_logf("crash: dump written: %s (%.1f MB)", path, size.QuadPart / 1048576.0);
+    } else {
+        crash_logf("crash: MiniDumpWriteDump failed (0x%08lX)", GetLastError());
+    }
+    CloseHandle(h);
+}
+
+static LONG WINAPI crash_filter(EXCEPTION_POINTERS* ep)
+{
+    // A second crashing thread, or a filter that chains back to us: let the next one run.
+    if (InterlockedExchange(&g_inCrash, 1)) return EXCEPTION_CONTINUE_SEARCH;
+
+    if (ep && ep->ExceptionRecord && ep->ContextRecord) {
+        EXCEPTION_RECORD* er = ep->ExceptionRecord;
+        CONTEXT* c = ep->ContextRecord;
+        char where[MAX_PATH + 16];
+        PROCESS_MEMORY_COUNTERS_EX pmc;
+
+        crash_where((DWORD)(uintptr_t)er->ExceptionAddress, where, sizeof where);
+        crash_logf("crash: unhandled exception 0x%08lX at 0x%08X (%s), thread %lu",
+                   er->ExceptionCode, (unsigned)(uintptr_t)er->ExceptionAddress, where,
+                   GetCurrentThreadId());
+        if (er->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2) {
+            ULONG_PTR op = er->ExceptionInformation[0];
+            crash_logf("crash: access violation %s 0x%08X",
+                       op == 0 ? "reading" : op == 1 ? "writing" : op == 8 ? "executing" : "at",
+                       (unsigned)er->ExceptionInformation[1]);
+        }
+        crash_logf("crash: eax=%08lX ebx=%08lX ecx=%08lX edx=%08lX esi=%08lX edi=%08lX",
+                   c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi);
+        crash_logf("crash: eip=%08lX esp=%08lX ebp=%08lX", c->Eip, c->Esp, c->Ebp);
+
+        // Raw stack scan: code addresses found on the stack, newest first. Most are
+        // return addresses; some are stale. The dump has the real unwind.
+        {
+            DWORD sp = c->Esp & ~3u, top = (DWORD)__readfsdword(4);   // TEB StackBase
+            int found = 0;
+            if (sp && top > sp) {
+                if (top - sp > 0x10000) top = sp + 0x10000;
+                for (; sp < top && found < 24; sp += 4) {
+                    DWORD v = *(DWORD*)(uintptr_t)sp;
+                    if (!crash_is_code(v)) continue;
+                    crash_where(v, where, sizeof where);
+                    crash_logf("crash:   [esp+%04X] %08lX %s", sp - (c->Esp & ~3u), v, where);
+                    found++;
+                }
+            }
+        }
+
+        pmc.cb = sizeof pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof pmc))
+            crash_logf("crash: memory private=%lu MB working set=%lu MB",
+                       (unsigned long)(pmc.PrivateUsage >> 20), (unsigned long)(pmc.WorkingSetSize >> 20));
+        crash_write_dump(ep);
+    } else {
+        crash_logf("crash: unhandled exception without exception pointers");
+    }
+
+    if (g_prevFilter) {
+        crash_logf("crash: passing on to the previous filter at 0x%08X",
+                   (unsigned)(uintptr_t)g_prevFilter);
+        return g_prevFilter(ep);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+// Takes the top-level filter slot back. Called from DllMain and every worker tick.
+static void crash_tick(void)
+{
+    static int logged;
+    LPTOP_LEVEL_EXCEPTION_FILTER prev;
+    if (!cfg_crash_dump || g_inCrash) return;
+    prev = SetUnhandledExceptionFilter(crash_filter);
+    if (prev != crash_filter) {
+        char where[MAX_PATH + 16];
+        g_prevFilter = prev;
+        if (logged++ < 5) {   // a module that keeps re-installing its own would flood the log
+            crash_where((DWORD)(uintptr_t)prev, where, sizeof where);
+            logf_("crash: filter armed, chaining to 0x%08X (%s)", (unsigned)(uintptr_t)prev,
+                  prev ? where : "none");
+        }
+    }
+}
+
+// Keeps the newest CRASH_KEEP_DUMPS dumps; the names sort by time.
+static void crash_prune_dumps(void)
+{
+    char pattern[MAX_PATH], names[64][64], path[MAX_PATH];
+    WIN32_FIND_DATAA fd;
+    HANDLE f;
+    int n = 0, i, j;
+
+    sprintf_s(pattern, MAX_PATH, "%s\\witcher2_enginefix_crash_*.dmp", g_binDir);
+    f = FindFirstFileA(pattern, &fd);
+    if (f == INVALID_HANDLE_VALUE) return;
+    do {
+        if (n < 64 && strlen(fd.cFileName) < sizeof names[0]) strcpy_s(names[n++], sizeof names[0], fd.cFileName);
+    } while (FindNextFileA(f, &fd));
+    FindClose(f);
+    for (i = 1; i < n; i++)
+        for (j = i; j > 0 && strcmp(names[j - 1], names[j]) > 0; j--) {
+            char t[64];
+            strcpy_s(t, sizeof t, names[j]); strcpy_s(names[j], sizeof names[j], names[j - 1]);
+            strcpy_s(names[j - 1], sizeof names[j - 1], t);
+        }
+    for (i = 0; i < n - CRASH_KEEP_DUMPS; i++) {
+        sprintf_s(path, MAX_PATH, "%s\\%s", g_binDir, names[i]);
+        if (DeleteFileA(path)) logf_("crash: removed old dump %s", names[i]);
+    }
+}
+
+static void crash_init(void)
+{
+    HMODULE dbg;
+    if (!cfg_crash_dump) return;
+    // The game imports dbghelp itself, so this normally finds the loaded copy.
+    dbg = GetModuleHandleA("dbghelp.dll");
+    if (!dbg) dbg = LoadLibraryA("dbghelp.dll");
+    if (dbg) g_miniDumpWriteDump = (MiniDumpWriteDump_t)GetProcAddress(dbg, "MiniDumpWriteDump");
+    if (!g_miniDumpWriteDump) logf_("crash: MiniDumpWriteDump not found - crashes are logged without a dump");
+    crash_prune_dumps();
+    crash_tick();
+}
+
 static DWORD WINAPI worker(LPVOID param)
 {
     (void)param;
     Sleep(1500);   // let the loader finish; never touch loader APIs during DllMain
+    crash_init();
     // Wait for the engine to be up before touching anything.
     for (int i = 0; i < 600 && g_running; i++) {
         if (GetModuleHandleA("witcher2.exe") || GetModuleHandleA("witcher2.EXE")) break;
@@ -2067,6 +2284,7 @@ static DWORD WINAPI worker(LPVOID param)
             logf_("startup: %ld startup movie(s) stopped, %s", g_skipStops,
                   g_skipDone == 1 ? "main menu reached" : "gave up after 60 s");
         }
+        crash_tick();
         osd_pump();
         apply_lod();
         if (cfg_hotkeys) poll_hotkeys();
@@ -2239,8 +2457,17 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         g_ftT0 = GetTickCount();
         ini_path();
         load_config();
-        if (cfg_log) fopen_s(&g_log, g_logPath, "w");
+        if (cfg_log) {
+            // Keep the last session's log: after a crash the game is usually restarted
+            // before anyone looks, and "w" would wipe the evidence.
+            MoveFileExA(g_logPath, g_prevLogPath, MOVEFILE_REPLACE_EXISTING);
+            // _SH_DENYWR, not fopen_s (exclusive): the log can be read while the game runs.
+            g_log = _fsopen(g_logPath, "w", _SH_DENYWR);
+        }
         logf_("witcher2_enginefix %s loaded (image base 0x%08X)", ENGINEFIX_VERSION, (unsigned)IMAGE_BASE);
+        logf_("diagnostics: crash_dump=%d (previous log kept as witcher2_enginefix.prev.log)", cfg_crash_dump);
+        // Replaced by the game's static initializer right after; crash_tick re-arms.
+        if (cfg_enabled && cfg_crash_dump) g_prevFilter = SetUnhandledExceptionFilter(crash_filter);
         logf_("config: enabled=%d enforce=%d mesh=%.2f foliage=%.2f downscale=%d hotkeys=%d",
               cfg_enabled, cfg_enforce, cfg_mesh, cfg_foliage, cfg_enforce_down, cfg_hotkeys);
         logf_("distance config: experimental=%d visibility=%.2fx shadow=%.2fx",

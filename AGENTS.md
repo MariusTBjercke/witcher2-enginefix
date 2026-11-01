@@ -34,7 +34,7 @@ Machine-specific; nothing in the build depends on them.
 |---|---|
 | Game install | `<game>` = e.g. `D:\SteamLibrary\steamapps\common\the witcher 2` |
 | Installed DLL + ini | `<game>\bin\dinput8.dll`, `<game>\bin\witcher2_enginefix.ini` |
-| Runtime log | `<game>\bin\witcher2_enginefix.log` (held open exclusively while the game runs) |
+| Runtime log | `<game>\bin\witcher2_enginefix.log` (readable while the game runs from 0.6.1; the last session is `witcher2_enginefix.prev.log`) |
 | User config (**outside** the game folder) | `%USERPROFILE%\Documents\Witcher 2\Config\` |
 | Steam saves | `C:\Program Files (x86)\Steam\userdata\<steamid>\20920\remote\` |
 | Unpacked analysis copy | `tools\ghidra-inputs\witcher2.exe.unpacked.exe` (git-ignored) |
@@ -128,6 +128,11 @@ Only needed for reverse engineering, not for building.
   saves (`009B79AD` -> `009B7149`) in the same tick; the capture lands ~25 ms later.
   That race is the whole missing-preview bug. `[FileSystem] CloudStorage` in User.ini is
   overridden at startup when Steam already has saves (`00AC9152`).
+* The game's top-level exception filter (`00930D4A`, set during CRT init by `00930D99`)
+  just returns `EXCEPTION_EXECUTE_HANDLER`: a crash exits silently, with no WER report
+  or event log entry. Steam's `CSERHelper.dll` filter sits on top of it at runtime and left
+  no dump either. `[diagnostics] crash_dump` re-arms our filter in front of both;
+  see `docs/fixes/crash-capture.md`.
 * The live CDB save-preview trace is **disabled**: the game crashed on its first
   software breakpoint at VA `009B6BC5` with `STATUS_WX86_BREAKPOINT` (`4000001F`).
   Do not repeat that workflow; see `docs/fixes/save-previews.md`.

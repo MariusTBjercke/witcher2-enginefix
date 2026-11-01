@@ -4,6 +4,11 @@ Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
 with all earlier fixes included in one initial Nexus changelog entry; earlier
 versions are not separate Nexus releases.
 
+## 0.6.1
+
+- Crash capture: the game's own crash handler ends the process silently (no message, no Windows error report, no event log entry), so a random crash left nothing to go on. The DLL now puts its own handler in front of it: on a crash it logs the exception, the address as module+offset, the registers, code addresses from the stack and the memory use to `witcher2_enginefix.log`, writes a minidump to `bin\witcher2_enginefix_crash_<date>_<time>.dmp` (newest 5 kept), then hands over to the game's handler as before. `[diagnostics] crash_dump` (1 = log + minidump, 2 = full dump, 0 = off). See `docs/fixes/crash-capture.md`.
+- The previous session's log is kept as `witcher2_enginefix.prev.log`; starting the game again after a crash no longer overwrites it. The log can also be read while the game runs (it was opened exclusively before).
+
 ## 0.6.0
 
 - The script patches are now built into the DLL and on by default: book marker, Continue in the main menu and Quit in the pause menu work as soon as `dinput8.dll` is in `bin\`, with no `Install.bat` to run. The game's files are never changed: at the first start the DLL builds patched copies of the files it needs (your `base_scripts.dzip`, also Project Mersey's, the trade and storage screens, also HD UI's, and the read-book icons) into `bin\witcher2_enginefix_cache\` (about 0.1 s) and the game reads those instead; later starts reuse them until a game file changes. `[scriptpatches] book_marker`, `continue` and `pause_quit` turn each one off. Uninstalling is deleting the mod's files again. See `docs/fixes/dll-script-patches.md`.
