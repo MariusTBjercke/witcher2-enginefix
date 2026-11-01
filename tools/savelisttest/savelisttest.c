@@ -54,10 +54,79 @@ static void __fastcall fake_add(void* self, void* edx, void* name, void* stream)
 typedef struct fake_name { const wchar_t* text; unsigned key; } fake_name;
 typedef struct fake_stream { void* vtbl; int destroyed; char pad[0x18]; void* inner; } fake_stream;
 
-int main(void)
+// fast_list: a fake mode-0 provider stream over `dz` (a whole .sav), attached lazily. Reads
+// what 009B76FD reads (0x480 header, the four sections it seeks to, the end magic), then
+// every byte, and compares with a full unpack. Returns 1 when all of it matches.
+static int lazy_check(const sp_buf* dz, const char* label, int verbose)
+{
+    void* inner[8] = { (void*)(uintptr_t)VA_MEM_STREAM };
+    void* outer[16] = { (void*)(uintptr_t)VA_STEAM_STREAM };
+    sp_dzip z;
+    sp_buf full = { 0 };
+    const unsigned char* r;
+    const char* keys[4] = { "timeInfo", "saveInfo", "worldInfo", "timeManger" };
+    unsigned char tmp[0x480];
+    LONG header_blocks;
+    int ok = 1;
+    if (!sp_dzip_open(dz, &z) || !sp_dzip_extract(&z, 0, &full)) { printf("%s: not a DZIP save\n", label); return 0; }
+    sp_dzip_close(&z);
+    outer[0x10 / 4] = dz->p; outer[0x14 / 4] = (void*)(uintptr_t)dz->n; outer[0x20 / 4] = inner;
+    inner[0x10 / 4] = &outer[0x10 / 4];
+    if (!lazy_attach(outer) || inner[0x10 / 4] != (void*)g_lazy.arr || (size_t)g_lazy.arr[1] != full.n) {
+        printf("%s: attach failed\n", label); sp_free(&full); lazy_release(); return 0;
+    }
+    r = (const unsigned char*)g_lazy.arr[0];
+    memcpy(tmp, r, sizeof tmp);
+    ok &= !memcmp(tmp, full.p, sizeof tmp);
+    ok &= !memcmp(r + full.n - 4, full.p + full.n - 4, 4);
+    // SAVY directory: 32-byte name + u32 offset per entry from +12
+    for (int k = 0; k < 4; k++)
+        for (size_t at = 12; at + 36 <= sizeof tmp; at += 36)
+            if (!strcmp((const char*)tmp + at, keys[k])) {
+                unsigned off = *(const unsigned*)(tmp + at + 32);
+                if (off + 256 <= full.n) ok &= !memcmp(r + off, full.p + off, 256);
+            }
+    header_blocks = g_lazy.blocks;
+    ok &= !memcmp(r, full.p, full.n) && g_lazy.bad == 0;
+    if (verbose || !ok)
+        printf("%-26s %8zu bytes, header reads unpacked %ld of %ld blocks, all bytes %s\n", label, full.n,
+               header_blocks, (long)(g_lazy.reserved / LAZY_BLOCK), ok ? "equal" : "DIFFER");
+    lazy_release();
+    sp_free(&full);
+    return ok;
+}
+
+static int lazy_saves(const char* dir)
+{
+    char pat[MAX_PATH], path[MAX_PATH];
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    int n = 0, bad = 0;
+    snprintf(pat, sizeof pat, "%s\\*.sav", dir);
+    h = FindFirstFileA(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) { printf("no saves in %s\n", dir); return -1; }
+    do {
+        FILE* f;
+        sp_buf b = { 0 };
+        snprintf(path, sizeof path, "%s\\%s", dir, fd.cFileName);
+        if (fopen_s(&f, path, "rb") || !f) continue;
+        b.n = fd.nFileSizeLow;
+        b.p = (unsigned char*)malloc(b.n);
+        if (b.p && fread(b.p, 1, b.n, f) == b.n) { if (!lazy_check(&b, fd.cFileName, n < 3)) bad++; n++; }
+        fclose(f);
+        free(b.p);
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    printf("%d real saves checked, %d differ\n", n, bad);
+    return bad;
+}
+
+int main(int argc, char** argv)
 {
     typedef void (__stdcall *thunk_t)(void*);
+    setvbuf(stdout, NULL, _IONBF, 0);   // a crash must not swallow the lines before it
     InitializeCriticalSection(&g_thumbLock);
+    InitializeCriticalSection(&g_logLock);
     g_log = stdout; cfg_log = 1; cfg_savelist_trace = 1;
     if (!map_game_range()) return 2;
 
@@ -80,8 +149,8 @@ int main(void)
     expect("leak fix recognised its targets", g_leakFixOn == 1);
     expect("startup call redirected", *(LONG*)(VA_SAVELIST_CALL_A + 1) == (LONG)((uintptr_t)savelist_startup - (VA_SAVELIST_CALL_A + 5)));
     expect("menu call redirected", *(LONG*)(VA_SAVELIST_CALL_B + 1) == (LONG)((uintptr_t)savelist_menu - (VA_SAVELIST_CALL_B + 5)));
-    expect("second install is a no-op", patch_call(VA_SAVELIST_CALL_A, (void*)savelist_startup));
-    expect("foreign call target refused", !patch_call(VA_SAVELIST_CALL_B, (void*)savelist_startup));
+    expect("second install is a no-op", patch_call(VA_SAVELIST_CALL_A, VA_SAVELIST, (void*)savelist_startup));
+    expect("foreign call target refused", !patch_call(VA_SAVELIST_CALL_B, VA_SAVELIST, (void*)savelist_startup));
 
     // stdcall stack balance: run both thunks many times; a wrong cleanup crashes or drifts ESP
     for (int i = 0; i < 1000; i++) {
@@ -120,6 +189,35 @@ int main(void)
         hook_AddImage(self, NULL, &held, NULL);
         expect("held name, no stream: original", add_calls == 1);
         g_listDepth = 0;
+    }
+
+    {
+        // Synthetic save: SAVY header naming the four sections, 300 KB of mixed data.
+        static unsigned char savy[300000];
+        const char* names[1] = { "C:\\x\\Test.sav.tmp" };
+        unsigned char empty[32] = { 'D', 'Z', 'I', 'P', 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0,
+                                    0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0 };
+        sp_buf e = { empty, sizeof empty }, data = { savy, sizeof savy }, out = { 0 }, junk = { savy, 4096 };
+        sp_dzip z;
+        void* inner[8] = { (void*)(uintptr_t)VA_MEM_STREAM };
+        void* outer[16] = { (void*)0x1111 };
+        unsigned offs[4] = { 0x48C, 0x4CD, 150000, 0x579 };
+        const char* keys[4] = { "timeInfo", "saveInfo", "worldInfo", "timeManger" };
+        memcpy(savy, "SAVY\2\0\0\0\1\0\0\0", 12);
+        for (int k = 0; k < 4; k++) { strcpy_s((char*)savy + 12 + 36 * k, 32, keys[k]); memcpy(savy + 44 + 36 * k, &offs[k], 4); }
+        for (size_t i = 0x480; i < sizeof savy; i++) savy[i] = (unsigned char)((i / 7) ^ (i % 251 < 40 ? i : 0));
+        memcpy(savy + sizeof savy - 4, "KCUP", 4);
+        expect("lazy: fault handler installed", AddVectoredExceptionHandler(1, lazy_fault) != NULL);
+        expect("lazy: synthetic DZIP written", sp_dzip_open(&e, &z) && sp_dzip_write(&z, 1, names, &data, 0, &out));
+        sp_dzip_close(&z);
+        expect("lazy: synthetic save reads equal, few blocks", lazy_check(&out, "synthetic", 1));
+        expect("lazy: foreign stream type refused", !lazy_attach(outer) && !g_lazy.region);
+        outer[0] = (void*)(uintptr_t)VA_STEAM_STREAM;
+        outer[0x10 / 4] = junk.p; outer[0x14 / 4] = (void*)(uintptr_t)junk.n; outer[0x20 / 4] = inner;
+        inner[0x10 / 4] = &outer[0x10 / 4];
+        expect("lazy: non-DZIP data refused, stream untouched", !lazy_attach(outer) && inner[0x10 / 4] == &outer[0x10 / 4]);
+        sp_free(&out);
+        if (argc > 1) expect("lazy: every real save equal to a full unpack", lazy_saves(argv[1]) == 0);
     }
 
     mem_view m;

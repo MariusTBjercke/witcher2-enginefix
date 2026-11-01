@@ -206,6 +206,29 @@ int sp_dzip_extract(const sp_dzip* z, int i, sp_buf* out)
     return 1;
 }
 
+long long sp_dzip_block(const sp_dzip* z, int i, long long k, unsigned char* dst)
+{
+    const sp_dzip_entry* e;
+    const unsigned char* b;
+    long long blocks, start, end, left;
+
+    if (!z || !z->data.p || i < 0 || i >= z->count || k < 0) return -1;
+    e = &z->e[i];
+    if (e->offset < DZIP_HEAD || e->csize <= 0 || e->usize <= 0 ||
+        (unsigned long long)e->offset > z->data.n ||
+        (unsigned long long)e->csize > z->data.n - (unsigned long long)e->offset)
+        return -1;
+    blocks = (e->usize + DZIP_BLOCK - 1) >> 16;
+    if (k >= blocks || blocks * 4 > e->csize) return -1;
+    b = z->data.p;
+    start = e->offset + (int)rd32(b + e->offset + 4 * k);
+    end = (k + 1 < blocks) ? e->offset + (int)rd32(b + e->offset + 4 * (k + 1)) : e->offset + e->csize;
+    if (start < e->offset || end < start || end > e->offset + e->csize) return -1;
+    left = e->usize - k * DZIP_BLOCK;
+    // Output offset 0: a back-reference before the block's start is refused, never read.
+    return lzf_block(b, start, end, dst, 0, left < DZIP_BLOCK ? left : DZIP_BLOCK);
+}
+
 // ---- writing ------------------------------------------------------------
 
 typedef struct { sp_buf b; size_t cap; } wbuf;

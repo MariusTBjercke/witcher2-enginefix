@@ -30,6 +30,11 @@ int sp_dzip_find(const sp_dzip* z, const char* name);
 // 1 = ok. LZF, 64 KiB blocks; fails on a corrupt stream or an entry outside `data`.
 int sp_dzip_extract(const sp_dzip* z, int i, sp_buf* out);
 
+// Decompresses only block k (the 64 KiB of output at k * 0x10000) of entry i into dst,
+// which must hold 0x10000 bytes. Blocks are compressed independently. Returns the bytes
+// produced (the last block is shorter; fewer means a corrupt stream), -1 on a bad table.
+long long sp_dzip_block(const sp_dzip* z, int i, long long k, unsigned char* dst);
+
 unsigned long long sp_dzip_hash(const sp_dzip_entry* e, int count);
 
 // Replaces the entries named in `names` and adds the ones that do not exist yet (the new

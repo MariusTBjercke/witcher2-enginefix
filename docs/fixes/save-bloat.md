@@ -213,3 +213,87 @@ cold Steam/disk cache; run 2's was 1.1 s.
 Still open: what the remaining ~1 s per build is spent on (not Steam reads),
 whether a new preview's ~1.7 MB can be released when the menu closes, and
 whether the save menu builds the same list.
+
+## 7. Where the rest of the build time goes: every save is unpacked in full (2026-11-01)
+
+Owner, mid chapter 1 with 118 saves: the list "takes a few seconds". Static analysis
+(unpacked 3.5.0.26) and an offline look at the saves:
+
+- A `.sav` is a DZIP v2 archive with one entry (the `SAVY` save, named
+  `Documents\Witcher 2\<name>.sav.tmp` inside) in independently LZF-compressed 64 KiB
+  blocks. Sizes grow fast: `AutoSave_0000` is 0.29 MB / 2.1 MB unpacked,
+  `AutoSave_0127` 1.7 MB / **12.5 MB unpacked** (191 blocks). All 118: 118 MB on disk,
+  **837 MB unpacked**.
+- Per save, `009B76FD` -> `00A9805B` opens it through the Steam provider (vtable
+  `00F02B78`, slot +0x18 = `00931DB7` -> `0052ADFF`) with mode 1: whole file from Steam,
+  written to `Documents\Witcher 2\<name>.sav.tmp` (suffix `00F02B34`), closed, reopened by
+  `00A4E42E`, which opens the DZIP (`0068D430`), allocates the full unpacked size and
+  unpacks every block (`0068DCE0`) into a memory stream (vtable `00E77440`: array* at
+  +0x10, position at +0x14).
+- `00A9805B` then checks `SAVY`, the version and the `KCUP` magic at the end, and
+  `009B76FD` reads only `timeInfo`, `saveInfo`, `worldInfo` and `timeManger`. The SAVY
+  header (0x480 bytes: 32-byte name + u32 offset per section) puts the first three in
+  block 0; `worldInfo` follows `playingMusic` (~1 MB in, block 15 in `AutoSave_0127`).
+  Plus the last block for the magic: **3 of 191 blocks are needed.**
+
+So each list build (game start, every Load/Save menu open) unpacks ~837 MB and writes
+~118 MB of temp files to disk (each freshly written file also goes past the virus
+scanner) to show 118 rows. That grows with every save and with the size of each save.
+
+## Fix: `[saves] fast_list=1` (default on, confirmed in game 2026-11-01)
+
+Only inside the list builder, and only for `.sav` opens in mode 1, the provider slot
++0x18 hook opens in mode 0 (the same Steam read; the compressed bytes stay in a memory
+stream, no temp file) and points that inner memory stream's array at a reserved,
+uncommitted region the size of the unpacked save. A vectored exception handler commits
+a 64 KiB page on its first access and unpacks that one block into it
+(`sp_dzip_block`), so whatever the reader touches is byte-identical to the full unpack,
+whichever offsets it uses. One region is live at a time (`009B76FD` destroys the reader
+before the next save) and the last one is released after the build. Anything
+unexpected (stream vtables, not a DZIP, bad table hash, > 256 MB) falls back to the
+original mode-1 open. Loading a save to play is not touched (`g_listDepth` is 0 there).
+`fast_list=2` alternates per build (odd builds fast) so one `savelist_trace` session
+measures both ways. Fingerprints: provider slot value and `00931DB7`, `0052ADFF`,
+`0052AF96` (forwarder), `0052AFAA` (destructor), memory stream slots 1 and 3 and their code.
+
+`savelist_trace` now also splits each build: `.sav` opens, preview opens, preview decode
+(AddImage), the rest (header parse and GUI), and for fast builds the blocks unpacked.
+
+Validation: `/W4` clean. `tools/savelisttest` (fixed: it predated `patch_call`'s target
+argument and the log lock) passes 20/20 including a synthetic DZIP save, refusal of a
+foreign stream and of non-DZIP data, and, given the Steam remote folder, all **120 real
+saves byte-identical** to a full unpack, with the header reads touching 3 blocks each.
+
+## Confirmed in game, A/B run (2026-11-01 23:36)
+
+`fast_list=2` (odd builds fast) with `savelist_trace=1`, 120 saves. Owner: Load menu
+4x from the main menu, 2x from the pause menu, loaded the newest save, once more from
+the pause menu. The list looked the same and felt faster; the load worked; clean exit,
+no crash. Log: `docs/validation/savelist-fastlist-ab-2026-11-01.log`.
+
+| build | reads | ms | .sav opens ms | previews ms | rest ms | blocks unpacked |
+|---|---|---|---|---|---|---|
+| 1 startup | fast | 984 | 272 | 235 | 476 | 360 of 13 835 (22 ms) |
+| 2 | full | 2200 | 1497 | 204 | 498 | all |
+| 3 | fast | 905 | 241 | 206 | 457 | 360 (21 ms) |
+| 4 | full | 2230 | 1514 | 205 | 510 | all |
+| 5 | fast | 900 | 240 | 204 | 455 | 360 (20 ms) |
+| 6 (in game) | full | 2357 | 1605 | 211 | 540 | all |
+| 7 (in game) | fast | 888 | 240 | 202 | 446 | 360 (20 ms) |
+| 8 (in game) | full | 2335 | 1603 | 217 | 515 | all |
+
+Every fast build: 120 fast reads, 0 fallbacks, 0 bad blocks; memory flat per build
+(the leak fix still frees 120 streams). The `.sav` part drops from ~1.55 s to ~0.24 s
+(of which ~0.2 s is the unchanged Steam read); the whole build from ~2.25 s to ~0.9 s.
+
+Scaling: a full build costs ~19 ms per save today and grows with each save's unpacked
+size too (2 MB in the prologue, 12.5 MB mid chapter 1). A fast build costs ~7.5 ms per
+save and grows only with the compressed size read from Steam: ~2.3 s at 300 saves
+instead of 6 s or more. Still linear in the number of saves. What is left per save:
+the Steam read of the `.sav` (~2 ms) and of the preview BMP (~1.7 ms, read again on
+every open although the registry already holds it and the leak fix then frees it), and
+~3.8 ms "rest" (header parse and the GUI rows; not split further). Next candidates if
+needed: skip the preview read for a held name, cache the four header values per save
+(name + Steam timestamp + size) so unchanged saves need no `.sav` read at all.
+
+Installed ini set to `fast_list=1`, `savelist_trace=0` afterwards.

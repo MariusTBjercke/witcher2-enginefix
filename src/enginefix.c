@@ -32,6 +32,7 @@
 #include <wchar.h>
 #include "distance_patch.h"
 #include "sp_hooks.h"
+#include "sp_dzip.h"
 #include "version.h"
 
 #define IMAGE_BASE          0x00400000u
@@ -106,6 +107,7 @@ static int cfg_save_trace;      // [diagnostics] save_trace: log the save-thumbn
 static int cfg_save_thumbs = 1; // [saves] fix_thumbnails: write the late save preview
 static int cfg_savelist_trace;  // [diagnostics] savelist_trace: time/memory of the save list
 static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the save list leaks
+static int cfg_fast_list = 1;   // [saves] fast_list: unpack only the save header blocks (2 = every other build)
 static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos before the main menu
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
 static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
@@ -315,6 +317,7 @@ static void load_config(void)
     cfg_save_thumbs = ini_int("saves", "fix_thumbnails", 1);
     cfg_savelist_trace = ini_int("diagnostics", "savelist_trace", 0);
     cfg_list_leak = ini_int("saves", "fix_list_leak", 1);
+    cfg_fast_list = ini_int("saves", "fast_list", 1);
     cfg_skip_intro = ini_int("startup", "skip_intro", 0);
     cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
     cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
@@ -826,8 +829,18 @@ static LONG     g_freedTotal;
 static int      g_leakFixOn;    // set once the lookup and the destructor are recognised
 static LONGLONG g_listBytes;
 static DWORD    g_listReadMs;
+static LONGLONG g_listAddUs;        // time in AddImage (decoding new previews)
 static unsigned g_seen[SEEN_MAX];   // name hashes AddImage has seen this session
 static int      g_seenCount;
+
+static LONGLONG qpc_us(void)
+{
+    static LONGLONG freq;
+    LARGE_INTEGER t;
+    if (!freq) { LARGE_INTEGER f; QueryPerformanceFrequency(&f); freq = f.QuadPart ? f.QuadPart : 1; }
+    QueryPerformanceCounter(&t);
+    return t.QuadPart / freq * 1000000 + t.QuadPart % freq * 1000000 / freq;
+}
 
 static unsigned name_hash(const wchar_t* s)
 {
@@ -910,6 +923,12 @@ static void __fastcall hook_AddImage(void* self, void* edx, void* name, void* st
                 return;   // the original would return here too, without the stream
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    }
+    if (g_listDepth && cfg_savelist_trace) {
+        LONGLONG t0 = qpc_us();
+        g_origAddImage(self, edx, name, stream);
+        g_listAddUs += qpc_us() - t0;
+        return;
     }
     g_origAddImage(self, edx, name, stream);
 }
@@ -1121,6 +1140,172 @@ static int __fastcall hook_FileRead(void* self, void* edx, const char* name, voi
     return got;
 }
 
+// ---- fast save list reads ---------------------------------------------------
+// [saves] fast_list=1. A .sav is a DZIP with one entry (the SAVY save) made of
+// independently LZF-compressed 64 KiB blocks; a late chapter-1 save is 1.7 MB on disk and
+// 12.5 MB unpacked. For every save the list opens it through the Steam provider (slot
+// +0x18, 00931DB7 -> 0052ADFF) in mode 1: whole file from Steam, written to
+// "Documents\Witcher 2\<name>.tmp", reopened and unpacked in full (00A4E42E) into a memory
+// stream - only for 009B76FD to read timeInfo, saveInfo, worldInfo and timeManger, which
+// sit in two or three blocks. Inside the list builder we open in mode 0 instead (same
+// Steam read, compressed bytes in a memory stream, no temp file) and point that memory
+// stream at reserved, uncommitted address space the size of the unpacked save. The first
+// read of a 64 KiB page faults; the handler commits the page and unpacks that one block
+// into it. Whatever the reader touches is byte-identical to the full unpack.
+// One region is live at a time: 009B76FD destroys the reader before the next save opens.
+#define VA_PROV_VTBL_OPEN  0x00F02B90u   // Steam provider vtable slot +0x18
+#define VA_PROV_OPEN       0x00931DB7u   // thiscall Stream* Open(String* name, bool mode1)
+#define VA_PROV_STREAM     0x0052ADFFu   // the provider stream's constructor
+#define VA_MEM_STREAM      0x00E77440u   // memory stream vtable: [+0x10] array* {data,size}, [+0x14] pos
+#define VA_MEM_SERIALIZE   0x00ABF380u   // its slot 1
+#define VA_MEM_SIZE        0x00ABF379u   // its slot 3
+#define VA_PROV_FORWARD    0x0052AF96u   // provider stream slot 1: forwards to the inner stream (+0x20)
+#define LAZY_BLOCK         0x10000u
+#define LAZY_MAX           (256u << 20)
+
+typedef void* (__fastcall *ProvOpen_t)(void* self, void* edx, void* name, int mode);
+
+static ProvOpen_t g_origProvOpen;
+static int        g_fastBuild;      // this build uses the lazy reads
+static struct {
+    unsigned char* region;          // MEM_RESERVE only until a page is read
+    size_t         reserved;
+    void*          arr[2];          // what the memory stream reads: {data, size}
+    sp_dzip        z;               // borrows the provider stream's compressed buffer
+    LONG           blocks, bad;     // pages unpacked, short or failed blocks
+} g_lazy;
+static LONG     g_lazyOpens, g_lazyFallbacks, g_lazyBlocks, g_lazyBlocksAll, g_lazyBad;
+static LONG     g_savOpens, g_bmpOpens;
+static LONGLONG g_savOpenUs, g_bmpOpenUs, g_lazyUnpackUs;
+
+static void lazy_release(void)
+{
+    if (!g_lazy.region) return;
+    g_lazyBlocks += g_lazy.blocks;
+    g_lazyBad += g_lazy.bad;
+    g_lazy.arr[1] = 0;              // a stream that outlived its reader now reads nothing
+    VirtualFree(g_lazy.region, 0, MEM_RELEASE);
+    sp_dzip_close(&g_lazy.z);
+    g_lazy.region = NULL;
+    g_lazy.reserved = 0;
+    g_lazy.blocks = g_lazy.bad = 0;
+}
+
+static LONG CALLBACK lazy_fault(EXCEPTION_POINTERS* ep)
+{
+    const EXCEPTION_RECORD* er = ep->ExceptionRecord;
+    uintptr_t at, base = (uintptr_t)g_lazy.region;
+    unsigned char* page;
+    long long want, got;
+    LONGLONG t0;
+    if (!base || er->ExceptionCode != EXCEPTION_ACCESS_VIOLATION || er->NumberParameters < 2)
+        return EXCEPTION_CONTINUE_SEARCH;
+    at = (uintptr_t)er->ExceptionInformation[1];
+    if (at < base || at - base >= g_lazy.reserved) return EXCEPTION_CONTINUE_SEARCH;
+    page = (unsigned char*)(base + ((at - base) & ~(uintptr_t)(LAZY_BLOCK - 1)));
+    if (!VirtualAlloc(page, LAZY_BLOCK, MEM_COMMIT, PAGE_READWRITE)) return EXCEPTION_CONTINUE_SEARCH;
+    t0 = qpc_us();
+    want = g_lazy.z.e[0].usize - (long long)(page - g_lazy.region);
+    if (want > LAZY_BLOCK) want = LAZY_BLOCK;
+    got = sp_dzip_block(&g_lazy.z, 0, (long long)(page - g_lazy.region) / LAZY_BLOCK, page);
+    if (got != want) g_lazy.bad++;  // the page stays (partly) zero, as a short unpack would
+    g_lazy.blocks++;
+    g_lazyUnpackUs += qpc_us() - t0;
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+// `outer` is a mode-0 provider stream: inner memory stream over the compressed file.
+static int lazy_attach(void* outer)
+{
+    void** o = (void**)outer;
+    void** inner;
+    sp_buf b;
+    long long usize;
+    __try {
+        if (o[0] != (void*)(uintptr_t)VA_STEAM_STREAM) return 0;
+        inner = (void**)o[0x20 / 4];
+        if (!inner || inner[0] != (void*)(uintptr_t)VA_MEM_STREAM || inner[0x10 / 4] != (void*)&o[0x10 / 4])
+            return 0;
+        b.p = (unsigned char*)o[0x10 / 4];
+        b.n = (size_t)o[0x14 / 4];
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    lazy_release();
+    if (!b.p || !sp_dzip_open(&b, &g_lazy.z)) return 0;
+    usize = g_lazy.z.count >= 1 ? g_lazy.z.e[0].usize : 0;
+    if (usize <= 0 || usize > LAZY_MAX) {
+        sp_dzip_close(&g_lazy.z);
+        return 0;
+    }
+    g_lazy.reserved = ((size_t)usize + LAZY_BLOCK - 1) & ~(size_t)(LAZY_BLOCK - 1);
+    g_lazy.region = (unsigned char*)VirtualAlloc(NULL, g_lazy.reserved, MEM_RESERVE, PAGE_READWRITE);
+    if (!g_lazy.region) { g_lazy.reserved = 0; sp_dzip_close(&g_lazy.z); return 0; }
+    g_lazy.arr[0] = g_lazy.region;
+    g_lazy.arr[1] = (void*)(uintptr_t)usize;
+    g_lazyBlocksAll += (LONG)(g_lazy.reserved / LAZY_BLOCK);
+    inner[0x10 / 4] = (void*)g_lazy.arr;
+    return 1;
+}
+
+static int is_sav_name(void* name)
+{
+    const wchar_t* s = NULL;
+    size_t n;
+    __try { s = name ? *(const wchar_t* const*)name : NULL; n = s ? wcslen(s) : 0; }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    return n > 4 && !_wcsicmp(s + n - 4, L".sav");
+}
+
+static void* __fastcall hook_ProvOpen(void* self, void* edx, void* name, int mode)
+{
+    void* s;
+    LONGLONG t0;
+    int sav;
+    if (!g_listDepth) return g_origProvOpen(self, edx, name, mode);
+    t0 = qpc_us();
+    sav = is_sav_name(name);
+    if ((mode & 0xFF) && sav && g_fastBuild) {
+        s = g_origProvOpen(self, edx, name, 0);
+        if (s && lazy_attach(s)) {
+            g_lazyOpens++;
+        } else {
+            if (s) __try { ((void (__fastcall*)(void*, void*, int))(uintptr_t)VA_STREAM_DTOR)(s, NULL, 1); }
+                   __except (EXCEPTION_EXECUTE_HANDLER) {}
+            g_lazyFallbacks++;
+            s = g_origProvOpen(self, edx, name, mode);
+        }
+    } else {
+        s = g_origProvOpen(self, edx, name, mode);
+    }
+    if (sav) { g_savOpens++; g_savOpenUs += qpc_us() - t0; }
+    else     { g_bmpOpens++; g_bmpOpenUs += qpc_us() - t0; }
+    return s;
+}
+
+static int hook_provider_open(void)
+{
+    DWORD old = 0, tmp = 0;
+    void** slot = (void**)(uintptr_t)VA_PROV_VTBL_OPEN;
+    void** mem = (void**)(uintptr_t)VA_MEM_STREAM;
+    if (!range_readable(slot, sizeof(void*)) || read_ptr(slot) != (void*)(uintptr_t)VA_PROV_OPEN ||
+        !code_matches(VA_PROV_OPEN, "55 8b ec 56 57 6a 00 6a 03 6a 3c 8b f9") ||
+        !code_matches(VA_PROV_STREAM, "55 8b ec 83 e4 f8 81 ec 30 01 00 00") ||
+        !code_matches(VA_PROV_FORWARD, "55 8b ec 8b 49 20 8b 01 5d ff 60 04") ||
+        !code_matches(VA_STREAM_DTOR, "55 8b ec 56 8b f1 8b 4e 20 c7 06 2c 2c f0 00") ||
+        read_ptr((void*)(uintptr_t)VA_STEAM_STREAM) != (void*)(uintptr_t)VA_STREAM_DTOR ||
+        read_ptr(&mem[1]) != (void*)(uintptr_t)VA_MEM_SERIALIZE || read_ptr(&mem[3]) != (void*)(uintptr_t)VA_MEM_SIZE ||
+        !code_matches(VA_MEM_SERIALIZE, "55 8b ec 56 8b f1 8b 4e 14 8b 46 10") ||
+        !code_matches(VA_MEM_SIZE, "8b 41 10 8b 40 04 c3")) {
+        logf_("savelist: Steam provider open not recognised - fast_list off");
+        return 0;
+    }
+    if (!AddVectoredExceptionHandler(1, lazy_fault)) return 0;
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
+    g_origProvOpen = (ProvOpen_t)*slot;
+    *slot = (void*)hook_ProvOpen;
+    VirtualProtect(slot, sizeof(void*), old, &tmp);
+    return 1;
+}
+
 typedef struct mem_view { DWORD private_mb, commit_mb, reserve_mb, free_mb, largest_free_mb; } mem_view;
 
 // Private bytes plus a walk of the 32-bit address space: an image that cannot be
@@ -1160,26 +1345,42 @@ static void savelist_run(void* panel, const char* who)
 {
     static int builds;
     mem_view a, b;
-    DWORD t0;
+    LONGLONG t0;
+    builds++;
+    // fast_list=2 alternates (odd builds fast) so one session measures both ways.
+    g_fastBuild = g_origProvOpen && (cfg_fast_list == 1 || (cfg_fast_list == 2 && (builds & 1)));
     if (!cfg_savelist_trace) {
         InterlockedIncrement(&g_listDepth);
         ((SaveList_t)(uintptr_t)VA_SAVELIST)(panel);
         InterlockedDecrement(&g_listDepth);
+        lazy_release();
         return;
     }
     mem_snapshot(&a);
     g_listImages = g_listNewImages = g_listReadsSav = g_listReadsOther = g_listFreed = 0;
-    g_listBytes = 0; g_listReadMs = 0;
-    t0 = GetTickCount();
+    g_listBytes = 0; g_listReadMs = 0; g_listAddUs = 0;
+    g_lazyOpens = g_lazyFallbacks = g_lazyBlocks = g_lazyBlocksAll = g_lazyBad = 0;
+    g_savOpens = g_bmpOpens = 0;
+    g_savOpenUs = g_bmpOpenUs = g_lazyUnpackUs = 0;
+    t0 = qpc_us();
     InterlockedIncrement(&g_listDepth);
     ((SaveList_t)(uintptr_t)VA_SAVELIST)(panel);
     InterlockedDecrement(&g_listDepth);
-    t0 = GetTickCount() - t0;
+    lazy_release();
+    t0 = qpc_us() - t0;
     mem_snapshot(&b);
-    logf_("savelist: build %d (%s) %lu ms; Steam reads %ld .sav + %ld other, %lu MB in %lu ms; "
+    logf_("savelist: build %d (%s, %s reads) %lu ms; Steam reads %ld .sav + %ld other, %lu MB in %lu ms; "
           "previews %ld (%ld new, %d held this session), leaked streams freed %ld",
-          ++builds, who, t0, g_listReadsSav, g_listReadsOther, (DWORD)(g_listBytes >> 20), g_listReadMs,
-          g_listImages, g_listNewImages, g_seenCount, g_listFreed);
+          builds, who, g_fastBuild ? "fast" : "full", (DWORD)(t0 / 1000), g_listReadsSav, g_listReadsOther,
+          (DWORD)(g_listBytes >> 20), g_listReadMs, g_listImages, g_listNewImages, g_seenCount, g_listFreed);
+    logf_("savelist:   .sav opens %ld in %lu ms, preview opens %ld in %lu ms, preview decode %lu ms, "
+          "rest (header parse, GUI) %ld ms",
+          g_savOpens, (DWORD)(g_savOpenUs / 1000), g_bmpOpens, (DWORD)(g_bmpOpenUs / 1000),
+          (DWORD)(g_listAddUs / 1000),
+          (long)((t0 - g_savOpenUs - g_bmpOpenUs - g_listAddUs) / 1000));
+    if (g_fastBuild)
+        logf_("savelist:   fast reads %ld, fallbacks %ld, blocks unpacked %ld of %ld (%lu ms), bad blocks %ld",
+              g_lazyOpens, g_lazyFallbacks, g_lazyBlocks, g_lazyBlocksAll, (DWORD)(g_lazyUnpackUs / 1000), g_lazyBad);
     logf_("savelist:   private %lu -> %lu MB, commit %lu -> %lu MB, largest free %lu -> %lu MB",
           a.private_mb, b.private_mb, a.commit_mb, b.commit_mb, a.largest_free_mb, b.largest_free_mb);
 }
@@ -1208,7 +1409,7 @@ static void savelist_install(void)
 {
     int a, b;
     if (!code_matches(VA_SAVELIST, "55 8b ec 83 e4 f8 81 ec ec 01 00 00")) {
-        logf_("savelist: list builder not recognised - leak fix and trace off");
+        logf_("savelist: list builder not recognised - leak fix, fast_list and trace off");
         return;
     }
     if (cfg_list_leak) {
@@ -1220,11 +1421,12 @@ static void savelist_install(void)
         else
             logf_("savelist: registry lookup or stream destructor not recognised - leak fix off");
     }
-    if (!g_leakFixOn && !cfg_savelist_trace) return;
+    if (!g_leakFixOn && !cfg_savelist_trace && !cfg_fast_list) return;
+    if ((cfg_fast_list || cfg_savelist_trace) && !hook_provider_open()) cfg_fast_list = 0;
     a = patch_call(VA_SAVELIST_CALL_A, VA_SAVELIST, (void*)savelist_startup);
     b = patch_call(VA_SAVELIST_CALL_B, VA_SAVELIST, (void*)savelist_menu);
-    logf_("savelist: startup call %s, menu call %s; leak fix=%d trace=%d",
-          a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_leakFixOn, cfg_savelist_trace);
+    logf_("savelist: startup call %s, menu call %s; leak fix=%d fast_list=%d trace=%d",
+          a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_leakFixOn, cfg_fast_list, cfg_savelist_trace);
     if (cfg_savelist_trace) log_mem("at install");
 }
 
@@ -1998,7 +2200,7 @@ static void save_tick(void)
     static int iat_done, steam_done, steam_tries;
     static unsigned char last_pending = 0xFE, last_queued = 0xFE;
     static DWORD mem_tick;
-    if (!cfg_save_trace && !cfg_save_thumbs && !cfg_savelist_trace && !cfg_list_leak) return;
+    if (!cfg_save_trace && !cfg_save_thumbs && !cfg_savelist_trace && !cfg_list_leak && !cfg_fast_list) return;
     if (!iat_done) {
         HMODULE pinned;
         iat_done = 1;
@@ -2006,7 +2208,7 @@ static void save_tick(void)
         if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
                                 (LPCSTR)(uintptr_t)hook_CreateFileW, &pinned)) {
             logf_("saves: could not pin module - thumbnail fix and trace disabled");
-            cfg_save_trace = cfg_save_thumbs = cfg_savelist_trace = cfg_list_leak = 0;
+            cfg_save_trace = cfg_save_thumbs = cfg_savelist_trace = cfg_list_leak = cfg_fast_list = 0;
             return;
         }
         if (cfg_save_trace) {
@@ -2021,7 +2223,7 @@ static void save_tick(void)
             cfg_save_thumbs = 0;
         }
         if (cfg_save_thumbs || cfg_savelist_trace || cfg_list_leak) hook_image_registry();
-        if (cfg_savelist_trace || cfg_list_leak) { savelist_install(); mem_tick = GetTickCount(); }
+        if (cfg_savelist_trace || cfg_list_leak || cfg_fast_list) { savelist_install(); mem_tick = GetTickCount(); }
     }
     if (!steam_done && steam_tries < 600) {
         HMODULE api = GetModuleHandleA("steam_api.dll");

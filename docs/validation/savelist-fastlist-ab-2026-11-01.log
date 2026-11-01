@@ -1,0 +1,83 @@
+23:36:15.631 witcher2_enginefix 0.6.1 loaded (image base 0x00400000)
+23:36:15.631 diagnostics: crash_dump=1 (previous log kept as witcher2_enginefix.prev.log)
+23:36:15.631 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+23:36:15.631 distance config: experimental=1 visibility=3.00x shadow=3.00x
+23:36:15.631 saves: fix_thumbnails=1 save_trace=0
+23:36:15.631 startup: skip_intro=1
+23:36:15.631 diagnostics: file_trace=0
+23:36:15.631 scriptpatches: book_marker=1 continue=1 pause_quit=1
+23:36:15.631 presets: startup=extreme, cycle modifiers=1 VK=79 (session only)
+23:36:15.634 script-patcher: hooked kernel32.dll!CreateFileW
+23:36:15.634 script-patcher: hooked kernel32.dll!FindFirstFileW
+23:36:15.634 script-patcher: hooked kernel32.dll!FindNextFileW
+23:36:15.635 script patches: hooks installed after 0 ms (3/3 slots)
+23:36:15.749 startup: movie list and tick hooked after 125 ms
+23:36:15.864 script overlay: cache D:\SteamLibrary\steamapps\common\the witcher 2\bin\witcher2_enginefix_cache
+23:36:16.107 script overlay: cache: reused (4 redirects)
+23:36:16.108 script patches: book_marker=on continue=on pause_quit=on cache=reused
+23:36:16.482 script patches: CreateFileW "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\base_scripts.dzip" -> cached copy
+23:36:16.490 script patches: CreateFileW "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\dlc_finishers.dzip" -> cached copy
+23:36:16.826 script patches: CreateFileW "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\base_scripts.dzip" -> cached copy
+23:36:17.143 crash: filter armed, chaining to 0x714F2571 (CSERHelper.dll+0x12571)
+23:36:17.149 osd: window ready (font 34 px)
+23:36:17.150 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
+23:36:17.150 osd: Graphics: extreme  (LOD only)
+23:36:17.154 lod enforced: mesh=8.000 foliage=5.000
+23:36:17.155 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=3.00x shadow=3.00x
+23:36:17.155 osd: Graphics: extreme  (4/4)
+23:36:17.155 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+23:36:17.155 thumbnail: menu image registry hooked (QuickSave preview refresh)
+23:36:17.155 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=2 trace=1
+23:36:17.159 savelist: at install private=210 MB commit=380 reserve=113 free=3601 largest_free=2046 MB, previews held=0
+23:36:17.159 saves: ISteamRemoteStorage 11890BE8 FileWrite hooked; thumbnail fix=1
+23:36:33.176 input: CreateDevice hook installed
+23:36:33.177 input: keyboard state filter installed
+23:36:33.179 startup: movie list built (1 entries), skip armed
+23:36:33.490 startup: stopping startup movie 1 of 1
+23:36:33.623 startup: 1 startup movie(s) stopped, main menu reached
+23:36:35.698 savelist: build 1 (startup, fast reads) 984 ms; Steam reads 120 .sav + 120 other, 221 MB in 328 ms; previews 120 (120 new, 120 held this session), leaked streams freed 0
+23:36:35.698 savelist:   .sav opens 120 in 272 ms, preview opens 120 in 235 ms, preview decode 0 ms, rest (header parse, GUI) 476 ms
+23:36:35.698 savelist:   fast reads 120, fallbacks 0, blocks unpacked 360 of 13835 (22 ms), bad blocks 0
+23:36:35.698 savelist:   private 881 -> 1083 MB, commit 1235 -> 1438 MB, largest free 2044 -> 2044 MB
+23:36:49.174 savelist: build 2 (menu, full reads) 2200 ms; Steam reads 120 .sav + 120 other, 221 MB in 297 ms; previews 120 (0 new, 120 held this session), leaked streams freed 120
+23:36:49.174 savelist:   .sav opens 120 in 1497 ms, preview opens 120 in 204 ms, preview decode 0 ms, rest (header parse, GUI) 498 ms
+23:36:49.174 savelist:   private 1023 -> 1024 MB, commit 1390 -> 1391 MB, largest free 2044 -> 2044 MB
+23:37:02.867 savelist: build 3 (menu, fast reads) 905 ms; Steam reads 120 .sav + 120 other, 221 MB in 359 ms; previews 120 (0 new, 120 held this session), leaked streams freed 120
+23:37:02.867 savelist:   .sav opens 120 in 241 ms, preview opens 120 in 206 ms, preview decode 0 ms, rest (header parse, GUI) 457 ms
+23:37:02.867 savelist:   fast reads 120, fallbacks 0, blocks unpacked 360 of 13835 (21 ms), bad blocks 0
+23:37:02.867 savelist:   private 1024 -> 1024 MB, commit 1377 -> 1377 MB, largest free 2044 -> 2044 MB
+23:37:11.106 savelist: build 4 (menu, full reads) 2230 ms; Steam reads 120 .sav + 120 other, 221 MB in 345 ms; previews 120 (0 new, 120 held this session), leaked streams freed 120
+23:37:11.106 savelist:   .sav opens 120 in 1514 ms, preview opens 120 in 205 ms, preview decode 0 ms, rest (header parse, GUI) 510 ms
+23:37:11.106 savelist:   private 1008 -> 1008 MB, commit 1361 -> 1361 MB, largest free 2044 -> 2044 MB
+23:37:17.218 savelist: periodic private=1008 MB commit=1369 reserve=270 free=2455 largest_free=2044 MB, previews held=120
+23:37:17.218 savelist: leaked preview streams freed so far: 360
+23:37:19.447 savelist: build 5 (menu, fast reads) 900 ms; Steam reads 120 .sav + 120 other, 221 MB in 406 ms; previews 120 (0 new, 120 held this session), leaked streams freed 120
+23:37:19.447 savelist:   .sav opens 120 in 240 ms, preview opens 120 in 204 ms, preview decode 0 ms, rest (header parse, GUI) 455 ms
+23:37:19.447 savelist:   fast reads 120, fallbacks 0, blocks unpacked 360 of 13835 (20 ms), bad blocks 0
+23:37:19.447 savelist:   private 1008 -> 1008 MB, commit 1369 -> 1369 MB, largest free 2044 -> 2044 MB
+23:37:32.862 distance stats: mesh=20966 shadow=926 baseline_reject=2333 admitted=927 (3.00x/3.00x)
+23:37:37.915 distance stats: mesh=4617651 shadow=283759 baseline_reject=565110 admitted=223359 (3.00x/3.00x)
+23:37:42.970 distance stats: mesh=6838769 shadow=402620 baseline_reject=762483 admitted=301592 (3.00x/3.00x)
+23:37:48.022 distance stats: mesh=7707909 shadow=452661 baseline_reject=858778 admitted=339662 (3.00x/3.00x)
+23:37:53.077 distance stats: mesh=4808880 shadow=284316 baseline_reject=536573 admitted=212332 (3.00x/3.00x)
+23:37:53.567 savelist: build 6 (menu, full reads) 2357 ms; Steam reads 120 .sav + 120 other, 221 MB in 344 ms; previews 120 (0 new, 120 held this session), leaked streams freed 120
+23:37:53.568 savelist:   .sav opens 120 in 1605 ms, preview opens 120 in 211 ms, preview decode 0 ms, rest (header parse, GUI) 540 ms
+23:37:53.568 savelist:   private 1426 -> 1427 MB, commit 1801 -> 1802 MB, largest free 1946 -> 1946 MB
+23:37:58.132 distance stats: mesh=6777280 shadow=399040 baseline_reject=755520 admitted=298880 (3.00x/3.00x)
+23:38:03.135 savelist: build 7 (menu, fast reads) 888 ms; Steam reads 120 .sav + 120 other, 221 MB in 357 ms; previews 120 (0 new, 120 held this session), leaked streams freed 120
+23:38:03.135 savelist:   .sav opens 120 in 240 ms, preview opens 120 in 202 ms, preview decode 0 ms, rest (header parse, GUI) 446 ms
+23:38:03.135 savelist:   fast reads 120, fallbacks 0, blocks unpacked 360 of 13835 (20 ms), bad blocks 0
+23:38:03.135 savelist:   private 1413 -> 1397 MB, commit 1788 -> 1772 MB, largest free 1946 -> 1946 MB
+23:38:03.184 distance stats: mesh=6310004 shadow=370359 baseline_reject=702952 admitted=278018 (3.00x/3.00x)
+23:38:08.238 distance stats: mesh=5529057 shadow=326714 baseline_reject=616847 admitted=244088 (3.00x/3.00x)
+23:38:10.666 input: CreateDevice hook installed
+23:38:10.666 input: keyboard state filter installed
+23:38:13.288 distance stats: mesh=2368554 shadow=138362 baseline_reject=263362 admitted=104584 (3.00x/3.00x)
+23:38:17.274 savelist: periodic private=1457 MB commit=1813 reserve=248 free=2033 largest_free=1856 MB, previews held=120
+23:38:17.274 savelist: leaked preview streams freed so far: 720
+23:38:18.357 distance stats: mesh=4493999 shadow=274099 baseline_reject=540318 admitted=213033 (3.00x/3.00x)
+23:38:20.220 savelist: build 8 (menu, full reads) 2335 ms; Steam reads 120 .sav + 120 other, 221 MB in 406 ms; previews 120 (0 new, 120 held this session), leaked streams freed 120
+23:38:20.220 savelist:   .sav opens 120 in 1603 ms, preview opens 120 in 217 ms, preview decode 0 ms, rest (header parse, GUI) 515 ms
+23:38:20.220 savelist:   private 1457 -> 1458 MB, commit 1813 -> 1814 MB, largest free 1856 -> 1856 MB
+23:38:23.413 distance stats: mesh=4753232 shadow=280918 baseline_reject=535168 admitted=209502 (3.00x/3.00x)
+23:38:24.749 unloaded
