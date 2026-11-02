@@ -16,7 +16,7 @@ What it does:
 - Faster save list: the list unpacks only the few parts of each save it
   reads, in memory, instead of every save in full (~2.5x faster with 120
   saves). Loading a save is unchanged.
-- Houses, shops and inns without a loading blink: the outdoors stays loaded
+- Seamless interiors: houses, shops and inns without a fade. The outdoors stays loaded
   (visible through the windows), the area's interiors load with the area, so
   open doors show the real rooms, and a door takes a few hundredths of a
   second without a fade instead of ~2.2 s. Doors that change area (the gate

@@ -6,7 +6,7 @@ versions are not separate Nexus releases.
 
 ## 0.8.0
 
-- Houses, shops and inns without a loading blink (`[loading] interiors=2`, default). Interiors are not separate levels: each is a world partition (a list of layers) inside its own building, and a door swaps partitions. Going into a house the game unloaded the outdoors around it (bushes, rocks, animals, fog, in Flotsam also far buildings, ships and the town's sound) and loaded it all again on the way out, behind a fade. Now:
+- Seamless interiors: walk into houses, shops and inns without a fade (`[loading] interiors=2`, default). Interiors are not separate levels: each is a world partition (a list of layers) inside its own building, and a door swaps partitions. Going into a house the game unloaded the outdoors around it (bushes, rocks, animals, fog, in Flotsam also far buildings, ships and the town's sound) and loaded it all again on the way out, behind a fade. Now:
   - the outdoors stays loaded (visible through the windows); a door only swaps what each place has of its own: ambient sound, occluders, the indoor environment, the area's flat "fake room" boxes and low-poly stand-ins;
   - the area's interiors are loaded together with the area (behind the loading screen or the area-change fade; ~1 s more on loading a save), so open doors show the real rooms and no house door loads anything. The interiors are found from the game's partition tree (an area's indoor sibling partitions) and from their folders (`\buildings\<name>\interior\`, the prologue's `_ints\`);
   - the engine's full object garbage collection is skipped on those doors (25-40 ms each, with nothing to collect);

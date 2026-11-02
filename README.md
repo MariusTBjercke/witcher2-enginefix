@@ -1,6 +1,6 @@
 # Witcher 2 Engine Fix
 
-Draw-distance, save-preview, interior-map and quality-of-life fixes for **The Witcher 2: Assassins of Kings - Enhanced Edition**. A small `dinput8.dll` that the game loads by itself and that adjusts specific engine values and bugs in memory while the game runs. `witcher2.exe`, the game's data files and your saves are never modified.
+Seamless interiors, draw-distance, save-preview, interior-map and quality-of-life fixes for **The Witcher 2: Assassins of Kings - Enhanced Edition**. A small `dinput8.dll` that the game loads by itself and that adjusts specific engine values and bugs in memory while the game runs. `witcher2.exe`, the game's data files and your saves are never modified.
 
 Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-enginefix) for The Witcher 1, built the same way.
 
@@ -13,7 +13,7 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Graphics presets** | One hotkey, **Ctrl+F10**, cycles baseline / high / ultra / extreme. Each level sets mesh LOD distance, foliage distance, the hard mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. Starts at `extreme`. The same levels are a **Draw distance** row in Options > Graphics (no on-screen text there), which the game remembers between sessions. | on (extreme) |
 | **LOD values that stick** | The game's `MeshDistanceScale`/`FoliageDistanceScale` are held at the preset values, also after the options menu rewrites them, and the two "gameplay LOD downscale" flags are kept off. | on |
 | **Black map in interiors** | In 25 interior map entries (temples, inns, Loredo's house, towers and other houses) the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
-| **Faster house doors** | Entering or leaving a house faded to black, swapped in the interior in a fraction of a second and then stayed black until the door animation ended. The picture now comes back as soon as the interior is in, with shorter fades: ~0.65 s instead of ~2.2 s per door. `[loading] fast_doors`, `door_fade`. | on |
+| **Seamless interiors** | Walk into houses, shops and inns without a fade. The game unloaded the outdoors around you at every door and loaded it again on the way out, behind ~2.2 s of black. Now the outdoors stays loaded (visible through the windows), the area's interiors load with the area so open doors show the real rooms, and a house door takes a few hundredths of a second. Doors that change area (the Flotsam gate) keep a short fade. `[loading] interiors` (2 preload, 1 load on first visit, 0 the game's doors), `door_fade`, `area_fade`. | on |
 | **Faster save list** | To show the Load/Save list (and at game start) the game unpacked every save in full to read a few header values. The mod unpacks only the parts the list reads, in memory: about 2.5x faster with 120 saves, same list. Loading a save is unchanged. `[saves] fast_list`. | on |
 | **Crash guard** | A physics ray cast that meets an object that was just unloaded (seen once when walking out of the Flotsam inn) misses it instead of closing the game. `[stability] raycast_guard`. | on |
 | **Crash capture** | The game's own crash handler closes the game without a word. The mod logs what crashed and writes a small dump next to the log, so a crash can be reported and analysed. `[diagnostics] crash_dump`. | on |
@@ -84,7 +84,8 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[saves] fix_thumbnails` | 1 | 0 turns the save-preview fix off |
 | `[saves] fix_list_leak` | 1 | 0 turns the save-list leak fix off |
 | `[saves] fast_list` | 1 | 0 lets the game unpack every save in full for the Load/Save list |
-| `[loading] fast_doors`, `door_fade` | 1, 0.25 | 0 and 0.5 restore the game's door timing |
+| `[loading] interiors` | 2 | 1 loads each interior on its first visit (short fade then), 0 restores the game's doors |
+| `[loading] fast_doors`, `door_fade`, `area_fade` | 1, 0.05, 0.25 | fade lengths for house doors and area changes; `fast_doors=0` and 0.5 restore the game's timing |
 | `[stability] raycast_guard` | 1 | 0 turns the ray-cast crash guard off |
 | `[startup] skip_intro` | 0 | 1 starts at the main menu, without logo videos and intro |
 | `[window] borderless` | 0 | 1 starts borderless (Full screen off, desktop resolution). After the first use, Options > Graphics owns the setting; it is stored in the game's User.ini |
