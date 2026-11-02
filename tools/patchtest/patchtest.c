@@ -1336,31 +1336,33 @@ done:
     return why;
 }
 
-// The RCDATA table: 14 rows in $FeatureList order, 8 BookMarker, 2 Continue, 4 PauseQuit.
+// The RCDATA table: 17 rows in $FeatureList order, 8 BookMarker, 2 Continue, 4 PauseQuit,
+// 3 WindowMode.
 static const char* test_script_data(void)
 {
     static const char* const frags[] = {
         "book_helpers.ws", "book_texts.ws", "continue_button.ws", "continue_input.ws",
         "quit_button.ws", "quit_input.ws", "quit_members.ws", "quit_box.ws",
-        "inventory_refill.ws"
+        "inventory_refill.ws", "window_graphics.ws", "window_input.ws", "window_texts.ws"
     };
     const sp_edit* e = NULL;
     const char* why = NULL;
-    int n = 0, i, book = 0, cont = 0, quit = 0, ends = 0;
+    int n = 0, i, book = 0, cont = 0, quit = 0, window = 0, ends = 0;
 
     if (!sp_edits_load(&e, &n)) {
         _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "sp_edits_load: %s", sp_script_error());
         why = g_why;
         goto done;
     }
-    CHECK(n == 14);
+    CHECK(n == 18);
     for (i = 0; i < n; i++) {
         if (strcmp(e[i].feature, "BookMarker") == 0) book++;
         else if (strcmp(e[i].feature, "Continue") == 0) cont++;
         else if (strcmp(e[i].feature, "PauseQuit") == 0) quit++;
+        else if (strcmp(e[i].feature, "WindowMode") == 0) window++;
         if (e[i].where == SP_END) ends++;
     }
-    CHECK(book == 8 && cont == 2 && quit == 4 && ends == 2);
+    CHECK(book == 8 && cont == 2 && quit == 4 && window == 4 && ends == 3);
     CHECK(strcmp(e[0].feature, "BookMarker") == 0);
     CHECK(strcmp(e[0].entry, "game\\gui\\guiutils.ws") == 0);
     CHECK(e[0].where == SP_AFTER && e[0].count == 1);
@@ -1480,7 +1482,7 @@ static const char* test_script_real(void)
         "game\\gameplay\\container_class.ws",
         "game\\gui\\guiinventory.ws"
     };
-    static const int want[5] = { 2, 1, 6, 6, 2 };
+    static const int want[5] = { 2, 1, 10, 6, 2 };
     static const char* books[2] = { "Book of Nekkers", "Book of Drowners" };
     const char* why = NULL;
     wchar_t zip[MAX_PATH], backup[MAX_PATH], cc[MAX_PATH];
@@ -1520,6 +1522,7 @@ static const char* test_script_real(void)
     CHECK(sp_script_apply("BookMarker", texts, 5, &ctx, whytxt, sizeof whytxt));
     CHECK(sp_script_apply("Continue", texts, 5, &ctx, whytxt, sizeof whytxt));
     CHECK(sp_script_apply("PauseQuit", texts, 5, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("WindowMode", texts, 5, &ctx, whytxt, sizeof whytxt));
     for (i = 0; i < 5; i++) {
         int got = count_in_text(&texts[i].text, "//===witcher2-enginefix=== BEGIN");
 
@@ -1530,7 +1533,7 @@ static const char* test_script_real(void)
             goto done;
         }
     }
-    printf("  markers 2 1 6 6 2, %d bytes of scripts\n",
+    printf("  markers 2 1 10 6 2, %d bytes of scripts\n",
            (int)(texts[0].text.n + texts[1].text.n + texts[2].text.n + texts[3].text.n +
                  texts[4].text.n));
 done:
@@ -1708,7 +1711,7 @@ static void log_line(const char* fmt, ...)
     fflush(stdout);
 }
 
-// build <game> <out>: the overlay for all three features, as the golden test runs it.
+// build <game> <out>: the overlay for all four features, as the golden test runs it.
 static int run_build(const char* game_arg, const char* out_arg)
 {
     static const int k_redirects = 8;
@@ -1728,6 +1731,7 @@ static int run_build(const char* game_arg, const char* out_arg)
     f.book_marker = 1;
     f.cont = 1;
     f.pause_quit = 1;
+    f.window_mode = 1;
     GetSystemTimeAsFileTime(&ft);
     now.LowPart = ft.dwLowDateTime;
     now.HighPart = ft.dwHighDateTime;

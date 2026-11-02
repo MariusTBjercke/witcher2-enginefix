@@ -282,3 +282,53 @@ and rollback are in [render-distance-experiment](fixes/render-distance-experimen
   found by trying all). Decoder: `tools/script-patches/check_texts.py`. Languages with full
   texts here: EN PL DE FR ES IT RU CZ HU TR JP ZH (Traditional); `br_user`/`kr_user` hold English
   placeholders. `theGame.GetGameLanguageName( audio, text )` returns these codes.
+
+## 10. Window, video mode and the in-game options (2026-11-02)
+
+Verified for the borderless feature (`docs/fixes/borderless-window.md`).
+
+* **The window** is created in `FUN_009d44e1` (`0x009D44E1`), class **`W2ViewportClass`**, which
+  is also how the mod finds it (`FindWindowW`). Windowed: style `0x00C80000` (caption + system
+  menu), exstyle `0x40000` (WS_EX_APPWINDOW), centered, client area = the configured resolution
+  (`0x009D45C3` / **`0x009D45CA`**, then `AdjustWindowRect` at `0x009D45E1`). Full screen:
+  `WS_POPUP` (`0x80000000`), exstyle `0x8` (WS_EX_TOPMOST), at 0,0 (`0x009D4562` /
+  `0x009D4569`). `CreateWindowExW` adds `WS_CLIPCHILDREN` (`0x009D4681`, IAT slot `0x00CAD338`).
+* **The mode setting**: `[Rendering] Fullscreen` (User.ini) is read by `FUN_00b07714` into the
+  settings object at **`+0x10`** (store `0x00B07A49`; `VSync` `+0x11`). It selects the window
+  branch above and `D3DPRESENT_PARAMETERS.Windowed` in `FUN_0052ccb0`
+  (`local_a20 = (param_4 == 0)`). There is **no runtime mode switch**: the only path is the
+  viewport-init vtable method `FUN_009e124a` (slot `0x00EC6114`) -> `FUN_009de288` ->
+  `FUN_0052ccb0`. A live change therefore needs a restart; only the window *style* is live
+  (restyle with `SetWindowLongW`/`SetWindowPos`).
+* **SteamStub and code patches**: `.text` is encrypted until the stub jumps to the OEP
+  `0x0066F59D`, which happens after every static DLL's `DllMain`. A `.text` patch installed from
+  `DllMain` reads encrypted bytes; poll for the site's fingerprint instead (the IAT, by contrast,
+  is already filled at `DllMain`, see section 6).
+* **DPI**: `witcher2.exe` has no manifest (`<assembly`/`dpiAware` absent in both the packed and
+  the unpacked file) and no `SetProcessDPIAware` code, so the process is DPI-unaware. On a scaled
+  desktop a windowed client is virtualized (4K at 150 % becomes 5760x3240 physical). A DLL can
+  still set awareness from an early thread, before the game creates its window
+  (`SetProcessDpiAwarenessContext` / `SetProcessDPIAware`).
+* **The in-game options are scripted**: `game\gui\guimainmenu.ws` has `FillOptionsGraphics` /
+  `InputOptionsGraphics` (brightness and gamma only; mode, resolution and VSync are launcher
+  settings, labelled in `bin\config\lang\EN.ini`). `InsertMenuOnOff( items, id, label, state )`
+  and ids outside `EMenuButtons` (the mod uses `9001` for Continue) are the pattern for a new
+  toggle.
+* **Script settings**: `theGame.ReadConfigParamFloat(category, section, key, out value)` and
+  `WriteConfigParamFloat(category, section, key, value)`; the writer native `FUN_009B503A` calls
+  `FUN_0041F4B7( const wchar_t* category, const wchar_t* section, const wchar_t* key,
+  const float* value )` - **`__stdcall`**: it ends in `RET 0x10` and the caller (`0x009B50EA`,
+  continuing at `0x009B50EF`) does not clean the arguments. A detour must use `__stdcall`; a
+  `__cdecl` hook removes the arguments a second time and returns into the stack (crash of the
+  first 0.7.0 test, 2026-11-02, see `docs/validation/borderless-first-test-2026-11-02.md`).
+  Prologue `55 8B EC 83 E4 F8 A1 50 86 60 01`. That entry is the live channel from the patched
+  menu to the DLL. The writer marks the config dirty; the engine writes User.ini later, so polling
+  the file is not a substitute.
+* **Peer-stop barrier at startup** (`src/patch_barrier.h`, shared): the freeze-to-a-fixed-point
+  pass can fail while the process is still creating threads (new thread in every pass, or a thread
+  exiting during enumeration). It succeeded 3 ms later in the 2026-11-02 log, so retry the install
+  briefly instead of giving up.
+* `FUN_009d24f8` is the mouse-mode function (0 = free, 1 = `ClipCursor` to the window rect,
+  2/3 = capture/exclusive DirectInput); it is not tied to full screen, so cursor clipping already
+  works in windowed/borderless mode.
+

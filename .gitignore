@@ -28,3 +28,6 @@ desktop.ini
 
 # Local notes
 docs/local/
+
+# Python bytecode
+__pycache__/

@@ -42,8 +42,9 @@ static const wchar_t* const k_carriers[] = {
 #define OV_NCARRIERS ((int)(sizeof k_carriers / sizeof k_carriers[0]))
 
 // Part of the cache key: bump it whenever the cache's contents or layout change, so an older
-// cache built by the same ENGINEFIX_VERSION is never served. 2 = icons in a carrier archive.
-#define OV_CACHE_LAYOUT 2
+// cache built by the same ENGINEFIX_VERSION is never served. 2 = icons in a carrier archive;
+// 3 = the WindowMode rows in guimainmenu.ws; 4 = one Display mode selector instead of two rows.
+#define OV_CACHE_LAYOUT 4
 
 // ---- logging -----------------------------------------------------------
 
@@ -300,7 +301,7 @@ static int ensure_dir(const wchar_t* path)
 // ---- build status ------------------------------------------------------
 // One line for the DLL's log (sp_overlay_status), built from the per-feature outcomes below.
 
-static char g_status[700];
+static char g_status[1000];
 
 const char* sp_overlay_status(void)
 {
@@ -458,8 +459,8 @@ static int build_key(ov_ctx* c, sp_features f, obuf* key)
     ob_clear(key);
     if (!ob_printf(key, "witcher2-enginefix %s layout %d\n", ENGINEFIX_VERSION,
                    OV_CACHE_LAYOUT) ||
-        !ob_printf(key, "features book_marker=%d continue=%d pause_quit=%d\n",
-                   f.book_marker, f.cont, f.pause_quit)) {
+        !ob_printf(key, "features book_marker=%d continue=%d pause_quit=%d window_mode=%d\n",
+                   f.book_marker, f.cont, f.pause_quit, f.window_mode)) {
         return 0;
     }
     for (i = 0; i < c->narch; i++) {
@@ -1063,7 +1064,8 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     sp_ctx sctx;
     sp_ctx* pctx = NULL;
     char st_book[240] = "off", st_cont[240] = "off", st_quit[240] = "off";
-    char status_feats[620] = "";
+    char st_window[240] = "off";
+    char status_feats[900] = "";
     int i, ok = 0, skip_scripts = 0, have_collect = 0, book_ok = 0, any, from_cache = 0;
     DWORD started = GetTickCount();
 
@@ -1083,9 +1085,10 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         return 0;
     }
     ctx.log = log;
-    any = f.book_marker || f.cont || f.pause_quit;
+    any = f.book_marker || f.cont || f.pause_quit || f.window_mode;
     if (!any) {
-        _snprintf_s(g_status, sizeof g_status, _TRUNCATE, "book_marker=off continue=off pause_quit=off cache=-");
+        _snprintf_s(g_status, sizeof g_status, _TRUNCATE,
+                    "book_marker=off continue=off pause_quit=off window_mode=off cache=-");
         vlogf(log, "script overlay: no feature enabled");
         return 1;
     }
@@ -1104,16 +1107,16 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         goto done;
     }
     if (key_matches(cache_dir, &key)) {
-        char remembered[620];
+        char remembered[900];
 
         reuse_redirects(&ctx, cache_dir, f, r, nr, maxr, log);
         if (read_status(cache_dir, remembered, sizeof remembered) && remembered[0]) {
             _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE, "%s", remembered);
         } else {
             _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE,
-                        "book_marker=%s continue=%s pause_quit=%s",
+                        "book_marker=%s continue=%s pause_quit=%s window_mode=%s",
                         f.book_marker ? "on" : "off", f.cont ? "on" : "off",
-                        f.pause_quit ? "on" : "off");
+                        f.pause_quit ? "on" : "off", f.window_mode ? "on" : "off");
         }
         from_cache = 1;
         vlogf(log, "script overlay: cache: reused (%d redirects)", *nr);
@@ -1166,8 +1169,10 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         if (f.book_marker) _snprintf_s(st_book, sizeof st_book, _TRUNCATE, "skipped: scripts already patched");
         if (f.cont) _snprintf_s(st_cont, sizeof st_cont, _TRUNCATE, "skipped: scripts already patched");
         if (f.pause_quit) _snprintf_s(st_quit, sizeof st_quit, _TRUNCATE, "skipped: scripts already patched");
+        if (f.window_mode) _snprintf_s(st_window, sizeof st_window, _TRUNCATE, "skipped: scripts already patched");
         _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE,
-                    "book_marker=%s continue=%s pause_quit=%s", st_book, st_cont, st_quit);
+                    "book_marker=%s continue=%s pause_quit=%s window_mode=%s", st_book, st_cont,
+                    st_quit, st_window);
         write_status(cache_dir, status_feats);
         if (!write_key(cache_dir, &key)) {
             vlogf(log, "script overlay: cannot write the cache key");
@@ -1236,6 +1241,15 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         } else {
             _snprintf_s(st_quit, sizeof st_quit, _TRUNCATE, "on");
             vlogf(log, "script overlay: pause_quit=on");
+        }
+    }
+    if (f.window_mode) {
+        if (!sp_script_apply("WindowMode", texts, 5, pctx, NULL, 0)) {
+            _snprintf_s(st_window, sizeof st_window, _TRUNCATE, "skipped: %s", sp_script_error());
+            vlogf(log, "script overlay: window_mode=%s", st_window);
+        } else {
+            _snprintf_s(st_window, sizeof st_window, _TRUNCATE, "on");
+            vlogf(log, "script overlay: window_mode=on");
         }
     }
 
@@ -1330,7 +1344,8 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     }
 
     _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE,
-                "book_marker=%s continue=%s pause_quit=%s", st_book, st_cont, st_quit);
+                "book_marker=%s continue=%s pause_quit=%s window_mode=%s", st_book, st_cont,
+                st_quit, st_window);
     write_status(cache_dir, status_feats);
     if (!write_key(cache_dir, &key)) {
         vlogf(log, "script overlay: cannot write the cache key");

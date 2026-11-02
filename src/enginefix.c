@@ -23,6 +23,7 @@
 #include <psapi.h>
 #include <dbghelp.h>   // MINIDUMP_* types only; MiniDumpWriteDump is resolved at runtime
 #include <objbase.h>   // LPUNKNOWN / REFIID for the DirectInput8Create signature
+#include <shlobj.h>    // SHGetFolderPathW: the game's Documents folder (User.ini)
 #include <stdio.h>
 #include <share.h>
 #include <stdarg.h>
@@ -31,6 +32,7 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include "distance_patch.h"
+#include "window_patch.h"
 #include "sp_hooks.h"
 #include "sp_dzip.h"
 #include "version.h"
@@ -78,6 +80,7 @@ static int   cfg_mod_mesh       = 1;    // EF_MOD_CTRL
 static int   cfg_vk_foliage     = VK_F10;
 static int   cfg_mod_foliage    = 1;
 static int   cfg_suppress       = 1;    // swallow F9/F10 in the game's keyboard state while a modifier is held
+static int   cfg_winkeys        = 1;    // [hotkeys] windows_keys: Windows key combinations and Print Screen in game
 static int   cfg_osd            = 1;
 static int   cfg_osd_ms         = 2500;
 static int   cfg_osd_size       = 34;
@@ -113,6 +116,10 @@ static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens 
 static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
 static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
 static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
+static int cfg_window_mode = 1; // [scriptpatches] window_mode: Full screen / Borderless in Options
+static int cfg_wf_enabled = 1;  // [window] enabled: borderless support (patch + live toggle + menu)
+static int cfg_wf_borderless;   // [window] borderless: start borderless until the menu has saved it
+static int cfg_wf_dpi = 1;      // [window] dpi_aware: DPI awareness when borderless starts on
 static int cfg_crash_dump = 1;  // [diagnostics] crash_dump: 0 off, 1 log + minidump, 2 full dump
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
@@ -295,6 +302,7 @@ static void load_config(void)
     GetPrivateProfileStringA("hotkeys", "cycle_foliage", "Ctrl+F10", buf, sizeof buf, g_ini);
     parse_hotkey(buf, "Ctrl+F10", &cfg_vk_foliage, &cfg_mod_foliage);
     cfg_suppress = ini_int("hotkeys", "suppress_mod_keys", 1);
+    cfg_winkeys = ini_int("hotkeys", "windows_keys", 1);
 
     cfg_distance = ini_int("distance", "enabled", 0);
     cfg_visibility = ef_distance_factor(ini_float("distance", "visibility_scale", 1.0f));
@@ -323,6 +331,10 @@ static void load_config(void)
     cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
     cfg_continue = ini_int("scriptpatches", "continue", 1);
     cfg_pause_quit = ini_int("scriptpatches", "pause_quit", 1);
+    cfg_window_mode = ini_int("scriptpatches", "window_mode", 1);
+    cfg_wf_enabled = ini_int("window", "enabled", 1);
+    cfg_wf_borderless = ini_int("window", "borderless", 0);
+    cfg_wf_dpi = ini_int("window", "dpi_aware", 1);
     cfg_crash_dump = ini_int("diagnostics", "crash_dump", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
@@ -2468,6 +2480,554 @@ static void crash_init(void)
     crash_tick();
 }
 
+// ---- window mode: full screen, borderless, windowed -----------------------------------------
+// The game creates its top-level window in FUN_009d44e1: as a captioned window (style 0x00C80000,
+// centered, client area = the configured resolution) when windowed, or as a topmost popup when
+// full screen. Borderless replaces only the windowed style, so Direct3D stays windowed and an
+// alt-tab never recreates the device.
+//
+// Full screen is the Windowed flag of the device's stored present parameters. The game has no
+// call that changes it, but its own lost-device path (viewport tick FUN_009E146E: release, then
+// Reset with the stored parameters) is exactly the sequence a switch needs, so the viewport tick
+// is hooked (window_patch.h) and drives that path with a new Windowed flag, on the game's thread.
+//
+// The wanted state comes from the game's config (the Options > Graphics "Display mode" row writes
+// [Rendering] Fullscreen and EngineFixBorderless through the game's own WriteConfigParamFloat,
+// stored in User.ini), else from [window] borderless in witcher2_enginefix.ini.
+
+static LONG g_wfApplied = -1;            // 0/1 = the window's current style, -2 = fullscreen
+static volatile LONG g_wfFrom;           // 1 = options menu, 0 = startup/other
+static volatile LONG g_wfFullscreenHint; // 1/-1: the menu wrote Fullscreen=1/0 (no live switch)
+static int g_wfWarnedFullscreen;
+// Live full screen switch (wf_vp_tick_hook). g_fsWant is set by the menu and taken back by the
+// hook once the device runs in that mode; the worker leaves the window alone while it is set.
+static int g_fsHooked;                   // the viewport tick is hooked: Full screen applies live
+static volatile LONG g_fsWant = -1;      // 1 full screen, 0 windowed, -1 nothing pending
+static volatile LONG g_fsResult;         // 1/2 switched to full screen/windowed, -1 Reset refused
+static volatile LONG g_fsTicks;          // viewport ticks seen, so a stalled switch is noticed
+static volatile LONG g_fsStage;          // 0 idle, 1 released (the hook asked for state 1)
+static BOOL g_fsPrevWindowed;
+static HWND g_wfWnd;
+// The swapchain's size: [Viewport] Width/Height from User.ini, else the client area the window
+// was born with. A restyle always restores it, because a framed window as large as the screen is
+// clipped by Windows (WM_GETMINMAXINFO), so its client area shrinks and cannot be trusted later.
+static int g_wfCx, g_wfCy;
+
+static void wf_state(int on)
+{
+    InterlockedExchange(&wf_borderless, on ? 1 : 0);
+    InterlockedExchange(&wf_style, on ? (LONG)WF_STYLE_POPUP : (LONG)WF_STYLE_FRAMED);
+}
+
+static void wf_request(int on, LONG from)
+{
+    wf_state(on);
+    InterlockedExchange(&g_wfFrom, from);
+}
+
+// The options menu's write lands here on the game's main thread. Only the state changes; the
+// viewport tick (full screen) and the worker thread (window style) apply it, so no window, device
+// or log work happens inside a script call.
+static void wf_on_config_write(const wchar_t* section, const wchar_t* key, float value)
+{
+    (void)section;
+    if (!cfg_wf_enabled) return;
+    if (_wcsicmp(key, L"EngineFixBorderless") == 0) {
+        wf_request(value > 0.0f, 1);
+    } else if (_wcsicmp(key, L"Fullscreen") == 0) {
+        if (g_fsHooked) InterlockedExchange(&g_fsWant, value > 0.0f ? 1 : 0);
+        else InterlockedExchange(&g_wfFullscreenHint, value > 0.0f ? 1 : -1);
+    }
+}
+
+// Documents\Witcher 2\Config\User.ini
+static int wf_user_ini_path(wchar_t* path)
+{
+    wchar_t docs[MAX_PATH];
+
+    if (SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, docs) != S_OK) return 0;
+    return _snwprintf_s(path, MAX_PATH, _TRUNCATE, L"%s\\Witcher 2\\Config\\User.ini", docs) >= 0;
+}
+
+// [Rendering] EngineFixBorderless in User.ini. *found = 0 when absent.
+static int wf_user_ini_borderless(int* found)
+{
+    wchar_t path[MAX_PATH];
+    int v;
+
+    *found = 0;
+    if (!wf_user_ini_path(path)) return 0;
+    v = (int)GetPrivateProfileIntW(L"Rendering", L"EngineFixBorderless", -1, path);
+    if (v < 0) return 0;
+    *found = 1;
+    return v != 0;
+}
+
+// [Viewport] Width/Height in User.ini: the resolution the launcher's Configurator sets, and the
+// size the game creates its window and swapchain with. 0 when absent.
+static void wf_user_ini_resolution(void)
+{
+    wchar_t path[MAX_PATH];
+    int cx, cy;
+
+    if (!wf_user_ini_path(path)) return;
+    cx = (int)GetPrivateProfileIntW(L"Viewport", L"Width", 0, path);
+    cy = (int)GetPrivateProfileIntW(L"Viewport", L"Height", 0, path);
+    if (cx >= 640 && cy >= 480 && cx <= 16384 && cy <= 16384) { g_wfCx = cx; g_wfCy = cy; }
+}
+
+// The game has no manifest, so it is DPI-unaware: on a scaled desktop Windows virtualizes the
+// window (a 3840x2160 client becomes 5760x3240 physical and is clipped). System awareness is
+// enough because the window always lands on the primary monitor, and it avoids WM_DPICHANGED
+// handling. Must run before the game creates its window.
+static void wf_set_dpi_aware(void)
+{
+    typedef BOOL (WINAPI *wf_dpi_ctx_t)(HANDLE);
+    HMODULE user32 = GetModuleHandleA("user32.dll");
+    wf_dpi_ctx_t ctx = user32
+        ? (wf_dpi_ctx_t)(void*)GetProcAddress(user32, "SetProcessDpiAwarenessContext") : NULL;
+
+    // DPI_AWARENESS_CONTEXT_SYSTEM_AWARE is (HANDLE)-2; SetProcessDPIAware is the Windows 7 path.
+    if (ctx && ctx((HANDLE)-2)) { logf_("window: dpi awareness = system aware"); return; }
+    if (SetProcessDPIAware()) { logf_("window: dpi awareness = system aware (fallback)"); return; }
+    logf_("window: dpi awareness not set (%lu); borderless may be DPI-virtualized",
+          (unsigned long)GetLastError());
+}
+
+// "mov edi,0x00C80000" -> "call wf_style_stub". Only EDI changes, as the replaced instruction did.
+static int wf_install_style(void)
+{
+    static const char* const orig = "bf 00 00 c8 00";
+    unsigned char code[5];
+    pb_range range;
+    HANDLE peers[256];
+    unsigned count = 0;
+    DWORD old = 0, tmp = 0;
+    void* site = (void*)(uintptr_t)WF_STYLE_SITE;
+    int64_t delta = (int64_t)(uintptr_t)wf_style_stub - (int64_t)(WF_STYLE_SITE + 5);
+
+    if (delta < INT32_MIN || delta > INT32_MAX) return 0;   // the call must be reachable
+    if (!code_matches(WF_STYLE_SITE, orig)) return 0;
+    code[0] = 0xE8;
+    *(uint32_t*)(code + 1) = (uint32_t)(int32_t)delta;
+    range.start = (const unsigned char*)site;
+    range.len = (unsigned)sizeof wf_style_orig;
+    if (!pb_stop_peers(peers, &count, &range, 1)) return 0;
+    if (!code_matches(WF_STYLE_SITE, orig) ||
+        !VirtualProtect(site, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
+        pb_resume_peers(peers, count);
+        return 0;
+    }
+    memcpy(site, code, sizeof code);
+    VirtualProtect(site, sizeof code, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), site, sizeof code);
+    pb_resume_peers(peers, count);
+    return 1;
+}
+
+// FUN_0041F4B7 entry -> "jmp wf_write_hook"; the trampoline runs the replaced prologue and jumps
+// back. The replaced prologue is 6 bytes (push ebp; mov ebp,esp; and esp,-8), so 5 + one NOP.
+static int wf_install_writer(void)
+{
+    static const char* const orig = "55 8b ec 83 e4 f8 a1 50 86 60 01";
+    unsigned char* tramp;
+    unsigned char code[6];
+    pb_range range;
+    HANDLE peers[256];
+    unsigned count = 0;
+    DWORD old = 0, tmp = 0;
+    void* site = (void*)(uintptr_t)WF_WRITER_SITE;
+    int64_t delta = (int64_t)(uintptr_t)wf_write_hook - (int64_t)(WF_WRITER_SITE + 5);
+
+    if (delta < INT32_MIN || delta > INT32_MAX) return 0;   // the jump must be reachable
+    if (!code_matches(WF_WRITER_SITE, orig)) return 0;
+    tramp = (unsigned char*)wf_make_trampoline(site, wf_writer_orig, sizeof wf_writer_orig);
+    if (!tramp) return 0;
+    wf_real_write = (wf_write_fn)(void*)tramp;
+    code[0] = 0xE9;
+    *(uint32_t*)(code + 1) = (uint32_t)(int32_t)delta;
+    code[5] = 0x90;
+    range.start = (const unsigned char*)site;
+    range.len = (unsigned)sizeof wf_writer_orig;
+    if (!pb_stop_peers(peers, &count, &range, 1)) goto failed;
+    if (!code_matches(WF_WRITER_SITE, orig) ||
+        !VirtualProtect(site, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
+        pb_resume_peers(peers, count);
+        goto failed;
+    }
+    memcpy(site, code, sizeof code);
+    VirtualProtect(site, sizeof code, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), site, sizeof code);
+    pb_resume_peers(peers, count);
+    return 1;
+failed:
+    wf_real_write = NULL;
+    VirtualFree(tramp, 0, MEM_RELEASE);
+    return 0;
+}
+
+// The game's own window (class registered in FUN_009d44e1), never another process's.
+static HWND wf_window(void)
+{
+    DWORD pid = 0;
+
+    if (g_wfWnd && IsWindow(g_wfWnd)) return g_wfWnd;
+    g_wfWnd = FindWindowW(L"W2ViewportClass", NULL);
+    if (g_wfWnd) GetWindowThreadProcessId(g_wfWnd, &pid);
+    if (pid != GetCurrentProcessId()) g_wfWnd = NULL;
+    return g_wfWnd;
+}
+
+// Give the client area the swapchain's size (g_wfCx/g_wfCy, not the current client area: see
+// there) and put the frame outside it. A framed window at the desktop resolution is larger than
+// the screen, so the game's own centering was off-screen; borderless centers a smaller window and
+// pins a full-screen one at (0,0). A window that was full screen loses its topmost flag here.
+static void wf_restyle(HWND w, int on)
+{
+    RECT c, r;
+    LONG frame = on ? (LONG)WF_STYLE_POPUP : (LONG)WF_STYLE_FRAMED;
+    LONG style = frame | WS_VISIBLE | WS_CLIPCHILDREN;
+    HWND after = (GetWindowLongW(w, GWL_EXSTYLE) & WS_EX_TOPMOST) ? HWND_NOTOPMOST : HWND_TOP;
+    int sw, sh, x = 0, y = 0, ww, wh;
+
+    if (g_wfCx > 0 && g_wfCy > 0) {
+        SetRect(&c, 0, 0, g_wfCx, g_wfCy);
+    } else if (!GetClientRect(w, &c) || c.right <= 0 || c.bottom <= 0) {
+        return;
+    }
+    r = c;
+    AdjustWindowRect(&r, (DWORD)frame, FALSE);
+    ww = r.right - r.left;
+    wh = r.bottom - r.top;
+    if (ww <= 0 || wh <= 0) return;
+    sw = GetSystemMetrics(SM_CXSCREEN);
+    sh = GetSystemMetrics(SM_CYSCREEN);
+    if (c.right != sw || c.bottom != sh) {
+        x = (sw - ww) / 2; if (x < 0) x = 0;
+        y = (sh - wh) / 2; if (y < 0) y = 0;
+    }
+    // Never derive WS_VISIBLE from the old style: the game's styles lack it and an invisible
+    // window never gets the focus (the W1 borderless black-screen incident).
+    SetWindowLongW(w, GWL_STYLE, style);
+    SetWindowPos(w, after, x, y, ww, wh,
+                 SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE);
+}
+
+// The device's mode as the engine knows it: 1 full screen, 0 windowed, -1 no device yet.
+static int wf_engine_fullscreen(void)
+{
+    if (!*(void* volatile*)(uintptr_t)WF_D3D_DEVICE) return -1;
+    return *(volatile BOOL*)(uintptr_t)WF_PP_WINDOWED == FALSE;
+}
+
+// The window the game itself creates for full screen (FUN_009d44e1): a topmost popup at (0,0).
+// Done before the Reset, synchronously when this thread owns the window.
+static void wf_fullscreen_window(void)
+{
+    HWND w = *(HWND volatile*)(uintptr_t)WF_PP_HWND;
+    UINT async = 0;
+
+    if (!w || !IsWindow(w)) return;
+    if (GetWindowThreadProcessId(w, NULL) != GetCurrentThreadId()) async = SWP_ASYNCWINDOWPOS;
+    SetWindowLongW(w, GWL_STYLE, (LONG)(WF_STYLE_POPUP | WS_VISIBLE | WS_CLIPCHILDREN));
+    SetWindowPos(w, HWND_TOPMOST, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
+                 SWP_FRAMECHANGED | SWP_SHOWWINDOW | async);
+}
+
+// DXVK hooks the window procedure when it enters full screen and unhooks when it leaves, but only
+// if its procedure is still the top one (src/d3d9/d3d9_window.cpp, ResetWindowProc). NVIDIA's
+// Vulkan driver subclasses the same window (opengl32!wglWndProc). After a full screen start the
+// chain is wgl -> DXVK -> game; leaving full screen drops DXVK's record but leaves its procedure
+// in the chain (it then sends everything to DefWindowProc, so the game's own procedure no longer
+// sees messages), and entering full screen again hooks DXVK on top of wgl, whose "previous" is
+// DXVK: the two call each other until the stack overflows (owner's test 2026-11-02, WER dump with
+// ~10 000 alternating d3d9/wglWndProc frames). So around every switch the window gets its class
+// procedure (the game's FUN_009D237E) back first: DXVK then always hooks or unhooks a clean chain.
+// Only when the d3d9.dll in use is not the system one (a wrapper such as DXVK).
+static void wf_reset_wndproc(HWND w)
+{
+    static int wrapper = -1;
+    LONG cls;
+
+    if (wrapper < 0) {
+        wchar_t path[MAX_PATH], sys[MAX_PATH];
+        HMODULE d3d9 = GetModuleHandleW(L"d3d9.dll");
+        UINT n = GetSystemDirectoryW(sys, MAX_PATH);
+
+        wrapper = d3d9 && n && n < MAX_PATH && GetModuleFileNameW(d3d9, path, MAX_PATH) &&
+                  _wcsnicmp(path, sys, n) != 0;
+        logf_("window: d3d9.dll is %s", wrapper ? "a wrapper (window procedure repaired at switches)"
+                                                : "the system one");
+    }
+    if (!wrapper || !w || !IsWindow(w)) return;
+    cls = GetClassLongW(w, GCL_WNDPROC);
+    if ((uint32_t)cls != WF_GAME_WNDPROC) return;
+    if (GetWindowLongW(w, GWL_WNDPROC) != cls) SetWindowLongW(w, GWL_WNDPROC, cls);
+}
+
+// Replaces the viewport tick (vtable slot WF_VP_TICK_SLOT), called by the game once per frame on
+// its own thread. Its device state at +0xB0 is the engine's lost-device machine: 1 = flush
+// loading and release (-> 2), 2 = wait until Reset is allowed, 3 = Reset with the stored present
+// parameters (-> 0). During a switch TestCooperativeLevel returns D3D_OK, and then the engine
+// leaves that state alone, so setting it walks the engine's own release/Reset code:
+//   frame 1: Windowed flag changed, state 1 -> the engine releases its device resources;
+//   frame 2: state 3 -> the engine resets into the new mode and recreates them.
+// A refused Reset puts the old flag back; the engine's own retry then resets in the old mode.
+static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
+{
+    wf_vp_tick_fn real = (wf_vp_tick_fn)(uintptr_t)WF_VP_TICK;
+    volatile LONG* state = (volatile LONG*)((char*)vp + WF_VP_STATE);
+    volatile BOOL* windowed = (volatile BOOL*)(uintptr_t)WF_PP_WINDOWED;
+    LONG want = g_fsWant;
+    char r;
+
+    InterlockedIncrement(&g_fsTicks);
+    if (g_fsStage == 0) {
+        if (want < 0 || *state != 0 || wf_engine_fullscreen() < 0) return real(vp, edx);
+        if ((*windowed == FALSE) == (want != 0)) {   // already in that mode
+            InterlockedCompareExchange(&g_fsWant, -1, want);
+            return real(vp, edx);
+        }
+        g_fsPrevWindowed = *windowed;
+        *windowed = want ? FALSE : TRUE;
+        *state = 1;
+        InterlockedExchange(&g_fsStage, 1);
+        return real(vp, edx);
+    }
+    if (*state == 0) {              // the release never happened: only the flag to undo
+        *windowed = g_fsPrevWindowed;
+        InterlockedExchange(&g_fsResult, -1);
+        InterlockedExchange(&g_fsWant, -1);
+        InterlockedExchange(&g_fsStage, 0);
+        return real(vp, edx);
+    }
+    if (*state != 2) return real(vp, edx);
+    wf_reset_wndproc(*(HWND volatile*)(uintptr_t)WF_PP_HWND);
+    if (*windowed == FALSE) wf_fullscreen_window();
+    *state = 3;
+    r = real(vp, edx);
+    // Out of full screen: drop whatever DXVK left behind. Into it: DXVK's hook is wanted.
+    if (*state == 0 && *windowed) wf_reset_wndproc(*(HWND volatile*)(uintptr_t)WF_PP_HWND);
+    if (*state == 0) {
+        InterlockedExchange(&g_fsResult, *windowed ? 2 : 1);
+        InterlockedCompareExchange(&g_fsWant, -1, *windowed ? 0 : 1);
+    } else {
+        *windowed = g_fsPrevWindowed;
+        InterlockedExchange(&g_fsResult, -1);
+        InterlockedExchange(&g_fsWant, -1);
+    }
+    InterlockedExchange(&g_fsStage, 0);
+    return r;
+}
+
+// Worker tick: the switch results, then the wanted style against the live window.
+static void wf_tick(void)
+{
+    static LONG seen_ticks;
+    static DWORD pending_since;
+    static int force;
+    HWND w = wf_window();
+    LONG style, ex, hint, res;
+    int fullscreen, borderless, topmost, want, engine;
+
+    if (!w) return;
+    if (g_wfApplied == -1) {
+        // First sight of the window: its client area is still the one it was born with.
+        RECT c;
+
+        if (GetClientRect(w, &c)) {
+            logf_("window: game window %ldx%ld, User.ini viewport %dx%d", c.right, c.bottom,
+                  g_wfCx, g_wfCy);
+            if (g_wfCx <= 0 && c.right > 0 && c.bottom > 0) { g_wfCx = c.right; g_wfCy = c.bottom; }
+        }
+    }
+
+    res = InterlockedExchange(&g_fsResult, 0);
+    if (res == 1) {
+        logf_("window: full screen on (options menu)");
+    } else if (res == 2) {
+        logf_("window: full screen off (options menu)");
+        force = 1;   // the window still has the full screen style: give it the windowed one
+    } else if (res < 0) {
+        logf_("window: Reset into the new mode was refused; the old mode is kept");
+        osd_show("Display mode: could not switch, restart the game to apply");
+    }
+
+    // A switch the viewport tick never picks up (the game is not rendering) must not keep the
+    // window locked: after 3 s it is left for the next start.
+    if (g_fsWant >= 0 && !g_fsStage) {
+        if (!pending_since || g_fsTicks != seen_ticks) {
+            pending_since = GetTickCount();
+            seen_ticks = g_fsTicks;
+        } else if (GetTickCount() - pending_since > 3000) {
+            InterlockedExchange(&g_fsWant, -1);
+            pending_since = 0;
+            logf_("window: full screen switch not picked up by the game; it applies at the next start");
+            osd_show("Display mode: restart the game to apply");
+        }
+        return;
+    }
+    pending_since = 0;
+    if (g_fsStage) return;   // the viewport tick is switching: hands off the window
+
+    style = GetWindowLongW(w, GWL_STYLE);
+    ex = GetWindowLongW(w, GWL_EXSTYLE);
+    topmost = (ex & WS_EX_TOPMOST) != 0;
+    engine = wf_engine_fullscreen();
+    fullscreen = engine >= 0 ? engine : ((style & WS_POPUP) != 0 && topmost);
+    borderless = (style & WS_POPUP) != 0 && !topmost;
+    want = wf_borderless ? 1 : 0;
+
+    hint = InterlockedExchange(&g_wfFullscreenHint, 0);
+    if (hint && ((hint > 0 && !fullscreen) || (hint < 0 && fullscreen))) {
+        osd_show("Full screen: restart the game to apply");
+        logf_("window: Full screen changed in the options menu; it applies at the next start");
+    }
+
+    if (fullscreen) {
+        if (want && !g_fsHooked && !g_wfWarnedFullscreen) {
+            g_wfWarnedFullscreen = 1;
+            osd_show("Borderless window: turn Full screen off, then restart");
+            logf_("window: borderless is on but the game runs in full screen; set Full screen off (restart)");
+        }
+        g_wfApplied = -2;
+        return;
+    }
+    g_wfWarnedFullscreen = 0;
+    if (IsIconic(w) || (!force && borderless == want && !topmost)) { g_wfApplied = borderless; return; }
+
+    wf_restyle(w, want);
+    g_wfApplied = want;
+    {
+        LONG from = InterlockedExchange(&g_wfFrom, 0);
+        const char* src = (from == 1 || force) ? "options menu" : "startup";
+        LONG now = GetWindowLongW(w, GWL_STYLE);
+
+        force = 0;
+        if (((now & WS_POPUP) != 0) != (want != 0)) {
+            logf_("window: restyle failed (style 0x%08lX)", (unsigned long)now);
+            return;
+        }
+        // No on-screen line: the Display mode row already shows the choice.
+        logf_("window: borderless %s (%s)", want ? "on" : "off", src);
+    }
+}
+
+// Viewport tick slot -> wf_vp_tick_hook. A data write (the vtable is in .rdata), aligned and
+// atomic, so no thread has to be stopped. Fingerprinted: the slot must hold the tick, the tick
+// must read its state from +0xB0, and the Reset must copy the present parameters from WF_PP.
+static int wf_install_vp_tick(void)
+{
+    volatile LONG* slot = (volatile LONG*)(uintptr_t)WF_VP_TICK_SLOT;
+    DWORD old = 0, tmp = 0;
+    LONG prev;
+
+    if ((uint32_t)*slot != WF_VP_TICK) return 0;
+    if (!code_matches(WF_VP_TICK, "55 8b ec 83 e4 f8 56 57 8b f9 8b c7 e8") ||
+        !code_matches(WF_VP_TICK + 0x11, "8b 87 b0 00 00 00") ||
+        !code_matches(WF_RESET_COPY, "b9 0e 00 00 00 be a0 67 62 01"))
+        return 0;
+    if (!VirtualProtect((void*)slot, sizeof(LONG), PAGE_READWRITE, &old)) return 0;
+    prev = InterlockedCompareExchange(slot, (LONG)(uintptr_t)wf_vp_tick_hook, (LONG)WF_VP_TICK);
+    VirtualProtect((void*)slot, sizeof(LONG), old, &tmp);
+    return (uint32_t)prev == WF_VP_TICK;
+}
+
+// The shipped exe is SteamStub protected: .text is encrypted until the stub jumps to the real
+// entry point, which happens after every static DLL's DllMain has run. A site only reads as its
+// real bytes once that has happened, so wait for the fingerprint instead of assuming it.
+static int wf_wait_site(uintptr_t at, const char* hex, int timeout_ms)
+{
+    DWORD t0 = GetTickCount();
+
+    while (g_running && (long)(GetTickCount() - t0) < timeout_ms) {
+        if (code_matches(at, hex)) return 1;
+        Sleep(1);
+    }
+    return 0;
+}
+
+// The peer-stop barrier can refuse while the process is still creating threads (a new thread in
+// every freeze pass makes it fail; the writer site 3 ms later is proof of how transient that is,
+// see the 2026-11-02 crash log). Retry briefly. The birth style only matters before the window
+// exists: once it is there, stop and let the restyle path take over.
+static int wf_install_style_before_window(void)
+{
+    DWORD t0 = GetTickCount();
+
+    do {
+        if (wf_install_style()) return 1;
+        if (wf_window()) return 0;
+        Sleep(1);
+    } while (g_running && (long)(GetTickCount() - t0) < 3000);
+    return 0;
+}
+
+static int wf_install_writer_retry(void)
+{
+    DWORD t0 = GetTickCount();
+
+    do {
+        if (wf_install_writer()) return 1;
+        Sleep(1);
+    } while (g_running && (long)(GetTickCount() - t0) < 3000);
+    return 0;
+}
+
+// Started from DllMain: read the stored option, make the process DPI-aware before the game
+// creates its window, and install both patches. A thread, not DllMain, because shell and loader
+// APIs must not be called under the loader lock.
+static DWORD WINAPI window_init_thread(LPVOID param)
+{
+    int found = 0, on;
+
+    (void)param;
+    on = wf_user_ini_borderless(&found);
+    if (!found) on = cfg_wf_borderless;
+    wf_user_ini_resolution();
+    wf_state(on);
+    if (on && cfg_wf_dpi) wf_set_dpi_aware();
+    logf_("window: borderless=%d (%s), dpi_aware=%d, menu=%d",
+          on, found ? "options menu" : "ini", cfg_wf_dpi, cfg_window_mode);
+    {
+        // The engine calls into this DLL through the patched sites: keep it loaded.
+        HMODULE pinned;
+
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                GET_MODULE_HANDLE_EX_FLAG_PIN,
+                                (LPCSTR)(uintptr_t)wf_style_stub, &pinned)) {
+            logf_("window: could not pin the DLL; the window patches are not installed");
+            return 0;
+        }
+        if (!wf_wait_site(WF_STYLE_SITE, "bf 00 00 c8 00", 60000)) {
+            logf_("window: window style site never appeared - borderless off for this start");
+        } else if (!wf_install_style_before_window()) {
+            if (wf_window())
+                logf_("window: window created before the style patch - borderless applies by restyle");
+            else
+                logf_("window: startup style not patched (bytes differ or out of range) - borderless would appear after creation");
+        } else {
+            logf_("window: startup borderless style patched");
+        }
+        if (!wf_wait_site(WF_WRITER_SITE, "55 8b ec 83 e4 f8 a1 50 86 60 01", 60000)) {
+            logf_("window: config writer site never appeared - the menu setting applies at the next start");
+        } else if (!wf_install_writer_retry()) {
+            logf_("window: menu channel not hooked (bytes differ or out of range) - the menu setting applies at the next start");
+        } else {
+            logf_("window: menu channel hooked (Options > Graphics applies borderless at once)");
+            // Full screen follows the menu live only through the menu channel.
+            if (!wf_wait_site(WF_RESET_COPY, "b9 0e 00 00 00 be a0 67 62 01", 60000) ||
+                !wf_install_vp_tick()) {
+                logf_("window: viewport tick not hooked (bytes differ) - Full screen applies at the next start");
+            } else {
+                g_fsHooked = 1;
+                logf_("window: viewport tick hooked (Full screen switches at once)");
+            }
+        }
+    }
+    return 0;
+}
+
 static DWORD WINAPI worker(LPVOID param)
 {
     (void)param;
@@ -2489,6 +3049,7 @@ static DWORD WINAPI worker(LPVOID param)
         crash_tick();
         osd_pump();
         apply_lod();
+        if (cfg_wf_enabled) wf_tick();
         if (cfg_hotkeys) poll_hotkeys();
         distance_tick();
         save_tick();
@@ -2553,13 +3114,150 @@ static CD_t g_origCreateDevice;
 static const GUID kSysKeyboard =
     { 0x6F1D2B61, 0xD5A0, 0x11CF, { 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00 } };
 
+// ---- Windows key combinations in game ([hotkeys] windows_keys) -----------
+// The game reads the keyboard two ways (FUN_009d24f8 sets the input mode, window object +0x834):
+// in the menus through WM_KEYDOWN/WM_KEYUP (window procedure FUN_009d4bd9 -> FUN_009d243e), and
+// in mode 3 (play) through a DirectInput keyboard it creates for that mode, acquired with
+// DISCL_EXCLUSIVE | DISCL_FOREGROUND (push 5 at 0x009D25EE) and polled with GetDeviceData and
+// GetDeviceState (FUN_009d2817). An exclusive keyboard makes every Windows key combination dead
+// while the game is in front, and with it Print Screen when Windows opens the Snipping Tool with
+// it (Win+Shift+S, Print Screen). Witcher 1 had the same symptom from DISCL_NOWINKEY (its engine
+// fix's QoL 6); here both are dropped: the keyboard's SetCooperativeLevel (IDirectInputDevice8
+// slot 13: HWND, DWORD flags) gets DISCL_NONEXCLUSIVE without DISCL_NOWINKEY.
+//
+// A non-exclusive keyboard also lets Windows send the window its key messages, which an exclusive
+// one did not, so in mode 3 the engine would get every key twice and Alt or F10 would open the
+// window's system menu. The window object's procedure (vtable slot WK_WNDPROC_SLOT) is therefore
+// hooked: in mode 3 it drops WM_KEYFIRST..WM_KEYLAST, so the engine sees exactly what it saw
+// before. The cooperative level is only changed once that hook is in place.
+//
+// Without the block a Windows key pressed and released on its own would open the Start menu, so
+// a thread watches the key while the game is in front: as soon as it goes down, an unassigned key
+// (0xE8, as AutoHotkey does) is pressed and released, and the shell takes the release as the end
+// of a combination. Combinations work as usual.
+
+#define WK_DISCL_EXCLUSIVE    0x01
+#define WK_DISCL_NONEXCLUSIVE 0x02
+#define WK_DISCL_NOWINKEY     0x10
+#define WK_MASK               0xE8         // unassigned virtual key
+#define WK_POLL               5            // ms; a tap of the key lasts far longer
+#define WK_WNDPROC_SLOT       0x00EC6560u  // window object vtable slot 0 -> FUN_009D4BD9
+#define WK_WNDPROC            0x009D4BD9u  // __thiscall (msg, wparam, lparam), RET 0xC
+#define WK_INPUT_MODE         0x834        // window object: input mode, 3 = DirectInput
+
+typedef HRESULT (WINAPI *SCL_t)(void* self, HWND w, DWORD flags);
+typedef LRESULT (__fastcall *wk_wndproc_fn)(void* obj, void* edx, UINT msg, WPARAM wp, LPARAM lp);
+static SCL_t g_origSCL;
+static int g_wkThread, g_wkLogged, g_wkProcHooked = -1;
+static void* volatile g_wkKeyboard;   // the keyboard the game created last
+
+// The window object's procedure: in DirectInput mode the keyboard comes from DirectInput only.
+static LRESULT __fastcall wk_window_proc(void* obj, void* edx, UINT msg, WPARAM wp, LPARAM lp)
+{
+    if (msg >= WM_KEYFIRST && msg <= WM_KEYLAST &&
+        *(volatile LONG*)((char*)obj + WK_INPUT_MODE) == 3)
+        return 0;
+    return ((wk_wndproc_fn)(uintptr_t)WK_WNDPROC)(obj, edx, msg, wp, lp);
+}
+
+// Slot write in .rdata, aligned and atomic; fingerprinted by the slot value, the procedure's
+// prologue (push ebp; mov ebp,esp; and esp,-8; sub esp,0x64) and its RET 0xC.
+static int wk_hook_window_proc(void)
+{
+    volatile LONG* slot = (volatile LONG*)(uintptr_t)WK_WNDPROC_SLOT;
+    DWORD old = 0, tmp = 0;
+    LONG prev;
+
+    if (g_wkProcHooked >= 0) return g_wkProcHooked;
+    g_wkProcHooked = 0;
+    if ((uint32_t)*slot != WK_WNDPROC ||
+        !code_matches(WK_WNDPROC, "55 8b ec 83 e4 f8 83 ec 64") ||
+        !code_matches(WK_WNDPROC + 0x2F2, "c2 0c 00") ||
+        !VirtualProtect((void*)slot, sizeof(LONG), PAGE_READWRITE, &old)) {
+        logf_("input: window procedure not hooked (bytes differ) - the keyboard stays exclusive");
+        return 0;
+    }
+    prev = InterlockedCompareExchange(slot, (LONG)(uintptr_t)wk_window_proc, (LONG)WK_WNDPROC);
+    VirtualProtect((void*)slot, sizeof(LONG), old, &tmp);
+    g_wkProcHooked = (uint32_t)prev == WK_WNDPROC;
+    logf_("input: window procedure %s", g_wkProcHooked ? "hooked (key messages ignored while DirectInput reads the keyboard)"
+                                                       : "not hooked - the keyboard stays exclusive");
+    return g_wkProcHooked;
+}
+
+static DWORD WINAPI winkey_thread(LPVOID param)
+{
+    int was_down = 0;
+
+    (void)param;
+    while (g_running) {
+        int down = (GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) < 0;
+
+        if (down && !was_down) {
+            HWND fg = GetForegroundWindow();
+            DWORD pid = 0;
+
+            if (fg) GetWindowThreadProcessId(fg, &pid);
+            if (pid == GetCurrentProcessId()) {
+                INPUT in[2];
+
+                ZeroMemory(in, sizeof in);
+                in[0].type = in[1].type = INPUT_KEYBOARD;
+                in[0].ki.wVk = in[1].ki.wVk = WK_MASK;
+                in[1].ki.dwFlags = KEYEVENTF_KEYUP;
+                SendInput(2, in, sizeof(INPUT));
+                if (!g_wkLogged) {
+                    g_wkLogged = 1;
+                    logf_("input: Windows key pressed in game, masked (no Start menu on its own)");
+                }
+            }
+        }
+        was_down = down;
+        Sleep(down ? 20 : WK_POLL);
+    }
+    return 0;
+}
+
+static HRESULT WINAPI hook_SetCooperativeLevel(void* self, HWND w, DWORD flags)
+{
+    if (!g_origSCL) return E_FAIL;
+    // The slot may be shared with the mouse's class: only the keyboard is changed.
+    if (self == g_wkKeyboard && (flags & (WK_DISCL_EXCLUSIVE | WK_DISCL_NOWINKEY)) &&
+        wk_hook_window_proc()) {
+        static int logged;
+        DWORD want = (flags & ~(WK_DISCL_EXCLUSIVE | WK_DISCL_NOWINKEY)) | WK_DISCL_NONEXCLUSIVE;
+
+        if (!logged) {
+            logged = 1;
+            logf_("input: keyboard cooperative level 0x%02lX -> 0x%02lX (Windows keys and Print Screen work in game)",
+                  (unsigned long)flags, (unsigned long)want);
+        }
+        flags = want;
+        if (!g_wkThread) {
+            HANDLE t = CreateThread(NULL, 0, winkey_thread, NULL, 0, NULL);
+
+            if (t) { g_wkThread = 1; CloseHandle(t); }
+        }
+    }
+    return g_origSCL(self, w, flags);
+}
+
 static HRESULT WINAPI hook_CreateDevice(void* self, const GUID* rguid, void** out, void* outer)
 {
     if (!g_origCreateDevice) return E_FAIL;
     HRESULT hr = g_origCreateDevice(self, rguid, out, outer);
     if (SUCCEEDED(hr) && out && *out && rguid && memcmp(rguid, &kSysKeyboard, sizeof(GUID)) == 0) {
-        if (patch_vtable(*out, 9, (void*)hook_GetDeviceState, (void**)&g_origGDS))
+        if (cfg_suppress && patch_vtable(*out, 9, (void*)hook_GetDeviceState, (void**)&g_origGDS))
             logf_("input: keyboard state filter installed");
+        if (cfg_winkeys) {
+            static int logged;
+
+            g_wkKeyboard = *out;
+            if (patch_vtable(*out, 13, (void*)hook_SetCooperativeLevel, (void**)&g_origSCL) && !logged) {
+                logged = 1;
+                logf_("input: keyboard cooperative level hook installed");
+            }
+        }
     }
     return hr;
 }
@@ -2592,7 +3290,7 @@ HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD ver, REFIID riid, LPVOI
     PFN_Create fn = (PFN_Create)real_proc("DirectInput8Create");
     if (!fn) return E_FAIL;
     HRESULT hr = fn(hinst, ver, riid, out, outer);
-    if (SUCCEEDED(hr) && out && *out && cfg_suppress) {
+    if (SUCCEEDED(hr) && out && *out && (cfg_suppress || cfg_winkeys)) {
         if (patch_vtable(*out, 3, (void*)hook_CreateDevice, (void**)&g_origCreateDevice))
             logf_("input: CreateDevice hook installed");
     }
@@ -2677,8 +3375,10 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d", cfg_skip_intro);
         logf_("diagnostics: file_trace=%d", cfg_file_trace);
-        logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d",
-              cfg_book_marker, cfg_continue, cfg_pause_quit);
+        logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d",
+              cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode);
+        logf_("window: enabled=%d borderless=%d dpi_aware=%d",
+              cfg_wf_enabled, cfg_wf_borderless, cfg_wf_dpi);
         if (cfg_preset_mode)
             logf_("presets: startup=%s, cycle modifiers=%d VK=%02X (session only)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
@@ -2687,6 +3387,10 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             if (cfg_enabled) {
                 HANDLE h = CreateThread(NULL, 0, worker, NULL, 0, NULL);
                 if (h) CloseHandle(h); else logf_("CreateThread failed");
+                if (cfg_wf_enabled) {
+                    h = CreateThread(NULL, 0, window_init_thread, NULL, 0, NULL);
+                    if (h) CloseHandle(h); else logf_("window: CreateThread failed - borderless off");
+                }
                 if (cfg_skip_intro) {
                     h = CreateThread(NULL, 0, startvideo_thread, NULL, 0, NULL);
                     if (h) CloseHandle(h); else logf_("startup: CreateThread failed - skip_intro off");
@@ -2697,12 +3401,12 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                 if (h) CloseHandle(h);
                 else { logf_("file-trace: CreateThread failed - file trace off"); cfg_file_trace = 0; }
             }
-            if (cfg_enabled && (cfg_book_marker || cfg_continue || cfg_pause_quit)) {
+            if (cfg_enabled && (cfg_book_marker || cfg_continue || cfg_pause_quit || cfg_window_mode)) {
                 wchar_t sgame[MAX_PATH], scache[MAX_PATH];
 
                 if (script_dirs(sgame, scache) &&
                     sp_hooks_start(sgame, scache, cfg_book_marker, cfg_continue, cfg_pause_quit,
-                                   logf_)) {
+                                   cfg_window_mode, logf_)) {
                     g_scriptHooks = 1;
                 } else {
                     logf_("script patches: cannot locate the game or cache folder - off");

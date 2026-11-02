@@ -80,15 +80,15 @@ def chars_of(path):
     return set("".join(decode(b, sk) for b in raw))
 
 
-def book_texts():
-    """language -> the 15 texts, read back from W2EF_Text in book_texts.ws.
+def parse_texts_file(name):
+    """language -> texts, read back from a W2EF_* text function in src/scriptpatches/<name>.
 
     Each language is an `if ( textLang == "XX" )` block of `if ( id == N ) { return ...; }` lines;
     English is the fallback after the blocks. A return value joins "..." literals and
     StrChar( n ) calls with +.
     """
     ws = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src", "scriptpatches",
-                      "book_texts.ws")
+                      name)
     lang = "EN"
     texts = {}
     for line in open(ws, encoding="latin-1"):
@@ -108,22 +108,43 @@ def book_texts():
     return texts
 
 
-def main():
-    if len(sys.argv) != 2:
-        sys.exit("usage: check_texts.py <game>\\CookedPC")
-    cooked = sys.argv[1]
+def book_texts():
+    return parse_texts_file("book_texts.ws")
+
+
+def window_texts():
+    return parse_texts_file("window_texts.ws")
+
+
+def check_texts(cooked, label, texts, upper_all):
     bad = 0
-    for lang, texts in book_texts().items():
+    for lang, values in texts.items():
         have = set()
         for suffix in ("0", "_user"):
             path = os.path.join(cooked, FILES[lang] + suffix + ".w2strings")
             if os.path.exists(path):
                 have |= chars_of(path)
-        need = set("".join(texts)) | set("".join(t.upper() for t in texts[:3]))
+        need = set("".join(values))
+        if upper_all:
+            need |= set("".join(t.upper() for t in values))
+        else:
+            need |= set("".join(t.upper() for t in values[:3]))
         missing = sorted(c for c in need if c not in have and c not in "%1")
         bad += len(missing)
-        print("%s %2d texts, %s" % (lang, len(texts),
-                                    "ok" if not missing else "MISSING " + " ".join("U+%04X" % ord(c) for c in missing)))
+        print("%s %s %2d texts, %s" % (label, lang, len(values),
+                                       "ok" if not missing else
+                                       "MISSING " + " ".join("U+%04X" % ord(c) for c in missing)))
+    return bad
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit("usage: check_texts.py <game>\\CookedPC")
+    cooked = sys.argv[1]
+    # Book status texts: ids 1-3 are list labels and are shown upper-cased. The window labels
+    # are shown upper-cased too (Options > Graphics).
+    bad = check_texts(cooked, "book", book_texts(), False)
+    bad += check_texts(cooked, "window", window_texts(), True)
     sys.exit(1 if bad else 0)
 
 

@@ -139,11 +139,11 @@ static int build_once(void)
 }
 
 int sp_hooks_start(const wchar_t* game, const wchar_t* cache, int book_marker, int cont,
-                   int pause_quit, sp_log_fn log)
+                   int pause_quit, int window_mode, sp_log_fn log)
 {
     if (g_active) return 1;
     if (!game || !cache || !*game || !*cache) return 0;
-    if (!book_marker && !cont && !pause_quit) return 0;
+    if (!book_marker && !cont && !pause_quit && !window_mode) return 0;
     if (!wide_copy(g_game, MAX_PATH, game) || !wide_copy(g_cache, MAX_PATH, cache)) return 0;
     if (!path_join(g_cooked, MAX_PATH, game, L"CookedPC") ||
         !path_join(g_archive_glob, MAX_PATH, g_cooked, L"*.dzip")) {
@@ -156,6 +156,7 @@ int sp_hooks_start(const wchar_t* game, const wchar_t* cache, int book_marker, i
     g_features.book_marker = book_marker;
     g_features.cont = cont;
     g_features.pause_quit = pause_quit;
+    g_features.window_mode = window_mode;
     g_log = log;
     g_active = 1;
     return 1;

@@ -4,6 +4,7 @@
 #define W2_DISTANCE_PATCH_H
 
 #include <stdint.h>
+#include "patch_barrier.h"
 
 #define EF_RANGE_RVA  0x005BB09Fu
 #define EF_SHADOW_RVA 0x005BB465u
@@ -58,70 +59,17 @@ __declspec(naked) static void ef_shadow_bridge(void) {
     }
 }
 
-// Native enumeration is a kernel call, so repeated passes need no heap/snapshot
-// allocation while peers are stopped. Signature checked against System Informer
-// phnt ntpsapi.h (NtGetNextThread). Resolve the export before stopping anyone.
-// Freeze to a fixed point: a creator may have made a child during an earlier
-// pass, but after a pass adds no threads all in-process creators are stopped.
-// Remote injection by another process is outside this startup-only protocol.
-typedef LONG (NTAPI *EF_NextThread)(HANDLE, HANDLE, DWORD, ULONG, ULONG, PHANDLE);
+// The peer-stop protocol lives in patch_barrier.h (shared with the window-mode patches): the
+// two distance sites are the ranges a peer must not be executing while they are rewritten.
 static int ef_stop_peers(HANDLE* peers, unsigned* count,
                         unsigned char* range, unsigned char* shadow) {
-    EF_NextThread next_thread = (EF_NextThread)(uintptr_t)GetProcAddress(
-        GetModuleHandleA("ntdll.dll"), "NtGetNextThread");
-    DWORD ids[256], self = GetCurrentThreadId();
-    unsigned n = 0, pass, i;
-    int ok = 0;
-    *count = 0;
-    if (!next_thread) return 0;
-    for (pass = 0; pass < 8; pass++) {
-        HANDLE cursor = NULL;
-        int cursor_owned = 0;
-        unsigned added = 0;
-        for (;;) {
-            HANDLE thread = NULL;
-            LONG status = next_thread(GetCurrentProcess(), cursor,
-                THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION,
-                0, 0, &thread);
-            if (cursor && !cursor_owned) CloseHandle(cursor);
-            cursor = NULL;
-            cursor_owned = 0;
-            if ((ULONG)status == 0x8000001aUL) break; // STATUS_NO_MORE_ENTRIES
-            if (status < 0 || !thread) goto failed;
-            cursor = thread;
-            {
-                DWORD id = GetThreadId(thread);
-                CONTEXT context;
-                if (!id) { CloseHandle(thread); goto failed; }
-                if (id == self) continue;
-                for (i = 0; i < n; i++) if (ids[i] == id) break;
-                if (i < n) continue;
-                if (n == 256 || SuspendThread(thread) == (DWORD)-1) {
-                    CloseHandle(thread);
-                    goto failed;
-                }
-                ids[n] = id;
-                peers[n++] = thread;
-                cursor_owned = 1;
-                added++;
-                context.ContextFlags = CONTEXT_CONTROL;
-                if (!GetThreadContext(thread, &context) ||
-                    (context.Eip >= (DWORD)(uintptr_t)range &&
-                     context.Eip < (DWORD)(uintptr_t)(range+8)) ||
-                    (context.Eip >= (DWORD)(uintptr_t)shadow &&
-                     context.Eip < (DWORD)(uintptr_t)(shadow+6))) goto failed;
-            }
-        }
-        if (!added) { ok = 1; break; }
-    }
-failed:
-    if (!ok) {
-        for (i = 0; i < n; i++) ResumeThread(peers[i]);
-        for (i = 0; i < n; i++) CloseHandle(peers[i]);
-        return 0;
-    }
-    *count = n;
-    return 1;
+    pb_range ranges[2];
+
+    ranges[0].start = range;
+    ranges[0].len = 8;
+    ranges[1].start = shadow;
+    ranges[1].len = 6;
+    return pb_stop_peers(peers, count, ranges, 2);
 }
 static int ef_distance_install(unsigned char* base, size_t span) {
     unsigned char *range, *shadow;

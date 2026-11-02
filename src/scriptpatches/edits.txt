@@ -20,3 +20,7 @@ PauseQuit	game\gui\guimainmenu.ws	After	1	InsertMenuButton( AS_MenuItems, MM_BTN
 PauseQuit	game\gui\guimainmenu.ws	Body	1	private final function InputMainInGame( button : int ) {	@quit_input.ws
 PauseQuit	game\gui\guimainmenu.ws	Before	1	private final function InputMainMenu( button : int )	@quit_members.ws
 PauseQuit	game\gui\guimainmenu.ws	End	0		@quit_box.ws
+WindowMode	game\gui\guimainmenu.ws	Body	1	private final function FillOptionsGraphics( AS_MenuItems : int ) {	var w2efModes : array< string >;
+WindowMode	game\gui\guimainmenu.ws	After	1	InsertMenuSlider( AS_MenuItems, MM_SLID_GAMMA,	@window_graphics.ws
+WindowMode	game\gui\guimainmenu.ws	Body	1	private final function InputOptionsGraphics( item : int, value : float ) {	@window_input.ws
+WindowMode	game\gui\guimainmenu.ws	End	0		@window_texts.ws

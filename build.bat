@@ -26,5 +26,5 @@ for %%f in (src\third_party\tinf\*.c) do (
 rem The script-patch data (edits.txt and the .ws fragments) is embedded as RCDATA.
 rc /nologo /fo build\version.res src\version.rc || exit /b 1
 rc /nologo /fo build\scriptpatches.res src\scriptpatches.rc || exit /b 1
-cl /nologo /O2 /W4 /MT /LD src\enginefix.c !SP! !TINF! build\version.res build\scriptpatches.res /Fobuild\ /link user32.lib gdi32.lib /DEF:src\dinput8.def /OUT:build\dinput8.dll /IMPLIB:build\dinput8.lib || exit /b 1
+cl /nologo /O2 /W4 /MT /LD src\enginefix.c !SP! !TINF! build\version.res build\scriptpatches.res /Fobuild\ /link user32.lib gdi32.lib shell32.lib /DEF:src\dinput8.def /OUT:build\dinput8.dll /IMPLIB:build\dinput8.lib || exit /b 1
 echo Built build\dinput8.dll

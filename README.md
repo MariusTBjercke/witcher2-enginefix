@@ -15,19 +15,21 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Black map in interiors** | In 25 interior map entries (temples, inns, Loredo's house, towers and other houses) the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
 | **Skip the startup videos** | `[startup] skip_intro=1` starts at the main menu without the logo videos and the intro movie. The mod presses "skip" for the game on each startup movie (the same path as Esc), so a short black moment remains. Works with or without an intro removal mod. | off |
 | **Ctrl+F9/F10 do not quick-load** | F9 (quick load) and F10 cannot be rebound in this game. While Ctrl or Alt is held, the mod hides F9/F10 from the game, so the mod's hotkeys never trigger a quick load. Plain F9 still quick-loads. | on |
+| **Snipping Tool and Windows keys** | The game blocks every Windows key combination while it is in front, so Win+Shift+S and Print Screen (Snipping Tool) did nothing. Now they work, as do Win+D and the rest; a Windows key tapped on its own still does not open the Start menu. `[hotkeys] windows_keys`. | on |
 | **Book read markers** | Books show `Read`, `Nothing new` or `Unread` in the inventory, trade and storage lists, with a tooltip describing what reading them would still teach you. A tick marks books you have read; at merchants and in storage it also keeps the game's carried-copy meaning. `Nothing new` is text only, since the book itself is still unread. Reading a book refreshes the inventory immediately. Looted books show the read tick too; the loot window shows `(Nothing new)` after the name where applicable. In 12 languages. | on |
 | **Continue** | The main menu gets a Continue button (the game's own translated label) that loads your newest save. | on |
 | **Quit in the pause menu** | The pause menu gets the game's Quit button, with a confirmation, next to "Exit to main menu". | on |
+| **Display mode in game** | Options > Graphics gets a **Display mode** row: full screen, borderless window or windowed, switched at once without a restart. Borderless fills the screen at the desktop resolution without a border or title bar, while Direct3D stays windowed, so alt-tab does not recreate the device; the process is made DPI-aware so the picture stays 1:1 on a scaled desktop. | on (borderless off) |
 
 Each DLL part can be switched off in `witcher2_enginefix.ini`; the interior maps are removed by deleting their files (see below).
 
 ### Script patches without touching the game files
 
-The last three change the game's scripts and UI screens. The DLL does that at game start: the first start builds patched copies of the files your game uses (your `base_scripts.dzip`, also when a mod like Project Mersey replaced it; the trade/storage screens, also when an HD UI mod replaced them; the read-book icons) into `bin\witcher2_enginefix_cache\`, and the game reads those instead of the originals. Later starts reuse them until a game file changes. A screen another UI mod changed in a way the patch does not recognize is left alone, and a part that cannot be applied is skipped and logged rather than half-applied.
+The last four change the game's scripts and UI screens. The DLL does that at game start: the first start builds patched copies of the files your game uses (your `base_scripts.dzip`, also when a mod like Project Mersey replaced it; the trade/storage screens, also when an HD UI mod replaced them; the read-book icons) into `bin\witcher2_enginefix_cache\`, and the game reads those instead of the originals. Later starts reuse them until a game file changes. A screen another UI mod changed in a way the patch does not recognize is left alone, and a part that cannot be applied is skipped and logged rather than half-applied.
 
 **Upgrading from 0.4/0.5 with the old script patches installed:** extract the new version over the old one. The first start puts the original files back once from `Witcher2EngineFix_Optional\ScriptPatches\backup` (only files still exactly as the old patcher left them) and keeps that folder as `backup.restored-by-dll`. After that start the `Witcher2EngineFix_Optional` folder can be deleted.
 
-Details: [dll-script-patches.md](docs/fixes/dll-script-patches.md), [shop-book-read-marker.md](docs/fixes/shop-book-read-marker.md), [menu-buttons.md](docs/fixes/menu-buttons.md). Details, addresses and how each part was verified are in [`docs/fixes/`](docs/fixes/).
+Details: [dll-script-patches.md](docs/fixes/dll-script-patches.md), [shop-book-read-marker.md](docs/fixes/shop-book-read-marker.md), [menu-buttons.md](docs/fixes/menu-buttons.md), [borderless-window.md](docs/fixes/borderless-window.md). Details, addresses and how each part was verified are in [`docs/fixes/`](docs/fixes/).
 
 ### Preset values
 
@@ -52,7 +54,7 @@ The higher levels cost GPU time. They do not change how far away the game spawns
    `...\steamapps\common\the witcher 2\bin\dinput8.dll`
 3. Start the game as usual (through Steam and the launcher).
 
-To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.6.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
+To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix 0.7.0 loaded` and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
 
 | File | Purpose |
 |---|---|
@@ -78,7 +80,10 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[saves] fix_thumbnails` | 1 | 0 turns the save-preview fix off |
 | `[saves] fix_list_leak` | 1 | 0 turns the save-list leak fix off |
 | `[startup] skip_intro` | 0 | 1 starts at the main menu, without logo videos and intro |
-| `[scriptpatches] book_marker`, `continue`, `pause_quit` | 1, 1, 1 | 0 turns that script patch off (the cache is rebuilt) |
+| `[window] borderless` | 0 | 1 starts borderless (Full screen off, desktop resolution). After the first use, Options > Graphics owns the setting; it is stored in the game's User.ini |
+| `[window] enabled` | 1 | 0 turns the window patches, the live switch and the menu channel off |
+| `[window] dpi_aware` | 1 | Make the process DPI-aware when borderless starts on |
+| `[scriptpatches] book_marker`, `continue`, `pause_quit`, `window_mode` | 1, 1, 1, 1 | 0 turns that script patch off (the cache is rebuilt) |
 | `[osd] enabled`, `size`, `ms` | 1, 34, 2500 | On-screen readout; 34 px suits 4K, 22 px 1080p |
 | `[diagnostics] save_trace` | 0 | 1 logs the save-preview path (Steam writes, screenshot encoding) |
 | `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
@@ -91,6 +96,7 @@ The pause-menu Quit confirmation currently needs one click before it
 responds to hover. The button still works; this is a known minor issue.
 
 - **DXVK**: works with and without it. The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen.
+- **Borderless window**: only in windowed mode (Full screen off) and best at the desktop resolution; at a lower resolution it is a centered frameless window at that size, and it always sits on the primary monitor. Windowed mode may lose the device gamma ramp (Brightness/Gamma), and the game may behave differently in the background than in full screen; both are properties of the game's windowed mode, not of the patch.
 - **Other `dinput8.dll` mods**: only one `dinput8.dll` can sit in `bin\`. This mod loads the system `dinput8.dll` itself.
 - **Other map mods**: a mod that ships its own `CookedPC\globals\map_scales.csv` conflicts with the interior maps; whichever was copied last wins. UI mods that replace `ui_nav.swf` (A Better UI, HD UI upscales) are fine.
 - **Steam Cloud**: no effect on the fix; saves and previews are written through the game's own Steam storage interface.

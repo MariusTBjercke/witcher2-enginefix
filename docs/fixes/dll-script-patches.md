@@ -7,6 +7,11 @@ edit engine; Task 6 builds the patched files into a cache folder and proves the 
 test and in-game check (Task 7 Steps 2-3) are still pending. Target: Steam Enhanced Edition
 3.5.0.26.
 
+0.7.0 adds a fourth feature, `window_mode` (3 rows, `src/scriptpatches/window_*.ws`): the
+"Full screen" and "Borderless window" rows in Options > Graphics. It is unrelated to the file
+redirect described here; see [borderless-window.md](borderless-window.md). The edit table is now
+17 rows and `OV_CACHE_LAYOUT` is 3.
+
 ## Why
 
 Up to 0.5.1 the optional script patches (BookMarker, Continue, PauseQuit) are applied by

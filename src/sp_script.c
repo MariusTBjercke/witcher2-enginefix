@@ -237,7 +237,10 @@ static const struct { const char* name; int id; } k_resources[] = {
     { "quit_input.ws",       SP_RC_QUIT_INPUT },
     { "quit_members.ws",     SP_RC_QUIT_MEMBERS },
     { "quit_box.ws",         SP_RC_QUIT_BOX },
-    { "inventory_refill.ws", SP_RC_INVENTORY_REFILL }
+    { "inventory_refill.ws", SP_RC_INVENTORY_REFILL },
+    { "window_graphics.ws",  SP_RC_WINDOW_GRAPHICS },
+    { "window_input.ws",     SP_RC_WINDOW_INPUT },
+    { "window_texts.ws",     SP_RC_WINDOW_TEXTS }
 };
 
 static int resource_id(const char* name)
