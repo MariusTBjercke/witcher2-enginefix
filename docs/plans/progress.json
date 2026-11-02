@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-02T18:00:00+01:00",
+  "updated": "2026-11-02T18:30:00+01:00",
   "owner": "dsh",
   "items": [
     {
@@ -205,6 +205,30 @@
       ],
       "verify": "Log shows 'input: window procedure hooked' and 'keyboard cooperative level 0x05 -> 0x06'; in play Win+Shift+S and Print Screen open the Snipping Tool, a tapped Windows key does not open Start, keys act once, Alt/F10 open no system menu.",
       "evidence": "docs/fixes/windows-keys.md - the play-mode DirectInput keyboard is created with DISCL_EXCLUSIVE|DISCL_FOREGROUND (0x009D25EE), not DISCL_NOWINKEY; the first attempt (strip NOWINKEY) changed nothing in game. Second build: SetCooperativeLevel (slot 13) on the keyboard becomes non-exclusive, the window object's procedure (vtable 0x00EC6560 -> 0x009D4BD9) drops key messages in input mode 3, lone Windows key masked with VK 0xE8. Owner, 2026-11-02: start test passed and the Snipping Tool works in game; also with DXVK disabled."
+    },
+    {
+      "id": "load-times",
+      "title": "Faster save loading, area transitions and interiors (0.7.0 candidate)",
+      "status": "done",
+      "files": [
+        "docs/fixes/load-times.md",
+        "src/enginefix.c",
+        "dist-files/witcher2_enginefix.ini"
+      ],
+      "verify": "Log shows 'doors: streaming door timer hooked' and 'doors: fade-out patched, fade-in patched, 0.25 s'; each house door logs 'doors: interior ready after N ms - picture back now (state 2)'. With load_trace=1 a house door window is well under 1.69 s; in game the picture returns soon after the fade with no visible glitch.",
+      "evidence": "docs/fixes/load-times.md, docs/validation/load-trace-run1-2026-11-02.log, load-trace-run2-doors-2026-11-02.log - save load 3.0-3.3 s, CPU-bound on the main thread (I/O + unpack ~1 s, no artificial sleep, no vsync). House doors last a fixed 1.69 s (115 ticks) + 0.5 s fade-in while loading takes ~0.05 s: type 1 door task waits for the door animation's fade_out event. Recommended next: start the fade-in when the interior switch is done (+ shorter fades), ~1 s per house door; needs owner go-ahead and an in-game test. Run 2 ended in a game crash in Havok code (0x0084C7AF, misaligned body transform) leaving the inn - separate issue. 2026-11-02: owner agreed; [loading] fast_doors=1 (fade in via the task's own fade_out handler 00502B5F once game+0xE8 and world+0x30C are 0) and door_fade=0.25 implemented, start test pending. Run 3 (docs/validation/load-trace-run3-fast-doors-2026-11-02.log): owner 'much better'; house doors 375-422 ms (was 1 672-1 688), inn 1 235 ms (was 2 485); first door of a session fell back (fade_out CName not yet set) - fixed by a DLL-side name lookup (FUN_00b28d76), retest pending. Run 4 (docs/validation/load-trace-run4-first-door-2026-11-02.log): first door of the session 390 ms; owner 'looked good'."
+    },
+    {
+      "id": "crash-raycast-stale-body",
+      "title": "Crash leaving the Flotsam inn: ray cast against a freed physics object",
+      "status": "implemented-awaiting-game-test",
+      "files": [
+        "docs/fixes/crash-raycast-stale-body.md",
+        "src/enginefix.c",
+        "dist-files/witcher2_enginefix.ini"
+      ],
+      "verify": "Log shows 'stability: ray cast guard installed (collector slot 00D41A38)'; walk in and out of the Flotsam inn several times without a crash; any 'ray cast hit a freed physics object' line shows a caught case.",
+      "evidence": "docs/fixes/crash-raycast-stale-body.md - dump 2026-11-02 18:02:55: movaps fault at 0084C7AF in collector callback FUN_0084c750 (slot 00D41A38); owner pointer 5947BE03 odd and transform pointer inside nvgpucomp32.dll: stale handle from the worker's broadphase ray cast while the inn layer unloaded. Guard returns the callback's own no-hit fraction on an access violation. Run 3: guard installed, inn in/out without a crash, no caught case logged (race, so not proof)."
     }
   ]
 }

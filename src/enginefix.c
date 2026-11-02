@@ -21,6 +21,7 @@
 #include <windows.h>
 #define PSAPI_VERSION 2   // GetProcessMemoryInfo from kernel32 (K32...), no psapi.lib
 #include <psapi.h>
+#include <tlhelp32.h>   // CreateToolhelp32Snapshot: per-thread CPU time for load_trace
 #include <dbghelp.h>   // MINIDUMP_* types only; MiniDumpWriteDump is resolved at runtime
 #include <objbase.h>   // LPUNKNOWN / REFIID for the DirectInput8Create signature
 #include <shlobj.h>    // SHGetFolderPathW: the game's Documents folder (User.ini)
@@ -113,6 +114,9 @@ static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the s
 static int cfg_fast_list = 1;   // [saves] fast_list: unpack only the save header blocks (2 = every other build)
 static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos before the main menu
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
+static int cfg_load_trace;      // [diagnostics] load_trace: where loading-screen time goes
+static int cfg_fast_doors = 1;  // [loading] fast_doors: picture back once a house interior is in
+static float cfg_door_fade = 0.25f; // [loading] door_fade: seconds of the door fade-out/in (game: 0.5)
 static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
 static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
 static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
@@ -121,6 +125,7 @@ static int cfg_wf_enabled = 1;  // [window] enabled: borderless support (patch +
 static int cfg_wf_borderless;   // [window] borderless: start borderless until the menu has saved it
 static int cfg_wf_dpi = 1;      // [window] dpi_aware: DPI awareness when borderless starts on
 static int cfg_crash_dump = 1;  // [diagnostics] crash_dump: 0 off, 1 log + minidump, 2 full dump
+static int cfg_ray_guard = 1;   // [stability] raycast_guard: a ray cast that hits freed physics misses it
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
 
@@ -328,6 +333,10 @@ static void load_config(void)
     cfg_fast_list = ini_int("saves", "fast_list", 1);
     cfg_skip_intro = ini_int("startup", "skip_intro", 0);
     cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
+    cfg_load_trace = ini_int("diagnostics", "load_trace", 0);
+    cfg_fast_doors = ini_int("loading", "fast_doors", 1);
+    cfg_door_fade = ini_float("loading", "door_fade", 0.25f);
+    if (cfg_door_fade < 0.05f || cfg_door_fade > 2.0f) cfg_door_fade = 0.5f;
     cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
     cfg_continue = ini_int("scriptpatches", "continue", 1);
     cfg_pause_quit = ini_int("scriptpatches", "pause_quit", 1);
@@ -336,6 +345,7 @@ static void load_config(void)
     cfg_wf_borderless = ini_int("window", "borderless", 0);
     cfg_wf_dpi = ini_int("window", "dpi_aware", 1);
     cfg_crash_dump = ini_int("diagnostics", "crash_dump", 1);
+    cfg_ray_guard = ini_int("stability", "raycast_guard", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -1816,6 +1826,11 @@ static int script_full_path(const wchar_t* path, wchar_t* full)
     return 1;
 }
 
+// Load trace (below): handle kinds and open times, counted from hook_CreateFileW.
+static DWORD g_ltTls = TLS_OUT_OF_INDEXES;
+static DWORD g_ltMainTid;
+static void lt_note_open(const wchar_t* path, HANDLE h, LONGLONG us);
+
 static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
                                       LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, HANDLE tmpl)
 {
@@ -1823,6 +1838,7 @@ static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
     const wchar_t* use = path;
     HANDLE h;
     DWORD err;
+    LONGLONG t0 = cfg_load_trace ? qpc_us() : 0;
 
     if (g_scriptHooks && script_full_path(path, scriptFull) &&
         sp_hooks_path(scriptFull, scriptCache, MAX_PATH)) {
@@ -1838,6 +1854,7 @@ static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
         h = g_origCreateFileW(path, access, share, sa, disp, flags, tmpl);
         err = GetLastError();
     }
+    if (cfg_load_trace) lt_note_open(path, h, qpc_us() - t0);
     if (cfg_save_trace && trace_path(path))
         logf_("save-trace: CreateFileW \"%ls\" access=%08lX disp=%lu -> %s (err %lu)",
               path, access, disp, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", err);
@@ -2207,6 +2224,724 @@ static DWORD WINAPI scripthooks_thread(LPVOID param)
     return 0;
 }
 
+// ---- load trace ---------------------------------------------------------
+// [diagnostics] load_trace=1: where the time goes while a loading screen is up (load from
+// the menu, area transitions). Passive: the hooks call the real function first and only
+// count; nothing is changed. Results in docs/fixes/load-times.md.
+//
+// Window: the render thread object (DAT_0160D0A4, set by its loop FUN_009d1e96) holds the
+// loading-screen movie at +0x268 and the screen object at +0x26C; the render command
+// 009DC3FC -> FUN_009d1b9f sets +0x268 when a loading screen starts and clears it at the
+// end. While +0x268 is set and no command is queued, the render thread spins on
+// FUN_009d1d61, which draws only when 1/30 s has passed (QPC + PeekMessage, no wait).
+// The trace polls those two fields every 5 ms; a window is +0x268 going non-zero to zero.
+//
+// Counters per thread (one slot each, written only by that thread):
+//   ReadFile (00CAD27C)      count, bytes, time, split by the file the handle was opened as
+//                            (.dzip / other CookedPC / anything else); the dzip library
+//                            reads its 64 KiB blocks with the CRT's _lseeki64 + _read
+//                            (0068E8C1 / 0068E8D4), which end in this ReadFile
+//   CreateFileW (00CAD320)   opens and their time (shared hook)
+//   block unpack             FUN_0068f3b0, the dzip/save block decompressor (cdecl in, in_len,
+//                            out, 0x10000); its only call 0068E8E7 is redirected
+//   Sleep (00CAD304)         count, Sleep(0)/Sleep(1)/longer, time actually slept
+//   WaitForSingleObject(Ex) (00CAD2B0 / 00CAD07C) count and time
+//   IDirect3DDevice9::Present (vtable slot 17 of the device at 01626788) count and time
+// plus each thread's CPU time (GetThreadTimes) at both ends of the window. A timeline line
+// every 250 ms sums the counters over all threads.
+//
+// Interiors have no loading screen: a streaming door (constructor FUN_0095de8e) starts a task
+// in FUN_0095dcc4, keeps it at door+0x228 and ticks it from its OnTimer method FUN_0095db00
+// (door vtable slot 00EF01BC, thiscall, RET 8) until the task's Tick (slot 1) returns done;
+// the interior task (vtable 00EF0438, Tick 00502dc0) waits for the layer streaming and fades
+// to black after 2.5 s (+0x14 = 1). The slot is wrapped to time that span as a "door" window.
+// Outside any window, a 250 ms interval that read or unpacked more than 4 MB is logged as a
+// streaming burst (the open world streams without a marker).
+
+#define IAT_READFILE        0x00CAD27Cu
+#define IAT_SLEEP           0x00CAD304u
+#define IAT_WAITSINGLE      0x00CAD2B0u
+#define IAT_WAITSINGLEEX    0x00CAD07Cu
+#define VA_RENDER_THREAD    0x0160D0A4u   // render thread object while its loop runs
+#define OFF_RT_LOAD_MOVIE   0x268         // non-zero while a loading screen is up
+#define OFF_RT_LOAD_SCREEN  0x26C         // the screen object; byte +0x10 = still shown
+#define VA_UNPACK_CALL      0x0068E8E7u   // call FUN_0068f3b0 in FUN_0068e890
+#define VA_UNPACK           0x0068F3B0u
+#define LT_THREADS          128
+#define LT_HANDLES          4096          // open-addressing table: handle -> file kind
+#define LT_TICK_MS          250
+#define LT_MAX_WINDOWS      40
+#define LT_CPU_MAX          256
+#define VA_DOOR_TIMER_SLOT  0x00EF01BCu   // streaming door OnTimer
+#define VA_DOOR_TIMER       0x0095DB00u
+#define OFF_DOOR_TASK       0x228
+#define VA_DOOR_INTERIOR_VT 0x00EF0438u   // the interior task: +0x14 state (1 = faded out)
+#define LT_BURST_BYTES      (4 << 20)
+
+enum { LT_DZIP, LT_LOOSE, LT_OTHER, LT_UNKNOWN, LT_KINDS };
+static const char* const k_ltKind[LT_KINDS] = { "dzip", "loose", "other", "unknown" };
+
+typedef struct {
+    volatile LONG tid;
+    LONG     reads[LT_KINDS];
+    LONGLONG readBytes[LT_KINDS], readUs[LT_KINDS];
+    LONG     readsAsync;
+    LONG     opens;
+    LONGLONG openUs;
+    LONG     unpacks;
+    LONGLONG unpackIn, unpackOut, unpackUs;
+    LONG     sleeps, sleep0, sleep1;
+    LONGLONG sleepUs;
+    LONG     waits, waitsZero;
+    LONGLONG waitUs;
+    LONG     presents;
+    LONGLONG presentUs, presentMaxUs;
+} lt_thread;
+
+typedef struct { DWORD tid; ULONGLONG cpu; uintptr_t start; } lt_cpu;
+
+typedef BOOL  (WINAPI *ReadFile_t)(HANDLE, LPVOID, DWORD, LPDWORD, LPOVERLAPPED);
+typedef VOID  (WINAPI *Sleep_t)(DWORD);
+typedef DWORD (WINAPI *WaitSingle_t)(HANDLE, DWORD);
+typedef DWORD (WINAPI *WaitSingleEx_t)(HANDLE, DWORD, BOOL);
+typedef int   (__cdecl *Unpack_t)(const void*, int, void*, int);
+typedef HRESULT (WINAPI *Present_t)(void*, const RECT*, const RECT*, HWND, const RGNDATA*);
+typedef LONG  (WINAPI *NtQueryInformationThread_t)(HANDLE, int, PVOID, ULONG, PULONG);
+typedef LONG  (WINAPI *NtQueryTimerResolution_t)(PULONG, PULONG, PULONG);
+typedef void  (__fastcall *DoorTimer_t)(void* door, void* edx, void* name, float dt);
+
+static ReadFile_t     g_origReadFile;
+static Sleep_t        g_origSleep;
+static WaitSingle_t   g_origWaitSingle;
+static WaitSingleEx_t g_origWaitSingleEx;
+static Present_t      g_origPresent;
+static DoorTimer_t    g_origDoorTimer;
+static void* volatile g_ltDoorTask;     // the task being timed, set by the game thread
+static void*          g_ltDoorVt;
+static volatile DWORD g_ltDoorStart, g_ltDoorEnd;
+static volatile LONG  g_ltDoorTicks, g_ltDoorFaded, g_ltDoorOverlap;
+static lt_thread      g_lt[LT_THREADS];
+static lt_thread      g_ltStart[LT_THREADS];
+static struct { volatile LONG h; LONG kind; } g_ltHandles[LT_HANDLES];
+
+static lt_thread* lt_self(void)
+{
+    lt_thread* t;
+    DWORD tid;
+    int i;
+    if (g_ltTls == TLS_OUT_OF_INDEXES) return NULL;
+    t = (lt_thread*)TlsGetValue(g_ltTls);
+    if (t) return t;
+    tid = GetCurrentThreadId();
+    for (i = 0; i < LT_THREADS; i++) {
+        if (g_lt[i].tid == (LONG)tid ||
+            InterlockedCompareExchange(&g_lt[i].tid, (LONG)tid, 0) == 0) {
+            TlsSetValue(g_ltTls, &g_lt[i]);
+            return &g_lt[i];
+        }
+    }
+    return NULL;
+}
+
+static unsigned lt_hslot(HANDLE h) { return (((unsigned)(uintptr_t)h >> 2) * 2654435761u) >> 20; }
+
+// Called from hook_CreateFileW: remember what kind of file a handle is, count the open.
+static void lt_note_open(const wchar_t* path, HANDLE h, LONGLONG us)
+{
+    DWORD err = GetLastError();
+    lt_thread* t = lt_self();
+    if (t) { t->opens++; t->openUs += us; }
+    if (h != INVALID_HANDLE_VALUE && h && path) {
+        size_t n = wcslen(path);
+        LONG kind = (n >= 5 && !_wcsicmp(path + n - 5, L".dzip")) ? LT_DZIP
+                  : wcsistr(path, L"cookedpc") ? LT_LOOSE : LT_OTHER;
+        unsigned i = lt_hslot(h), k;
+        for (k = 0; k < 64; k++, i = (i + 1) % LT_HANDLES) {   // the handle's old slot or a free one
+            LONG have = g_ltHandles[i].h;
+            if (have == (LONG)(uintptr_t)h || have == 0) {
+                g_ltHandles[i].kind = kind;
+                InterlockedExchange(&g_ltHandles[i].h, (LONG)(uintptr_t)h);
+                break;
+            }
+        }
+    }
+    SetLastError(err);
+}
+
+static int lt_kind(HANDLE h)
+{
+    unsigned i = lt_hslot(h), k;
+    for (k = 0; k < 64; k++, i = (i + 1) % LT_HANDLES) {
+        LONG have = g_ltHandles[i].h;
+        if (have == (LONG)(uintptr_t)h) return g_ltHandles[i].kind;
+        if (have == 0) break;
+    }
+    return LT_UNKNOWN;
+}
+
+static BOOL WINAPI hook_ReadFile(HANDLE h, LPVOID buf, DWORD n, LPDWORD got, LPOVERLAPPED ov)
+{
+    LONGLONG t0 = qpc_us();
+    BOOL ok = g_origReadFile(h, buf, n, got, ov);
+    LONGLONG us = qpc_us() - t0;
+    DWORD err = GetLastError();
+    lt_thread* t = lt_self();
+    if (t) {
+        int k = lt_kind(h);
+        t->reads[k]++;
+        t->readUs[k] += us;
+        t->readBytes[k] += (ok && got) ? *got : (ov ? n : 0);
+        if (ov) t->readsAsync++;
+    }
+    SetLastError(err);
+    return ok;
+}
+
+static VOID WINAPI hook_Sleep(DWORD ms)
+{
+    LONGLONG t0 = qpc_us();
+    DWORD err;
+    lt_thread* t;
+    g_origSleep(ms);
+    err = GetLastError();
+    t = lt_self();
+    if (t) {
+        t->sleeps++;
+        if (ms == 0) t->sleep0++; else if (ms == 1) t->sleep1++;
+        t->sleepUs += qpc_us() - t0;
+    }
+    SetLastError(err);
+}
+
+static void lt_count_wait(DWORD ms, LONGLONG us)
+{
+    DWORD err = GetLastError();
+    lt_thread* t = lt_self();
+    if (t) {
+        t->waits++;
+        if (ms == 0) t->waitsZero++;
+        t->waitUs += us;
+    }
+    SetLastError(err);
+}
+
+static DWORD WINAPI hook_WaitSingle(HANDLE h, DWORD ms)
+{
+    LONGLONG t0 = qpc_us();
+    DWORD r = g_origWaitSingle(h, ms);
+    lt_count_wait(ms, qpc_us() - t0);
+    return r;
+}
+
+static DWORD WINAPI hook_WaitSingleEx(HANDLE h, DWORD ms, BOOL alertable)
+{
+    LONGLONG t0 = qpc_us();
+    DWORD r = g_origWaitSingleEx(h, ms, alertable);
+    lt_count_wait(ms, qpc_us() - t0);
+    return r;
+}
+
+static int __cdecl hook_Unpack(const void* in, int in_len, void* out, int out_len)
+{
+    LONGLONG t0 = qpc_us();
+    int r = ((Unpack_t)(uintptr_t)VA_UNPACK)(in, in_len, out, out_len);
+    LONGLONG us = qpc_us() - t0;
+    DWORD err = GetLastError();
+    lt_thread* t = lt_self();
+    if (t) {
+        t->unpacks++;
+        t->unpackIn += in_len;
+        if (r > 0) t->unpackOut += r;
+        t->unpackUs += us;
+    }
+    SetLastError(err);
+    return r;
+}
+
+// IDirect3DDevice9::Present: four parameters plus this.
+static HRESULT WINAPI hook_Present(void* self, const RECT* src, const RECT* dst, HWND wnd, const RGNDATA* dirty)
+{
+    LONGLONG t0 = qpc_us();
+    HRESULT hr = g_origPresent(self, src, dst, wnd, dirty);
+    LONGLONG us = qpc_us() - t0;
+    DWORD err = GetLastError();
+    lt_thread* t = lt_self();
+    if (t) {
+        t->presents++;
+        t->presentUs += us;
+        if (us > t->presentMaxUs) t->presentMaxUs = us;
+    }
+    SetLastError(err);
+    return hr;
+}
+
+// ---- fast doors ---------------------------------------------------------
+// [loading] fast_doors=1. A house door is a type 1 streaming-door task (vtable 00EF0410): its
+// constructor FUN_00502a7f fades to black, Tick 00502B18 queues the interior switch
+// (FUN_00aa7e18 appends a request to the game object's array at +0xE4, count +0xE8) and sets
+// state 1, and only the door animation's `fade_out` event (handler 00502B5F, slot 2) fades the
+// picture back in and sets state 2. The switch itself takes ~0.05-0.3 s, the event comes a fixed
+// ~1.2 s later (docs/fixes/load-times.md). Once the request has been consumed and the world
+// reports no pending streaming (world+0x30C == 0, the test the interior task 00502DC0 uses) for
+// FD_READY_TICKS door ticks, the hook calls that handler with a synthetic `fade_out` event, so
+// the game itself fades in and finishes the task; the real event later finds state 2 and does
+// nothing. [loading] door_fade repoints the two fades' `movss xmm0,[00E30444]` (the shared 0.5)
+// at a float of ours. Everything runs on the game thread inside the door's own OnTimer.
+#define VA_GAME             0x01404950u   // CGame*: +0x40 world, +0xE8 queued world requests
+#define VA_DOOR_TELEPORT_VT 0x00EF0410u   // type 1 task: +0x14 state (1 = switch queued)
+#define VA_DOOR_FADE_EVENT  0x00502B5Fu   // slot 2: thiscall (event, unused), RET 8
+#define VA_CNAME_FROM_STR   0x00B28D76u   // __stdcall (DWORD* out, const wchar_t*), RET 8
+#define VA_STR_FADE_OUT     0x00EF0050u   // L"fade_out", the string the handler names its event by
+#define VA_DOOR_FADE_OUT    0x00502ACDu   // movss xmm0,[00E30444] in FUN_00502a7f
+#define VA_DOOR_FADE_IN     0x00502BD9u   // movss xmm0,[00E30444] in 00502B5F
+#define FD_READY_TICKS      2
+
+typedef void (__fastcall *DoorEvent_t)(void* task, void* edx, const void* event, void* unused);
+typedef void (__stdcall *CNameFromStr_t)(DWORD* out, const wchar_t* name);
+
+static float g_doorFade = 0.5f;
+
+static void fast_door_tick(void* task)
+{
+    static void* s_task;
+    static DWORD s_since;
+    static int   s_ready, s_done;
+    static DWORD s_fadeOut;            // CName id of "fade_out", as the handler computes it
+    DWORD event[4] = { 0, 0, 0, 0 };
+    void *game, *world;
+    DWORD reqs, pending, waited;
+
+    if (!task || read_ptr(task) != (void*)(uintptr_t)VA_DOOR_TELEPORT_VT) return;
+    if (task != s_task) { s_task = task; s_since = 0; s_ready = 0; s_done = 0; }
+    if (s_done || *(const LONG*)((const char*)task + 0x14) != 1) return;
+    if (!s_since) s_since = GetTickCount();
+    game = read_ptr((void*)(uintptr_t)VA_GAME);
+    world = game ? read_ptr((char*)game + 0x40) : NULL;
+    reqs = game ? (DWORD)(uintptr_t)read_ptr((char*)game + 0xE8) : 1;
+    pending = world ? (DWORD)(uintptr_t)read_ptr((char*)world + 0x30C) : 1;
+    if (reqs == 0 && pending == 0) s_ready++; else s_ready = 0;
+    if (s_ready < FD_READY_TICKS) return;
+    s_done = 1;
+    waited = GetTickCount() - s_since;
+    // The handler's own copy (026ADE10) is only set on the first event it sees; the name pool
+    // gives the same id for the same string, so look it up here (game thread).
+    if (!s_fadeOut) ((CNameFromStr_t)(uintptr_t)VA_CNAME_FROM_STR)(&s_fadeOut, (const wchar_t*)(uintptr_t)VA_STR_FADE_OUT);
+    if (!s_fadeOut) {
+        logf_("doors: interior ready after %lu ms, event name not found - the game's own timing", waited);
+        return;
+    }
+    event[1] = s_fadeOut;
+    ((DoorEvent_t)(uintptr_t)VA_DOOR_FADE_EVENT)(task, NULL, event, NULL);
+    logf_("doors: interior ready after %lu ms - picture back now (state %ld)", waited,
+          *(const LONG*)((const char*)task + 0x14));
+}
+
+// Streaming door OnTimer: fast doors after the game's tick, then the load trace notes the task
+// before and after it. Runs on the game thread; the trace's poll thread reads the g_ltDoor*
+// fields and clears g_ltDoorTask/g_ltDoorEnd when done.
+static void __fastcall hook_DoorTimer(void* door, void* edx, void* name, float dt)
+{
+    void* before = *(void* volatile*)((char*)door + OFF_DOOR_TASK);
+    void* after;
+    g_origDoorTimer(door, edx, name, dt);
+    after = *(void* volatile*)((char*)door + OFF_DOOR_TASK);
+    if (cfg_fast_doors && after) fast_door_tick(after);
+    if (!before || !cfg_load_trace) return;
+    if (!g_ltDoorTask && !g_ltDoorEnd) {
+        g_ltDoorVt = read_ptr(before);
+        g_ltDoorTicks = 0;
+        g_ltDoorFaded = 0;
+        g_ltDoorStart = GetTickCount();
+        g_ltDoorTask = before;
+    } else if (before != g_ltDoorTask || g_ltDoorEnd) {
+        g_ltDoorOverlap++;
+        return;
+    }
+    g_ltDoorTicks++;
+    if (g_ltDoorVt == (void*)(uintptr_t)VA_DOOR_INTERIOR_VT && after == before &&
+        *(const LONG*)((const char*)before + 0x14) == 1)
+        g_ltDoorFaded = 1;
+    if (after != before) g_ltDoorEnd = GetTickCount();
+}
+
+// The door slot is in .rdata (not encrypted by the SteamStub): callable from DllMain's threads.
+static void door_timer_install(const char* tag)
+{
+    DWORD old = 0, tmp = 0;
+    void* have = read_ptr((void*)(uintptr_t)VA_DOOR_TIMER_SLOT);
+    if (have == (void*)hook_DoorTimer) return;
+    if (have != (void*)(uintptr_t)VA_DOOR_TIMER) {
+        logf_("%s: streaming door slot %08X holds %08X, expected %08X - doors untouched",
+              tag, (unsigned)VA_DOOR_TIMER_SLOT, (unsigned)(uintptr_t)have, (unsigned)VA_DOOR_TIMER);
+        return;
+    }
+    if (!VirtualProtect((void*)(uintptr_t)VA_DOOR_TIMER_SLOT, 4, PAGE_READWRITE, &old)) return;
+    g_origDoorTimer = (DoorTimer_t)(uintptr_t)VA_DOOR_TIMER;
+    if (InterlockedCompareExchangePointer((void* volatile*)(uintptr_t)VA_DOOR_TIMER_SLOT,
+                                          (void*)hook_DoorTimer, have) == have)
+        logf_("%s: streaming door timer hooked", tag);
+    VirtualProtect((void*)(uintptr_t)VA_DOOR_TIMER_SLOT, 4, old, &tmp);
+}
+
+// Repoint one `movss xmm0,[00E30444]` (F3 0F 10 05 disp32) at g_doorFade.
+static int door_fade_patch(uintptr_t at)
+{
+    static const unsigned char want[8] = { 0xF3, 0x0F, 0x10, 0x05, 0x44, 0x04, 0xE3, 0x00 };
+    LONG mine = (LONG)(uintptr_t)&g_doorFade;
+    DWORD old = 0, tmp = 0;
+    if (!range_readable((void*)at, 8)) return 0;
+    if (*(LONG*)(at + 4) == mine) return 1;
+    if (memcmp((void*)at, want, 8)) return 0;
+    if (!VirtualProtect((void*)at, 8, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    InterlockedCompareExchange((volatile LONG*)(at + 4), mine, 0x00E30444);
+    VirtualProtect((void*)at, 8, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), (void*)at, 8);
+    return *(LONG*)(at + 4) == mine;
+}
+
+// Worker tick: the door slot at once, the fade sites once the SteamStub has decrypted .text.
+static void doors_tick(void)
+{
+    static int fades_done, tries;
+    if (!cfg_fast_doors && cfg_door_fade == 0.5f) return;
+    door_timer_install("doors");
+    if (fades_done || tries > 500) return;
+    tries++;
+    if (cfg_door_fade == 0.5f) { fades_done = 1; return; }
+    g_doorFade = cfg_door_fade;
+    if (code_matches(VA_DOOR_FADE_OUT, "f3 0f 10 05 44 04 e3 00") || code_matches(VA_DOOR_FADE_IN, "f3 0f 10 05 44 04 e3 00")) {
+        int a = door_fade_patch(VA_DOOR_FADE_OUT), b = door_fade_patch(VA_DOOR_FADE_IN);
+        fades_done = 1;
+        logf_("doors: fade-out %s, fade-in %s, %.2f s (game 0.5 s); fast_doors=%d",
+              a ? "patched" : "NOT patched", b ? "patched" : "NOT patched", cfg_door_fade, cfg_fast_doors);
+    } else if (tries == 500) {
+        logf_("doors: fade sites not recognised - fades left at 0.5 s");
+    }
+}
+
+// CPU time of every thread of the process, with its start address (to find it in Ghidra).
+static int lt_snapshot_cpu(lt_cpu* out, int max)
+{
+    static NtQueryInformationThread_t qit;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    THREADENTRY32 te;
+    DWORD pid = GetCurrentProcessId();
+    BOOL ok;
+    int n = 0;
+    if (!qit) qit = (NtQueryInformationThread_t)(void*)GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtQueryInformationThread");
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    te.dwSize = sizeof te;
+    for (ok = Thread32First(snap, &te); ok && n < max; ok = Thread32Next(snap, &te)) {
+        HANDLE th;
+        FILETIME c, e, k, u;
+        if (te.th32OwnerProcessID != pid) continue;
+        th = OpenThread(THREAD_QUERY_INFORMATION, FALSE, te.th32ThreadID);
+        if (!th) continue;
+        out[n].tid = te.th32ThreadID;
+        out[n].cpu = 0;
+        out[n].start = 0;
+        if (GetThreadTimes(th, &c, &e, &k, &u))
+            out[n].cpu = (((ULONGLONG)k.dwHighDateTime << 32) | k.dwLowDateTime) +
+                         (((ULONGLONG)u.dwHighDateTime << 32) | u.dwLowDateTime);
+        if (qit) qit(th, 9 /* ThreadQuerySetWin32StartAddress */, &out[n].start, sizeof out[n].start, NULL);
+        CloseHandle(th);
+        n++;
+    }
+    CloseHandle(snap);
+    return n;
+}
+
+static double lt_ms(LONGLONG us) { return us / 1000.0; }
+
+// b - a, field by field; presentMaxUs is a maximum, not a counter, and is taken from b.
+static void lt_diff(const lt_thread* a, const lt_thread* b, lt_thread* d)
+{
+    int k;
+    memset(d, 0, sizeof *d);
+    for (k = 0; k < LT_KINDS; k++) {
+        d->reads[k] = b->reads[k] - a->reads[k];
+        d->readBytes[k] = b->readBytes[k] - a->readBytes[k];
+        d->readUs[k] = b->readUs[k] - a->readUs[k];
+    }
+    d->readsAsync = b->readsAsync - a->readsAsync;
+    d->opens = b->opens - a->opens;           d->openUs = b->openUs - a->openUs;
+    d->unpacks = b->unpacks - a->unpacks;     d->unpackIn = b->unpackIn - a->unpackIn;
+    d->unpackOut = b->unpackOut - a->unpackOut; d->unpackUs = b->unpackUs - a->unpackUs;
+    d->sleeps = b->sleeps - a->sleeps;        d->sleep0 = b->sleep0 - a->sleep0;
+    d->sleep1 = b->sleep1 - a->sleep1;        d->sleepUs = b->sleepUs - a->sleepUs;
+    d->waits = b->waits - a->waits;           d->waitsZero = b->waitsZero - a->waitsZero;
+    d->waitUs = b->waitUs - a->waitUs;
+    d->presents = b->presents - a->presents;  d->presentUs = b->presentUs - a->presentUs;
+    d->presentMaxUs = b->presentMaxUs;
+}
+
+static void lt_sum(const lt_thread* in, lt_thread* s)
+{
+    int i, k;
+    memset(s, 0, sizeof *s);
+    for (i = 0; i < LT_THREADS; i++) {
+        const lt_thread* t = &in[i];
+        if (!t->tid) continue;
+        for (k = 0; k < LT_KINDS; k++) {
+            s->reads[k] += t->reads[k]; s->readBytes[k] += t->readBytes[k]; s->readUs[k] += t->readUs[k];
+        }
+        s->readsAsync += t->readsAsync;
+        s->opens += t->opens;     s->openUs += t->openUs;
+        s->unpacks += t->unpacks; s->unpackIn += t->unpackIn; s->unpackOut += t->unpackOut; s->unpackUs += t->unpackUs;
+        s->sleeps += t->sleeps;   s->sleep0 += t->sleep0; s->sleep1 += t->sleep1; s->sleepUs += t->sleepUs;
+        s->waits += t->waits;     s->waitsZero += t->waitsZero; s->waitUs += t->waitUs;
+        s->presents += t->presents; s->presentUs += t->presentUs;
+    }
+}
+
+static ULONGLONG lt_process_cpu(void)
+{
+    FILETIME c, e, k, u;
+    if (!GetProcessTimes(GetCurrentProcess(), &c, &e, &k, &u)) return 0;
+    return (((ULONGLONG)k.dwHighDateTime << 32) | k.dwLowDateTime) +
+           (((ULONGLONG)u.dwHighDateTime << 32) | u.dwLowDateTime);
+}
+
+// The counters of one interval as " | ..." fields; returns 0 when nothing was counted.
+static int lt_format(char* buf, size_t cap, const lt_thread* d)
+{
+    size_t n = 0;
+    int k, any = 0;
+    buf[0] = 0;
+#define LT_ADD(...) (n += (size_t)max(0, _snprintf_s(buf + n, cap - n, _TRUNCATE, __VA_ARGS__)))
+    for (k = 0; k < LT_KINDS; k++) {
+        if (!d->reads[k]) continue;
+        any = 1;
+        LT_ADD(" | %s read %ldx %.1f MB %.0f ms", k_ltKind[k], d->reads[k],
+               d->readBytes[k] / 1048576.0, lt_ms(d->readUs[k]));
+    }
+    if (d->readsAsync) LT_ADD(" (%ld overlapped)", d->readsAsync);
+    if (d->opens) { any = 1; LT_ADD(" | open %ldx %.0f ms", d->opens, lt_ms(d->openUs)); }
+    if (d->unpacks) {
+        any = 1;
+        LT_ADD(" | unpack %ldx %.1f->%.1f MB %.0f ms", d->unpacks, d->unpackIn / 1048576.0,
+               d->unpackOut / 1048576.0, lt_ms(d->unpackUs));
+    }
+    if (d->sleeps) {
+        any = 1;
+        LT_ADD(" | sleep %ldx (0:%ld 1:%ld) %.0f ms", d->sleeps, d->sleep0, d->sleep1, lt_ms(d->sleepUs));
+    }
+    if (d->waits) { any = 1; LT_ADD(" | wait %ldx (%ld polls) %.0f ms", d->waits, d->waitsZero, lt_ms(d->waitUs)); }
+    if (d->presents) {
+        any = 1;
+        if (d->presentMaxUs) LT_ADD(" | present %ldx %.0f ms (max %.1f)", d->presents, lt_ms(d->presentUs), lt_ms(d->presentMaxUs));
+        else LT_ADD(" | present %ldx %.0f ms", d->presents, lt_ms(d->presentUs));
+    }
+#undef LT_ADD
+    return any;
+}
+
+// The device's stored D3DPRESENT_PARAMETERS (window_patch.h) and the VSync setting (+0x11).
+static void lt_present_info(const char* when)
+{
+    const unsigned char* pp = (const unsigned char*)(uintptr_t)WF_PP;
+    void* settings = read_ptr((void*)(uintptr_t)(IMAGE_BASE + RVA_SETTINGS));
+    unsigned vsync = settings ? read_u8((uintptr_t)settings + 0x11) : 0xFF;
+    if (!range_readable(pp, 0x38)) return;
+    logf_("load-trace: %s: back buffer %lux%lu windowed=%lu refresh=%lu PresentationInterval=%08lX "
+          "(0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=%u",
+          when, *(const DWORD*)pp, *(const DWORD*)(pp + 4), *(const DWORD*)(pp + 0x20),
+          *(const DWORD*)(pp + 0x30), *(const DWORD*)(pp + 0x34), vsync);
+}
+
+static void lt_window_end(int id, const char* what, DWORD wall, const lt_cpu* c0, int n0, ULONGLONG pcpu0)
+{
+    static lt_cpu c1[LT_CPU_MAX];
+    static lt_thread now[LT_THREADS];
+    lt_thread total0, total1, d;
+    char line[640];
+    int n1, i, j, m;
+    ULONGLONG pcpu = lt_process_cpu() - pcpu0;
+    ULONG tmin = 0, tmax = 0, tcur = 0;
+    NtQueryTimerResolution_t qtr = (NtQueryTimerResolution_t)(void*)GetProcAddress(
+        GetModuleHandleA("ntdll.dll"), "NtQueryTimerResolution");
+
+    memcpy(now, g_lt, sizeof now);
+    n1 = lt_snapshot_cpu(c1, LT_CPU_MAX);
+    if (qtr) qtr(&tmin, &tmax, &tcur);
+    logf_("load-trace: window %d end: %s %lu ms; process CPU %.0f ms = %.2f cores; timer resolution %.3f ms",
+          id, what, wall, pcpu / 10000.0, wall ? pcpu / 10000.0 / wall : 0.0, tcur / 10000.0);
+    for (i = 0; i < LT_THREADS; i++) {
+        double cpu = -1;
+        uintptr_t start = 0;
+        if (!now[i].tid) continue;
+        lt_diff(&g_ltStart[i], &now[i], &d);
+        for (j = 0; j < n1; j++) {
+            if (c1[j].tid != (DWORD)now[i].tid) continue;
+            start = c1[j].start;
+            cpu = c1[j].cpu / 10000.0;                // started inside the window
+            for (m = 0; m < n0; m++)
+                if (c0[m].tid == c1[j].tid) cpu = (c1[j].cpu - c0[m].cpu) / 10000.0;
+        }
+        if (!lt_format(line, sizeof line, &d)) continue;
+        logf_("load-trace:   tid=%ld%s start=%08X cpu=%.0f ms (%.0f%%)%s", now[i].tid,
+              (DWORD)now[i].tid == g_ltMainTid ? " (main)" : "", (unsigned)start, cpu,
+              (cpu >= 0 && wall) ? cpu * 100.0 / wall : 0.0, line);
+    }
+    // Threads with CPU time but no traced call (audio, the d3d9 wrapper, Steam, ...).
+    for (j = 0; j < n1; j++) {
+        double cpu = c1[j].cpu / 10000.0;
+        int counted = 0;
+        for (i = 0; i < LT_THREADS; i++) if ((DWORD)now[i].tid == c1[j].tid) counted = 1;
+        for (m = 0; m < n0; m++) if (c0[m].tid == c1[j].tid) cpu = (c1[j].cpu - c0[m].cpu) / 10000.0;
+        if (!counted && cpu >= 50.0)
+            logf_("load-trace:   tid=%lu%s start=%08X cpu=%.0f ms (%.0f%%) | no traced call", c1[j].tid,
+                  c1[j].tid == g_ltMainTid ? " (main)" : "", (unsigned)c1[j].start, cpu,
+                  wall ? cpu * 100.0 / wall : 0.0);
+    }
+    lt_sum(g_ltStart, &total0);
+    lt_sum(now, &total1);
+    lt_diff(&total0, &total1, &d);
+    d.presentMaxUs = 0;
+    lt_format(line, sizeof line, &d);
+    logf_("load-trace: window %d totals%s", id, line);
+    lt_present_info("window end");
+}
+
+// Started from DllMain while load_trace=1: the filetrace_thread pattern for the import slots,
+// then the code site once the SteamStub has decrypted .text and Present once the device exists.
+static DWORD WINAPI loadtrace_thread(LPVOID param)
+{
+    static lt_cpu c0[LT_CPU_MAX];
+    static lt_thread tickPrev, cur, d;
+    DWORD t0 = GetTickCount(), winStart = 0, screenStart = 0, screenMs = 0, lastTick = 0;
+    HMODULE k32 = NULL, pinned;
+    void* expect = NULL;
+    int n = 0, unpackOn = 0, presentOn = 0, inWin = 0, windows = 0, n0 = 0;   // inWin: 1 screen, 2 door
+    void* lastScreen = NULL;
+    unsigned char lastShown = 0;
+    ULONGLONG pcpu0 = 0;
+    char line[640], what[96];
+    (void)param;
+
+    for (;;) {
+        if (!k32) k32 = GetModuleHandleA("kernel32.dll");
+        if (k32 && !expect) expect = (void*)GetProcAddress(k32, "ReadFile");
+        if (expect && ft_slot(IAT_READFILE) == expect) break;
+        if (!g_running || GetTickCount() - t0 > 120000) {
+            logf_("load-trace: ReadFile slot never held the kernel32 export - off");
+            return 0;
+        }
+        Sleep(1);
+    }
+    // Import slots must not outlive this DLL if a caller releases its handle.
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                            (LPCSTR)(uintptr_t)hook_ReadFile, &pinned)) {
+        logf_("load-trace: could not pin module - off");
+        return 0;
+    }
+    n += patch_iat("load-trace", IAT_READFILE, "kernel32.dll", "ReadFile", (void*)hook_ReadFile, (void**)&g_origReadFile);
+    n += patch_iat("load-trace", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW", (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+    n += patch_iat("load-trace", IAT_SLEEP, "kernel32.dll", "Sleep", (void*)hook_Sleep, (void**)&g_origSleep);
+    n += patch_iat("load-trace", IAT_WAITSINGLE, "kernel32.dll", "WaitForSingleObject", (void*)hook_WaitSingle, (void**)&g_origWaitSingle);
+    n += patch_iat("load-trace", IAT_WAITSINGLEEX, "kernel32.dll", "WaitForSingleObjectEx", (void*)hook_WaitSingleEx, (void**)&g_origWaitSingleEx);
+    logf_("load-trace: hooked after %lu ms (%d/5 import slots), main thread %lu", GetTickCount() - t0, n, g_ltMainTid);
+    door_timer_install("load-trace");
+    lt_sum(g_lt, &tickPrev);
+
+    while (g_running) {
+        void *rt, *movie = NULL, *screen = NULL;
+        unsigned char shown = 0;
+        DWORD now = GetTickCount();
+
+        // .text is encrypted until the SteamStub reaches the OEP: wait for the fingerprint.
+        if (!unpackOn && code_matches(VA_UNPACK, "55 8b ec 8b 4d 08 0f b6 01 c1 e8 05")) {
+            unpackOn = patch_call(VA_UNPACK_CALL, VA_UNPACK, (void*)hook_Unpack) ? 1 : -1;
+            logf_("load-trace: block unpack call %s after %lu ms", unpackOn > 0 ? "hooked" : "NOT hooked", now - t0);
+        } else if (!unpackOn && now - t0 > 120000) {
+            unpackOn = -1;
+            logf_("load-trace: block unpack function never appeared - not timed");
+        }
+        if (!presentOn) {
+            void* dev = read_ptr((void*)(uintptr_t)WF_D3D_DEVICE);
+            if (dev && range_readable(dev, sizeof(void*))) {
+                presentOn = patch_vtable(dev, 17, (void*)hook_Present, (void**)&g_origPresent) ? 1 : -1;
+                logf_("load-trace: device %08X Present %s after %lu ms", (unsigned)(uintptr_t)dev,
+                      presentOn > 0 ? "hooked" : "NOT hooked", now - t0);
+                lt_present_info("device found");
+            }
+        }
+
+        rt = read_ptr((void*)(uintptr_t)VA_RENDER_THREAD);
+        if (rt) {
+            movie = read_ptr((char*)rt + OFF_RT_LOAD_MOVIE);
+            screen = read_ptr((char*)rt + OFF_RT_LOAD_SCREEN);
+            if (screen) shown = read_u8((uintptr_t)screen + 0x10);
+        }
+        if (!inWin && windows < LT_MAX_WINDOWS && (movie || (g_ltDoorTask && !g_ltDoorEnd))) {
+            inWin = movie ? 1 : 2;
+            windows++;
+            winStart = screenStart = lastTick = now;
+            if (inWin == 2 && now - g_ltDoorStart < 1000) winStart = g_ltDoorStart;
+            screenMs = 0;
+            memcpy(g_ltStart, g_lt, sizeof g_ltStart);
+            lt_sum(g_ltStart, &tickPrev);
+            n0 = lt_snapshot_cpu(c0, LT_CPU_MAX);
+            pcpu0 = lt_process_cpu();
+            if (inWin == 1)
+                logf_("load-trace: window %d start (loading screen): render thread %08X movie %08X screen %08X shown=%u (%d threads)",
+                      windows, (unsigned)(uintptr_t)rt, (unsigned)(uintptr_t)movie, (unsigned)(uintptr_t)screen,
+                      shown, n0);
+            else
+                logf_("load-trace: window %d start (streaming door): task %08X vtable %08X%s, ticking for %lu ms (%d threads)",
+                      windows, (unsigned)(uintptr_t)g_ltDoorTask, (unsigned)(uintptr_t)g_ltDoorVt,
+                      g_ltDoorVt == (void*)(uintptr_t)VA_DOOR_INTERIOR_VT ? " (interior)" : "",
+                      now - g_ltDoorStart, n0);
+        } else if ((inWin == 1 && !movie) || (inWin == 2 && g_ltDoorEnd)) {
+            if (inWin == 1) {
+                if (lastScreen) screenMs += now - screenStart;
+                _snprintf_s(what, sizeof what, _TRUNCATE, "loading screen (screen object %lu ms)", screenMs);
+                lt_window_end(windows, what, now - winStart, c0, n0, pcpu0);
+            } else {
+                _snprintf_s(what, sizeof what, _TRUNCATE, "streaming door (%ld ticks%s, %ld overlapping)",
+                            g_ltDoorTicks, g_ltDoorFaded ? ", faded to black" : "", g_ltDoorOverlap);
+                lt_window_end(windows, what, g_ltDoorEnd - winStart, c0, n0, pcpu0);
+                g_ltDoorOverlap = 0;
+                g_ltDoorTask = NULL;
+                g_ltDoorEnd = 0;
+            }
+            inWin = 0;
+            lt_sum(g_lt, &tickPrev);
+            lastTick = now;
+        } else if (inWin == 1 && (screen != lastScreen || shown != lastShown)) {
+            logf_("load-trace: window %d +%lu ms: screen object %08X shown=%u", windows, now - winStart,
+                  (unsigned)(uintptr_t)screen, shown);
+            if (screen && !lastScreen) screenStart = now;
+            if (!screen && lastScreen) screenMs += now - screenStart;
+        }
+        if (inWin != 2 && g_ltDoorEnd) {       // a door that ended inside a loading screen
+            g_ltDoorTask = NULL;
+            g_ltDoorEnd = 0;
+        }
+        if (now - lastTick >= LT_TICK_MS) {
+            int k;
+            LONGLONG bytes = 0;
+            lt_sum(g_lt, &cur);
+            lt_diff(&tickPrev, &cur, &d);
+            d.presentMaxUs = 0;
+            tickPrev = cur;
+            for (k = 0; k < LT_KINDS; k++) bytes += d.readBytes[k];
+            if (inWin) {
+                if (!lt_format(line, sizeof line, &d)) strcpy_s(line, sizeof line, " | idle");
+                logf_("load-trace: window %d +%lu ms%s", windows, now - winStart, line);
+            } else if ((bytes >= LT_BURST_BYTES || d.unpackOut >= LT_BURST_BYTES) &&
+                       lt_format(line, sizeof line, &d)) {
+                logf_("load-trace: streaming burst %lu ms%s", now - lastTick, line);
+            }
+            lastTick = now;
+        }
+        lastScreen = screen;
+        lastShown = shown;
+        Sleep(5);
+    }
+    return 0;
+}
+
 static void save_tick(void)
 {
     static int iat_done, steam_done, steam_tries;
@@ -2270,6 +3005,64 @@ static void save_tick(void)
         logf_("save-trace: capture flags pending=%u queued=%u", pending, queued);
         last_pending = pending; last_queued = queued;
     }
+}
+
+// ---- ray cast guard ----------------------------------------------------
+// [stability] raycast_guard=1. Crash of 2026-11-02 18:02:55 (leaving the Flotsam inn through a
+// streaming door, docs/fixes/crash-raycast-stale-body.md): a worker thread's broadphase ray cast
+// (FUN_00625400, `call [edx+4]` at 006258DB) handed a stale collidable to the ray collector's
+// per-object callback FUN_0084c750 (vtable 00D41A34, slot 1 = 00D41A38; thiscall (handle, index),
+// RET 8, returns the hit fraction in ST0). It computes the owner as handle + (signed char)
+// handle[5]; the freed handle gave an odd owner (5947BE03) whose transform pointer pointed into
+// nvgpucomp32.dll, and `movaps xmm1,[esi+30h]` (0084C7AF) faulted. The callback's own "no hit"
+// exits return the collector's current fraction, *(float*)(*(this+0xC)+0x10); the guard returns
+// that when the callback raises an access violation, so the ray misses an object that is gone.
+// Valid calls are untouched (no extra checks on the normal path).
+#define VA_RAY_SLOT  0x00D41A38u
+#define VA_RAY_HIT   0x0084C750u
+
+typedef float (__fastcall *RayHit_t)(void* self, void* edx, const void* handle, int index);
+static volatile LONG g_rayCaught;
+
+static int ray_filter(DWORD code)
+{
+    return code == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH;
+}
+
+static float __fastcall hook_RayHit(void* self, void* edx, const void* handle, int index)
+{
+    __try {
+        return ((RayHit_t)(uintptr_t)VA_RAY_HIT)(self, edx, handle, index);
+    }
+    __except (ray_filter(GetExceptionCode())) {
+        LONG n = InterlockedIncrement(&g_rayCaught);
+        float miss = 1.0f;
+        void* out = read_ptr((char*)self + 0xC);
+        if (out) read_f32((char*)out + 0x10, &miss);
+        if (n <= 5 || (n & (n - 1)) == 0)
+            logf_("stability: ray cast hit a freed physics object (handle %08X, thread %lu) - skipped, %ld so far",
+                  (unsigned)(uintptr_t)handle, GetCurrentThreadId(), n);
+        return miss;
+    }
+}
+
+static void ray_guard_tick(void)
+{
+    static int done;
+    DWORD old = 0, tmp = 0;
+    void* have;
+    if (done || !cfg_ray_guard) return;
+    done = 1;
+    have = read_ptr((void*)(uintptr_t)VA_RAY_SLOT);
+    if (have != (void*)(uintptr_t)VA_RAY_HIT) {
+        logf_("stability: ray collector slot %08X holds %08X, expected %08X - guard off",
+              (unsigned)VA_RAY_SLOT, (unsigned)(uintptr_t)have, (unsigned)VA_RAY_HIT);
+        return;
+    }
+    if (!VirtualProtect((void*)(uintptr_t)VA_RAY_SLOT, 4, PAGE_READWRITE, &old)) return;
+    InterlockedCompareExchangePointer((void* volatile*)(uintptr_t)VA_RAY_SLOT, (void*)hook_RayHit, have);
+    VirtualProtect((void*)(uintptr_t)VA_RAY_SLOT, 4, old, &tmp);
+    logf_("stability: ray cast guard installed (collector slot %08X)", (unsigned)VA_RAY_SLOT);
 }
 
 // ---- crash capture ------------------------------------------------------
@@ -3047,12 +3840,14 @@ static DWORD WINAPI worker(LPVOID param)
                   g_skipDone == 1 ? "main menu reached" : "gave up after 60 s");
         }
         crash_tick();
+        ray_guard_tick();
         osd_pump();
         apply_lod();
         if (cfg_wf_enabled) wf_tick();
         if (cfg_hotkeys) poll_hotkeys();
         distance_tick();
         save_tick();
+        doors_tick();
         osd_tick();
         Sleep(120);
     }
@@ -3374,7 +4169,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
               cfg_distance, cfg_visibility, cfg_shadow_range);
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d", cfg_skip_intro);
-        logf_("diagnostics: file_trace=%d", cfg_file_trace);
+        logf_("diagnostics: file_trace=%d load_trace=%d", cfg_file_trace, cfg_load_trace);
+        logf_("loading: fast_doors=%d door_fade=%.2f", cfg_fast_doors, cfg_door_fade);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",
@@ -3382,7 +4178,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         if (cfg_preset_mode)
             logf_("presets: startup=%s, cycle modifiers=%d VK=%02X (session only)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
-        if (cfg_enabled || cfg_file_trace) {
+        if (cfg_enabled || cfg_file_trace || cfg_load_trace) {
             g_running = 1;
             if (cfg_enabled) {
                 HANDLE h = CreateThread(NULL, 0, worker, NULL, 0, NULL);
@@ -3400,6 +4196,14 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                 HANDLE h = CreateThread(NULL, 0, filetrace_thread, NULL, 0, NULL);
                 if (h) CloseHandle(h);
                 else { logf_("file-trace: CreateThread failed - file trace off"); cfg_file_trace = 0; }
+            }
+            if (cfg_load_trace) {
+                HANDLE h;
+                g_ltMainTid = GetCurrentThreadId();   // DllMain runs on the game's main thread
+                g_ltTls = TlsAlloc();
+                h = g_ltTls != TLS_OUT_OF_INDEXES ? CreateThread(NULL, 0, loadtrace_thread, NULL, 0, NULL) : NULL;
+                if (h) CloseHandle(h);
+                else { logf_("load-trace: TlsAlloc or CreateThread failed - load trace off"); cfg_load_trace = 0; }
             }
             if (cfg_enabled && (cfg_book_marker || cfg_continue || cfg_pause_quit || cfg_window_mode)) {
                 wchar_t sgame[MAX_PATH], scache[MAX_PATH];

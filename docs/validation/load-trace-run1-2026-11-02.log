@@ -1,0 +1,47 @@
+﻿17:52:09.147 witcher2_enginefix 0.7.0 loaded (image base 0x00400000)
+17:52:09.149 load-trace: hooked kernel32.dll!ReadFile
+17:52:09.149 load-trace: hooked kernel32.dll!Sleep
+17:52:09.150 load-trace: hooked kernel32.dll!WaitForSingleObject
+17:52:09.150 load-trace: hooked kernel32.dll!WaitForSingleObjectEx
+17:52:09.150 load-trace: hooked after 0 ms (5/5 import slots), main thread 48592
+17:52:09.277 load-trace: block unpack call hooked after 125 ms
+17:52:10.657 crash: filter armed, chaining to 0x5F492571 (CSERHelper.dll+0x12571)
+17:52:25.661 load-trace: device 125EA200 Present hooked after 16515 ms
+17:52:25.661 load-trace: device found: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+17:52:25.822 load-trace: window 1 start: render thread 0BC53480 movie 16F254E0 screen 00000000 shown=0 (40 threads)
+17:52:25.984 load-trace: window 1 +250 ms | dzip read 2142x 91.9 MB 21 ms | loose read 21x 1.4 MB 2 ms | open 2x 0 ms | unpack 2048x 91.8->125.0 MB 91 ms | sleep 303x (0:0 1:303) 483 ms | wait 6x (0 polls) 0 ms | present 8x 46 ms
+17:52:26.191 load-trace: window 1 end: loading screen 390 ms (screen object 0 ms); process CPU 625 ms = 1.60 cores; timer resolution 0.500 ms
+17:52:26.191 load-trace:   tid=48592 (main) start=029262EE cpu=344 ms (88%) | dzip read 3215x 123.8 MB 29 ms | loose read 62x 4.6 MB 6 ms | open 9x 1 ms | unpack 2935x 123.8->172.0 MB 126 ms
+17:52:26.191 load-trace:   tid=41740 start=0066F607 cpu=0 ms (0%) | sleep 250x (0:0 1:250) 393 ms
+17:52:26.191 load-trace:   tid=47728 start=0066F607 cpu=0 ms (0%) | loose read 3x 0.4 MB 0 ms | sleep 249x (0:0 1:249) 393 ms
+17:52:26.191 load-trace:   tid=38424 start=0066F607 cpu=312 ms (80%) | wait 428x (0 polls) 0 ms | present 12x 47 ms (max 36.2)
+17:52:26.191 load-trace:   tid=44036 start=6FCA6EA0 cpu=62 ms (16%) | no traced call
+17:52:26.191 load-trace: window 1 totals | dzip read 3215x 123.8 MB 29 ms | loose read 65x 5.0 MB 6 ms | open 9x 1 ms | unpack 2935x 123.8->172.0 MB 126 ms | sleep 499x (0:0 1:499) 785 ms | wait 428x (0 polls) 0 ms | present 12x 47 ms
+17:52:26.191 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+17:52:57.220 load-trace: window 2 start: render thread 0BC53480 movie 16F254E0 screen 00000000 shown=0 (52 threads)
+17:52:57.404 load-trace: window 2 +250 ms | dzip read 181x 2.4 MB 1 ms | unpack 159x 2.4->9.0 MB 8 ms | sleep 459x (0:0 1:459) 705 ms | wait 16x (0 polls) 0 ms | present 7x 0 ms
+17:52:57.510 load-trace: window 2 +344 ms: screen object 0BDD0330 shown=1
+17:52:57.653 load-trace: window 2 +500 ms | dzip read 1041x 21.4 MB 6 ms | loose read 567x 10.3 MB 12 ms | open 17x 2 ms | unpack 759x 21.5->32.7 MB 28 ms | sleep 378x (0:0 1:378) 581 ms | wait 851x (0 polls) 355 ms | present 6x 0 ms
+17:52:57.907 load-trace: window 2 +750 ms | dzip read 1249x 39.1 MB 10 ms | loose read 528x 36.7 MB 39 ms | open 57x 4 ms | unpack 1044x 39.1->57.6 MB 55 ms | sleep 328x (0:0 1:328) 508 ms | wait 540x (0 polls) 0 ms | present 7x 0 ms
+17:52:58.154 load-trace: window 2 +1000 ms | dzip read 1366x 33.3 MB 9 ms | loose read 513x 40.5 MB 40 ms | open 55x 5 ms | unpack 993x 33.3->45.6 MB 48 ms | sleep 316x (0:0 1:316) 493 ms | wait 878x (0 polls) 1 ms | present 8x 0 ms
+17:52:58.408 load-trace: window 2 +1250 ms | dzip read 1128x 38.4 MB 10 ms | loose read 473x 33.0 MB 39 ms | open 51x 4 ms | unpack 944x 38.4->52.3 MB 54 ms | sleep 330x (0:0 1:330) 508 ms | wait 530x (0 polls) 0 ms | present 7x 0 ms
+17:52:58.653 load-trace: window 2 +1500 ms | dzip read 1377x 43.9 MB 11 ms | loose read 432x 27.7 MB 33 ms | open 82x 5 ms | unpack 1183x 43.8->67.3 MB 62 ms | sleep 316x (0:0 1:316) 489 ms | wait 554x (0 polls) 1 ms | present 8x 0 ms
+17:52:58.907 load-trace: window 2 +1750 ms | dzip read 1046x 35.8 MB 9 ms | loose read 460x 32.5 MB 33 ms | open 55x 73 ms | unpack 864x 35.9->47.9 MB 41 ms | sleep 332x (0:0 1:332) 509 ms | wait 512x (0 polls) 0 ms | present 7x 0 ms
+17:52:59.157 load-trace: window 2 +2000 ms | dzip read 782x 20.9 MB 6 ms | loose read 599x 39.5 MB 25 ms | open 99x 102 ms | unpack 566x 20.9->27.8 MB 25 ms | sleep 327x (0:0 1:327) 501 ms | wait 634x (0 polls) 0 ms | present 8x 0 ms
+17:52:59.407 load-trace: window 2 +2250 ms | dzip read 672x 20.5 MB 6 ms | loose read 402x 28.9 MB 31 ms | open 67x 109 ms | unpack 524x 20.5->27.4 MB 27 ms | sleep 322x (0:0 1:322) 499 ms | wait 454x (0 polls) 0 ms | present 7x 0 ms
+17:52:59.658 load-trace: window 2 +2500 ms | dzip read 2115x 44.0 MB 12 ms | loose read 171x 11.2 MB 9 ms | open 20x 13 ms | unpack 1553x 44.0->67.6 MB 44 ms | sleep 326x (0:0 1:326) 502 ms | wait 1162x (0 polls) 1 ms | present 8x 0 ms
+17:52:59.903 load-trace: window 2 +2750 ms | dzip read 956x 15.7 MB 5 ms | loose read 13x 0.5 MB 0 ms | open 4x 9 ms | unpack 651x 15.7->24.9 MB 20 ms | sleep 316x (0:0 1:316) 489 ms | wait 604x (0 polls) 0 ms | present 7x 0 ms
+17:53:00.156 load-trace: window 2 +3000 ms | dzip read 371x 9.2 MB 3 ms | loose read 125x 7.1 MB 8 ms | open 15x 33 ms | unpack 275x 9.2->13.2 MB 15 ms | sleep 306x (0:0 1:306) 474 ms | wait 15538x (0 polls) 6 ms | present 8x 0 ms
+17:53:00.404 load-trace: window 2 +3250 ms | dzip read 693x 22.7 MB 6 ms | loose read 288x 19.9 MB 27 ms | open 31x 8 ms | unpack 589x 22.7->33.4 MB 34 ms | sleep 203x (0:0 1:203) 317 ms | wait 64026x (0 polls) 23 ms | present 7x 0 ms
+17:53:00.570 load-trace: window 2 end: loading screen 3329 ms (screen object 2985 ms); process CPU 6000 ms = 1.80 cores; timer resolution 0.500 ms
+17:53:00.570 load-trace:   tid=48592 (main) start=029262EE cpu=2562 ms (77%) | dzip read 12283x 322.8 MB 87 ms | loose read 3779x 261.9 MB 261 ms | open 513x 346 ms | unpack 9498x 322.8->470.9 MB 424 ms | sleep 4x (0:0 1:4) 6 ms | wait 104x (0 polls) 1 ms
+17:53:00.570 load-trace:   tid=41740 start=0066F607 cpu=31 ms (1%) | dzip read 3x 0.0 MB 0 ms | unpack 2x 0.0->0.1 MB 0 ms | sleep 2137x (0:0 1:2137) 3299 ms
+17:53:00.570 load-trace:   tid=47728 start=0066F607 cpu=328 ms (10%) | dzip read 979x 34.8 MB 13 ms | loose read 420x 27.7 MB 38 ms | open 43x 33 ms | unpack 852x 34.8->49.6 MB 50 ms | sleep 1973x (0:0 1:1973) 3048 ms
+17:53:00.570 load-trace:   tid=2456 start=77088D10 cpu=0 ms (0%) | open 3x 0 ms
+17:53:00.570 load-trace:   tid=38424 start=0066F607 cpu=3188 ms (96%) | loose read 431x 1.7 MB 1 ms | open 1x 0 ms | wait 99820x (0 polls) 42 ms | present 98x 1 ms (max 36.2)
+17:53:00.570 load-trace:   tid=6952 start=00000000 cpu=-1 ms (0%) | wait 15x (0 polls) 355 ms
+17:53:00.570 load-trace:   tid=47628 start=00000000 cpu=-1 ms (0%) | sleep 203x (0:0 1:203) 311 ms | wait 1x (0 polls) 0 ms
+17:53:00.570 load-trace:   tid=44036 start=6FCA6EA0 cpu=78 ms (2%) | no traced call
+17:53:00.570 load-trace: window 2 totals | dzip read 13265x 357.7 MB 100 ms | loose read 4630x 291.2 MB 301 ms | open 560x 379 ms | unpack 10352x 357.6->520.6 MB 473 ms | sleep 4317x (0:0 1:4317) 6663 ms | wait 99940x (0 polls) 398 ms | present 98x 1 ms
+17:53:00.570 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+17:54:18.306 crash: filter armed, chaining to 0x00676B04 (witcher2.EXE+0x276B04)

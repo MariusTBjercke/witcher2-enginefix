@@ -1,0 +1,235 @@
+﻿18:24:57.729 witcher2_enginefix 0.7.0 loaded (image base 0x00400000)
+18:24:57.732 load-trace: hooked kernel32.dll!ReadFile
+18:24:57.732 load-trace: hooked kernel32.dll!Sleep
+18:24:57.732 load-trace: hooked kernel32.dll!WaitForSingleObject
+18:24:57.732 load-trace: hooked kernel32.dll!WaitForSingleObjectEx
+18:24:57.732 load-trace: hooked after 0 ms (5/5 import slots), main thread 31684
+18:24:57.732 load-trace: streaming door timer hooked
+18:24:57.847 load-trace: block unpack call hooked after 109 ms
+18:24:59.244 crash: filter armed, chaining to 0x5F492571 (CSERHelper.dll+0x12571)
+18:24:59.252 stability: ray cast guard installed (collector slot 00D41A38)
+18:24:59.259 doors: fade-out patched, fade-in patched, 0.25 s (game 0.5 s); fast_doors=1
+18:25:00.991 load-trace: streaming burst 250 ms | dzip read 251x 0.6 MB 1 ms | loose read 2158x 8.4 MB 7 ms | open 30x 1 ms | unpack 143x 0.6->3.7 MB 2 ms | sleep 32x (0:0 1:32) 498 ms
+18:25:01.241 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 40408x 8.9 MB 45 ms | open 2x 0 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 30x (0:0 1:30) 470 ms
+18:25:13.661 load-trace: device 125EFF00 Present hooked after 15921 ms
+18:25:13.661 load-trace: device found: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:25:13.814 load-trace: window 1 start (loading screen): render thread 0BB23480 movie 16F35320 screen 00000000 shown=0 (40 threads)
+18:25:13.982 load-trace: window 1 +250 ms | dzip read 2074x 88.9 MB 21 ms | loose read 21x 1.4 MB 2 ms | open 2x 0 ms | unpack 1983x 88.8->121.0 MB 91 ms | sleep 302x (0:0 1:302) 489 ms | wait 4x (0 polls) 0 ms | present 8x 49 ms
+18:25:14.210 load-trace: window 1 end: loading screen (screen object 0 ms) 421 ms; process CPU 641 ms = 1.52 cores; timer resolution 0.500 ms
+18:25:14.210 load-trace:   tid=31684 (main) start=029262EE cpu=375 ms (89%) | dzip read 3238x 124.8 MB 30 ms | loose read 62x 4.6 MB 6 ms | open 9x 1 ms | unpack 2957x 124.8->173.3 MB 131 ms
+18:25:14.210 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 263x (0:0 1:263) 418 ms
+18:25:14.210 load-trace:   tid=39748 start=0066F607 cpu=0 ms (0%) | loose read 3x 0.4 MB 0 ms | sleep 263x (0:0 1:263) 418 ms
+18:25:14.210 load-trace:   tid=32412 start=0066F607 cpu=312 ms (74%) | wait 428x (0 polls) 0 ms | present 13x 50 ms (max 37.1)
+18:25:14.210 load-trace: window 1 totals | dzip read 3238x 124.8 MB 30 ms | loose read 65x 5.0 MB 6 ms | open 9x 1 ms | unpack 2957x 124.8->173.3 MB 131 ms | sleep 526x (0:0 1:526) 835 ms | wait 428x (0 polls) 0 ms | present 13x 50 ms
+18:25:14.210 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:25:14.657 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 8x 31.7 MB 12 ms | open 3x 0 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 412x (0:0 1:412) 633 ms | wait 303x (0 polls) 737 ms | present 9x 116 ms
+18:25:18.905 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 7 ms | open 1x 0 ms | sleep 394x (0:0 1:394) 608 ms | wait 9x (0 polls) 2139 ms | present 1x 0 ms
+18:29:44.778 load-trace: window 2 start (loading screen): render thread 0BB23480 movie 16F35320 screen 00000000 shown=0 (45 threads)
+18:29:44.969 load-trace: window 2 +250 ms | dzip read 177x 2.4 MB 1 ms | unpack 156x 2.4->8.8 MB 9 ms | sleep 472x (0:0 1:472) 725 ms | wait 7x (0 polls) 0 ms | present 7x 0 ms
+18:29:45.085 load-trace: window 2 +359 ms: screen object 0BCA0330 shown=1
+18:29:45.218 load-trace: window 2 +500 ms | dzip read 872x 19.4 MB 6 ms | loose read 555x 9.6 MB 12 ms | open 15x 1 ms | unpack 653x 19.4->29.6 MB 25 ms | sleep 382x (0:0 1:382) 586 ms | wait 719x (0 polls) 384 ms | present 7x 0 ms
+18:29:45.468 load-trace: window 2 +750 ms | dzip read 1262x 35.5 MB 9 ms | loose read 470x 32.3 MB 30 ms | open 52x 4 ms | unpack 1022x 35.5->54.0 MB 53 ms | sleep 324x (0:0 1:324) 499 ms | wait 586x (0 polls) 0 ms | present 7x 0 ms
+18:29:45.717 load-trace: window 2 +1000 ms | dzip read 1390x 35.7 MB 10 ms | loose read 488x 36.8 MB 38 ms | open 52x 4 ms | unpack 1031x 35.7->48.2 MB 49 ms | sleep 322x (0:0 1:322) 497 ms | wait 858x (0 polls) 1 ms | present 8x 0 ms
+18:29:45.970 load-trace: window 2 +1250 ms | dzip read 1083x 33.4 MB 9 ms | loose read 558x 41.1 MB 42 ms | open 60x 5 ms | unpack 862x 33.4->45.8 MB 50 ms | sleep 328x (0:0 1:328) 505 ms | wait 622x (0 polls) 0 ms | present 7x 0 ms
+18:29:46.221 load-trace: window 2 +1500 ms | dzip read 1298x 43.3 MB 10 ms | loose read 318x 20.2 MB 24 ms | open 70x 4 ms | unpack 1153x 43.3->66.8 MB 62 ms | sleep 328x (0:0 1:328) 504 ms | wait 428x (0 polls) 0 ms | present 8x 0 ms
+18:29:46.465 load-trace: window 2 +1750 ms | dzip read 1327x 45.2 MB 11 ms | loose read 584x 40.6 MB 46 ms | open 68x 5 ms | unpack 1088x 45.1->60.3 MB 52 ms | sleep 315x (0:0 1:315) 487 ms | wait 652x (0 polls) 0 ms | present 7x 0 ms
+18:29:46.720 load-trace: window 2 +2000 ms | dzip read 1209x 35.5 MB 10 ms | loose read 822x 53.4 MB 50 ms | open 146x 9 ms | unpack 915x 35.5->46.7 MB 44 ms | sleep 328x (0:0 1:328) 511 ms | wait 902x (0 polls) 0 ms | present 8x 0 ms
+18:29:46.970 load-trace: window 2 +2250 ms | dzip read 1704x 48.6 MB 12 ms | loose read 351x 26.2 MB 19 ms | open 40x 3 ms | unpack 1391x 48.6->72.9 MB 51 ms | sleep 322x (0:0 1:322) 499 ms | wait 720x (0 polls) 0 ms | present 7x 0 ms
+18:29:47.219 load-trace: window 2 +2500 ms | dzip read 1521x 14.3 MB 5 ms | loose read 12x 0.4 MB 0 ms | open 4x 0 ms | unpack 909x 14.3->23.6 MB 19 ms | sleep 323x (0:0 1:323) 499 ms | wait 1212x (0 polls) 1 ms | present 8x 0 ms
+18:29:47.467 load-trace: window 2 +2750 ms | dzip read 391x 10.2 MB 3 ms | loose read 73x 4.2 MB 3 ms | open 10x 1 ms | unpack 302x 10.2->15.2 MB 14 ms | sleep 316x (0:0 1:316) 490 ms | wait 15558x (0 polls) 6 ms | present 7x 0 ms
+18:29:47.715 load-trace: window 2 +3000 ms | dzip read 677x 21.9 MB 6 ms | loose read 309x 20.6 MB 27 ms | open 33x 3 ms | unpack 561x 21.9->31.1 MB 32 ms | sleep 210x (0:0 1:210) 325 ms | wait 58384x (0 polls) 26 ms | present 7x 0 ms
+18:29:47.861 load-trace: window 2 end: loading screen (screen object 2703 ms) 3062 ms; process CPU 5953 ms = 1.94 cores; timer resolution 0.500 ms
+18:29:47.861 load-trace:   tid=31684 (main) start=029262EE cpu=2625 ms (86%) | dzip read 12283x 322.8 MB 86 ms | loose read 3779x 261.9 MB 262 ms | open 513x 36 ms | unpack 9498x 322.8->470.9 MB 425 ms | sleep 3x (0:0 1:3) 4 ms | wait 83x (0 polls) 7 ms
+18:29:47.861 load-trace:   tid=16444 start=0066F607 cpu=16 ms (1%) | dzip read 3x 0.0 MB 0 ms | unpack 2x 0.0->0.1 MB 0 ms | sleep 1970x (0:0 1:1970) 3040 ms
+18:29:47.861 load-trace:   tid=39748 start=0066F607 cpu=188 ms (6%) | dzip read 968x 34.7 MB 10 ms | loose read 419x 27.5 MB 36 ms | open 43x 4 ms | unpack 846x 34.7->49.4 MB 49 ms | sleep 1834x (0:0 1:1834) 2833 ms
+18:29:47.861 load-trace:   tid=48212 start=77088D10 cpu=0 ms (0%) | open 3x 0 ms
+18:29:47.861 load-trace:   tid=32412 start=0066F607 cpu=3000 ms (98%) | loose read 431x 1.7 MB 1 ms | open 1x 0 ms | wait 92694x (0 polls) 36 ms | present 91x 1 ms (max 37.1)
+18:29:47.861 load-trace:   tid=47092 start=00000000 cpu=-1 ms (0%) | wait 15x (0 polls) 383 ms
+18:29:47.861 load-trace:   tid=32180 start=00000000 cpu=-1 ms (0%) | sleep 213x (0:0 1:213) 327 ms | wait 1x (0 polls) 0 ms
+18:29:47.861 load-trace:   tid=47388 start=6FCA7500 cpu=78 ms (3%) | no traced call
+18:29:47.862 load-trace: window 2 totals | dzip read 13254x 357.6 MB 96 ms | loose read 4629x 291.1 MB 299 ms | open 560x 41 ms | unpack 10346x 357.5->520.4 MB 475 ms | sleep 4020x (0:0 1:4020) 6203 ms | wait 92793x (0 polls) 426 ms | present 91x 1 ms
+18:29:47.862 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:29:48.030 load-trace: streaming burst 250 ms | dzip read 49x 2.6 MB 1 ms | loose read 16x 33.6 MB 26 ms | open 9x 1 ms | unpack 46x 2.5->2.9 MB 2 ms | sleep 192x (0:0 1:192) 298 ms
+18:29:48.278 load-trace: streaming burst 250 ms | dzip read 193x 10.1 MB 2 ms | loose read 78x 206.0 MB 166 ms | open 70x 5 ms | unpack 187x 10.2->11.7 MB 11 ms | sleep 160x (0:0 1:160) 247 ms
+18:29:48.531 load-trace: streaming burst 250 ms | dzip read 142x 6.2 MB 2 ms | loose read 72x 74.1 MB 64 ms | open 27x 2 ms | unpack 131x 6.2->8.0 MB 9 ms | sleep 278x (0:0 1:278) 430 ms | wait 1942x (0 polls) 697 ms | present 2x 2 ms
+18:29:48.778 load-trace: streaming burst 250 ms | dzip read 109x 5.0 MB 1 ms | loose read 11x 0.2 MB 1 ms | unpack 107x 5.0->6.6 MB 6 ms | sleep 324x (0:0 1:324) 493 ms | wait 11939x (0 polls) 196 ms | present 17x 97 ms
+18:29:50.530 load-trace: streaming burst 250 ms | dzip read 34x 1.6 MB 0 ms | loose read 8x 26.1 MB 20 ms | open 7x 1 ms | unpack 33x 1.6->2.1 MB 2 ms | sleep 300x (0:0 1:300) 463 ms | wait 10704x (0 polls) 178 ms | present 17x 94 ms
+18:29:50.779 load-trace: streaming burst 250 ms | dzip read 120x 6.2 MB 1 ms | loose read 20x 68.1 MB 52 ms | open 12x 1 ms | unpack 116x 6.2->7.2 MB 6 ms | sleep 279x (0:0 1:279) 428 ms | wait 10146x (0 polls) 178 ms | present 16x 16 ms
+18:29:51.031 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 4 ms | open 1x 0 ms | sleep 324x (0:0 1:324) 498 ms | wait 11060x (0 polls) 172 ms | present 18x 115 ms
+18:29:52.528 load-trace: streaming burst 250 ms | dzip read 68x 3.2 MB 1 ms | loose read 3x 12.0 MB 10 ms | open 2x 0 ms | unpack 66x 3.2->4.1 MB 4 ms | sleep 311x (0:0 1:311) 475 ms | wait 10642x (0 polls) 164 ms | present 18x 41 ms
+18:29:52.782 load-trace: streaming burst 250 ms | dzip read 70x 3.0 MB 1 ms | loose read 13x 12.7 MB 10 ms | open 3x 0 ms | unpack 67x 3.0->4.2 MB 4 ms | sleep 318x (0:0 1:318) 489 ms | wait 10667x (0 polls) 170 ms | present 18x 44 ms
+18:29:53.032 load-trace: streaming burst 250 ms | dzip read 142x 6.6 MB 2 ms | loose read 47x 22.7 MB 20 ms | open 10x 1 ms | unpack 139x 6.6->8.6 MB 7 ms | sleep 287x (0:0 1:287) 443 ms | wait 10834x (0 polls) 163 ms | present 18x 30 ms
+18:29:54.032 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 3 ms | open 1x 0 ms | sleep 317x (0:0 1:317) 494 ms | wait 10760x (0 polls) 167 ms | present 18x 87 ms
+18:29:56.210 load-trace: window 3 start (streaming door): task 0DE55280 vtable 00EF0410, ticking for 0 ms (44 threads)
+18:29:56.392 load-trace: window 3 +250 ms | loose read 51x 0.2 MB 0 ms | sleep 312x (0:0 1:312) 479 ms | wait 10075x (0 polls) 19 ms | present 17x 170 ms
+18:29:56.521 doors: interior ready after 125 ms, event name not known yet - the game's own timing
+18:29:56.641 load-trace: window 3 +500 ms | dzip read 350x 9.1 MB 2 ms | loose read 218x 22.7 MB 18 ms | open 30x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | sleep 311x (0:0 1:311) 484 ms | wait 12700x (0 polls) 103 ms | present 12x 112 ms
+18:29:56.891 load-trace: window 3 +750 ms | sleep 322x (0:0 1:322) 502 ms | wait 8409x (0 polls) 2 ms | present 18x 204 ms
+18:29:57.141 load-trace: window 3 +1000 ms | loose read 1x 4.0 MB 3 ms | open 1x 0 ms | sleep 305x (0:0 1:305) 477 ms | wait 7924x (0 polls) 22 ms | present 18x 200 ms
+18:29:57.388 load-trace: window 3 +1250 ms | loose read 2x 0.2 MB 0 ms | open 1x 0 ms | sleep 318x (0:0 1:318) 493 ms | wait 7717x (0 polls) 12 ms | present 18x 199 ms
+18:29:57.642 load-trace: window 3 +1500 ms | loose read 3x 0.3 MB 1 ms | open 1x 0 ms | sleep 327x (0:0 1:327) 506 ms | wait 7795x (0 polls) 2 ms | present 18x 205 ms
+18:29:57.875 load-trace: window 3 end: streaming door (115 ticks, 0 overlapping) 1672 ms; process CPU 2375 ms = 1.42 cores; timer resolution 0.500 ms
+18:29:57.875 load-trace:   tid=31684 (main) start=029262EE cpu=1500 ms (90%) | dzip read 350x 9.1 MB 2 ms | loose read 213x 12.7 MB 9 ms | open 25x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | wait 114x (0 polls) 57 ms
+18:29:57.876 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 1073x (0:0 1:1073) 1665 ms
+18:29:57.876 load-trace:   tid=39748 start=0066F607 cpu=31 ms (2%) | loose read 13x 14.8 MB 14 ms | open 6x 1 ms | sleep 1051x (0:0 1:1051) 1628 ms
+18:29:57.876 load-trace:   tid=48212 start=77088D10 cpu=0 ms (0%) | open 2x 0 ms
+18:29:57.876 load-trace:   tid=32412 start=0066F607 cpu=219 ms (13%) | loose read 51x 0.2 MB 0 ms | wait 60232x (0 polls) 105 ms | present 114x 1238 ms (max 37.1)
+18:29:57.876 load-trace:   tid=28616 start=55FB0460 cpu=125 ms (7%) | no traced call
+18:29:57.876 load-trace:   tid=38244 start=55FB0460 cpu=62 ms (4%) | no traced call
+18:29:57.876 load-trace:   tid=36588 start=55FB0460 cpu=422 ms (25%) | no traced call
+18:29:57.876 load-trace: window 3 totals | dzip read 350x 9.1 MB 2 ms | loose read 277x 27.6 MB 23 ms | open 33x 3 ms | unpack 257x 9.1->13.1 MB 13 ms | sleep 2124x (0:0 1:2124) 3294 ms | wait 60346x (0 polls) 162 ms | present 114x 1238 ms
+18:29:57.876 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:30:04.642 load-trace: window 4 start (streaming door): task 0D339DE0 vtable 00EF0410, ticking for 0 ms (46 threads)
+18:30:04.826 load-trace: window 4 +250 ms | loose read 51x 0.2 MB 0 ms | sleep 312x (0:0 1:312) 479 ms | wait 8235x (0 polls) 176 ms | present 17x 133 ms
+18:30:04.962 doors: interior ready after 125 ms - picture back now (state 2)
+18:30:05.028 load-trace: window 4 end: streaming door (22 ticks, 0 overlapping) 391 ms; process CPU 344 ms = 0.88 cores; timer resolution 0.500 ms
+18:30:05.028 load-trace:   tid=31684 (main) start=029262EE cpu=188 ms (48%) | dzip read 627x 16.4 MB 4 ms | loose read 163x 10.8 MB 5 ms | open 18x 1 ms | unpack 486x 16.4->24.4 MB 19 ms | wait 21x (0 polls) 187 ms
+18:30:05.028 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 253x (0:0 1:253) 390 ms
+18:30:05.028 load-trace:   tid=39748 start=0066F607 cpu=0 ms (0%) | loose read 2x 4.5 MB 3 ms | open 2x 0 ms | sleep 251x (0:0 1:251) 386 ms
+18:30:05.028 load-trace:   tid=32412 start=0066F607 cpu=109 ms (28%) | loose read 51x 0.2 MB 0 ms | wait 18550x (0 polls) 99 ms | present 21x 157 ms (max 37.1)
+18:30:05.028 load-trace:   tid=47388 start=6FCA7500 cpu=62 ms (16%) | no traced call
+18:30:05.028 load-trace:   tid=36588 start=55FB0460 cpu=94 ms (24%) | no traced call
+18:30:05.028 load-trace: window 4 totals | dzip read 627x 16.4 MB 4 ms | loose read 216x 15.5 MB 9 ms | open 20x 2 ms | unpack 486x 16.4->24.4 MB 19 ms | sleep 504x (0:0 1:504) 776 ms | wait 18571x (0 polls) 286 ms | present 21x 157 ms
+18:30:05.028 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:30:08.217 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 315x (0:0 1:315) 488 ms | wait 10319x (0 polls) 174 ms | present 18x 123 ms
+18:30:10.568 load-trace: window 5 start (streaming door): task 510CCBD0 vtable 00EF0410, ticking for 0 ms (46 threads)
+18:30:10.765 load-trace: window 5 +250 ms | sleep 323x (0:0 1:323) 501 ms | wait 9840x (0 polls) 3 ms | present 18x 198 ms
+18:30:10.891 doors: interior ready after 110 ms - picture back now (state 2)
+18:30:10.958 load-trace: window 5 end: streaming door (23 ticks, 0 overlapping) 375 ms; process CPU 484 ms = 1.29 cores; timer resolution 0.500 ms
+18:30:10.958 load-trace:   tid=31684 (main) start=029262EE cpu=375 ms (100%) | dzip read 350x 9.1 MB 2 ms | loose read 213x 12.7 MB 2 ms | open 25x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | wait 22x (0 polls) 6 ms
+18:30:10.958 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 251x (0:0 1:251) 387 ms
+18:30:10.958 load-trace:   tid=39748 start=0066F607 cpu=0 ms (0%) | loose read 3x 6.0 MB 3 ms | open 4x 0 ms | sleep 246x (0:0 1:246) 382 ms
+18:30:10.958 load-trace:   tid=32412 start=0066F607 cpu=62 ms (17%) | wait 18700x (0 polls) 84 ms | present 22x 231 ms (max 37.1)
+18:30:10.958 load-trace:   tid=36588 start=55FB0460 cpu=78 ms (21%) | no traced call
+18:30:10.958 load-trace: window 5 totals | dzip read 350x 9.1 MB 2 ms | loose read 216x 18.7 MB 5 ms | open 29x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | sleep 497x (0:0 1:497) 769 ms | wait 18722x (0 polls) 90 ms | present 22x 231 ms
+18:30:10.958 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:30:11.388 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 318x (0:0 1:318) 489 ms | wait 7547x (0 polls) 12 ms | present 18x 200 ms
+18:30:17.061 load-trace: window 6 start (streaming door): task 510C9CC0 vtable 00EF0410, ticking for 0 ms (46 threads)
+18:30:17.250 load-trace: window 6 +250 ms | loose read 51x 0.2 MB 0 ms | sleep 320x (0:0 1:320) 495 ms | wait 8376x (0 polls) 188 ms | present 18x 105 ms
+18:30:17.378 doors: interior ready after 125 ms - picture back now (state 2)
+18:30:17.447 load-trace: window 6 end: streaming door (22 ticks, 0 overlapping) 391 ms; process CPU 500 ms = 1.28 cores; timer resolution 0.500 ms
+18:30:17.447 load-trace:   tid=31684 (main) start=029262EE cpu=188 ms (48%) | dzip read 627x 16.4 MB 3 ms | loose read 163x 10.8 MB 2 ms | open 18x 1 ms | unpack 486x 16.4->24.4 MB 19 ms | wait 21x (0 polls) 193 ms
+18:30:17.447 load-trace:   tid=16444 start=0066F607 cpu=16 ms (4%) | sleep 253x (0:0 1:253) 390 ms
+18:30:17.447 load-trace:   tid=39748 start=0066F607 cpu=0 ms (0%) | loose read 4x 7.5 MB 4 ms | open 3x 0 ms | sleep 251x (0:0 1:251) 388 ms
+18:30:17.447 load-trace:   tid=32412 start=0066F607 cpu=188 ms (48%) | loose read 51x 0.2 MB 0 ms | wait 18211x (0 polls) 97 ms | present 21x 117 ms (max 37.1)
+18:30:17.447 load-trace:   tid=47388 start=6FCA7500 cpu=62 ms (16%) | no traced call
+18:30:17.447 load-trace:   tid=36588 start=55FB0460 cpu=62 ms (16%) | no traced call
+18:30:17.447 load-trace: window 6 totals | dzip read 627x 16.4 MB 3 ms | loose read 218x 18.5 MB 6 ms | open 21x 2 ms | unpack 486x 16.4->24.4 MB 19 ms | sleep 504x (0:0 1:504) 777 ms | wait 18232x (0 polls) 289 ms | present 21x 117 ms
+18:30:17.447 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:30:21.142 load-trace: streaming burst 250 ms | dzip read 362x 14.9 MB 4 ms | loose read 98x 26.7 MB 27 ms | open 15x 2 ms | unpack 343x 14.9->21.1 MB 19 ms | sleep 236x (0:0 1:236) 366 ms | wait 10106x (0 polls) 149 ms | present 18x 122 ms
+18:30:21.387 load-trace: streaming burst 250 ms | dzip read 443x 18.4 MB 5 ms | loose read 131x 28.1 MB 31 ms | open 22x 3 ms | unpack 419x 18.4->25.6 MB 27 ms | sleep 201x (0:0 1:201) 311 ms | wait 9898x (0 polls) 144 ms | present 17x 95 ms
+18:30:21.639 load-trace: streaming burst 250 ms | dzip read 98x 4.5 MB 1 ms | loose read 27x 19.3 MB 17 ms | open 7x 1 ms | unpack 92x 4.5->5.7 MB 5 ms | sleep 293x (0:0 1:293) 449 ms | wait 11348x (0 polls) 158 ms | present 18x 94 ms
+18:30:21.887 load-trace: streaming burst 250 ms | loose read 5x 16.0 MB 14 ms | open 4x 1 ms | sleep 309x (0:0 1:309) 471 ms | wait 12330x (0 polls) 160 ms | present 18x 62 ms
+18:30:23.892 load-trace: streaming burst 250 ms | dzip read 150x 6.8 MB 2 ms | loose read 29x 11.5 MB 9 ms | open 4x 0 ms | unpack 141x 6.8->8.7 MB 9 ms | sleep 290x (0:0 1:290) 440 ms | wait 13649x (0 polls) 96 ms | present 18x 133 ms
+18:30:27.393 load-trace: streaming burst 250 ms | dzip read 307x 12.8 MB 3 ms | loose read 119x 32.1 MB 32 ms | open 19x 2 ms | unpack 288x 12.8->17.6 MB 19 ms | sleep 239x (0:0 1:239) 368 ms | wait 17519x (0 polls) 100 ms | present 19x 104 ms
+18:30:27.891 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 3 ms | open 1x 0 ms | sleep 320x (0:0 1:320) 492 ms | wait 17036x (0 polls) 94 ms | present 18x 113 ms
+18:30:28.388 load-trace: streaming burst 250 ms | dzip read 66x 3.0 MB 1 ms | loose read 13x 10.9 MB 8 ms | open 3x 0 ms | unpack 61x 3.0->3.7 MB 3 ms | sleep 310x (0:0 1:310) 469 ms | wait 16529x (0 polls) 118 ms | present 17x 73 ms
+18:30:29.141 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 3 ms | sleep 315x (0:0 1:315) 490 ms | wait 17451x (0 polls) 129 ms | present 18x 88 ms
+18:30:31.890 load-trace: streaming burst 250 ms | loose read 2x 4.0 MB 4 ms | open 2x 0 ms | sleep 314x (0:0 1:314) 488 ms | wait 17893x (0 polls) 129 ms | present 19x 69 ms
+18:30:32.138 load-trace: streaming burst 250 ms | dzip read 10x 0.6 MB 0 ms | loose read 7x 6.6 MB 6 ms | open 2x 0 ms | unpack 9x 0.6->0.6 MB 0 ms | sleep 312x (0:0 1:312) 483 ms | wait 15457x (0 polls) 116 ms | present 17x 52 ms
+18:30:34.352 load-trace: window 7 start (streaming door): task 60F6A230 vtable 00EF0410, ticking for 16 ms (46 threads)
+18:30:34.548 load-trace: window 7 +266 ms | loose read 29x 0.1 MB 0 ms | sleep 324x (0:0 1:324) 496 ms | wait 15203x (0 polls) 137 ms | present 18x 51 ms
+18:30:34.684 doors: interior ready after 141 ms - picture back now (state 2)
+18:30:34.767 load-trace: window 7 end: streaming door (23 ticks, 0 overlapping) 422 ms; process CPU 672 ms = 1.59 cores; timer resolution 0.500 ms
+18:30:34.767 load-trace:   tid=31684 (main) start=029262EE cpu=281 ms (67%) | dzip read 370x 10.2 MB 2 ms | loose read 224x 14.7 MB 11 ms | open 25x 2 ms | unpack 286x 10.2->15.4 MB 15 ms | wait 25x (0 polls) 156 ms
+18:30:34.768 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 268x (0:0 1:268) 411 ms
+18:30:34.768 load-trace:   tid=39748 start=0066F607 cpu=0 ms (0%) | loose read 5x 10.0 MB 8 ms | open 6x 0 ms | sleep 261x (0:0 1:261) 399 ms
+18:30:34.768 load-trace:   tid=32412 start=0066F607 cpu=281 ms (67%) | loose read 29x 0.1 MB 0 ms | wait 25242x (0 polls) 99 ms | present 22x 66 ms (max 37.1)
+18:30:34.768 load-trace:   tid=47388 start=6FCA7500 cpu=62 ms (15%) | no traced call
+18:30:34.768 load-trace:   tid=38244 start=55FB0460 cpu=78 ms (19%) | no traced call
+18:30:34.768 load-trace: window 7 totals | dzip read 370x 10.2 MB 2 ms | loose read 258x 24.8 MB 19 ms | open 31x 2 ms | unpack 286x 10.2->15.4 MB 15 ms | sleep 529x (0:0 1:529) 810 ms | wait 25267x (0 polls) 255 ms | present 22x 66 ms
+18:30:34.768 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:30:37.951 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 3 ms | open 1x 0 ms | sleep 317x (0:0 1:317) 487 ms | wait 10822x (0 polls) 138 ms | present 18x 127 ms
+18:30:41.145 load-trace: window 8 start (streaming door): task 62B28E20 vtable 00EF0410, ticking for 0 ms (46 threads)
+18:30:41.329 load-trace: window 8 +250 ms | loose read 25x 0.1 MB 0 ms | sleep 310x (0:0 1:310) 481 ms | wait 11571x (0 polls) 120 ms | present 17x 120 ms
+18:30:41.479 doors: interior ready after 141 ms - picture back now (state 2)
+18:30:41.541 load-trace: window 8 end: streaming door (22 ticks, 0 overlapping) 407 ms; process CPU 500 ms = 1.23 cores; timer resolution 0.500 ms
+18:30:41.541 load-trace:   tid=31684 (main) start=029262EE cpu=312 ms (77%) | dzip read 627x 16.4 MB 4 ms | loose read 163x 10.8 MB 8 ms | open 18x 1 ms | unpack 486x 16.4->24.4 MB 19 ms | wait 21x (0 polls) 117 ms
+18:30:41.541 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 256x (0:0 1:256) 394 ms
+18:30:41.541 load-trace:   tid=39748 start=0066F607 cpu=0 ms (0%) | loose read 1x 0.5 MB 0 ms | open 1x 0 ms | sleep 259x (0:0 1:259) 398 ms
+18:30:41.541 load-trace:   tid=32412 start=0066F607 cpu=156 ms (38%) | loose read 25x 0.1 MB 0 ms | wait 22657x (0 polls) 115 ms | present 21x 146 ms (max 37.1)
+18:30:41.541 load-trace:   tid=36588 start=55FB0460 cpu=62 ms (15%) | no traced call
+18:30:41.541 load-trace: window 8 totals | dzip read 627x 16.4 MB 4 ms | loose read 189x 11.4 MB 8 ms | open 19x 1 ms | unpack 486x 16.4->24.4 MB 19 ms | sleep 515x (0:0 1:515) 792 ms | wait 22678x (0 polls) 232 ms | present 21x 146 ms
+18:30:41.541 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:30:44.482 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 316x (0:0 1:316) 486 ms | wait 15643x (0 polls) 85 ms | present 17x 112 ms
+18:30:51.179 load-trace: window 9 start (streaming door): task 60EDB808 vtable 00EF0410, ticking for 0 ms (46 threads)
+18:30:51.371 load-trace: window 9 +250 ms | loose read 53x 0.2 MB 0 ms | sleep 317x (0:0 1:317) 489 ms | wait 12914x (0 polls) 137 ms | present 17x 40 ms
+18:30:51.495 doors: interior ready after 110 ms - picture back now (state 2)
+18:30:51.579 load-trace: window 9 end: streaming door (22 ticks, 0 overlapping) 391 ms; process CPU 562 ms = 1.44 cores; timer resolution 0.500 ms
+18:30:51.579 load-trace:   tid=31684 (main) start=029262EE cpu=250 ms (64%) | dzip read 370x 10.2 MB 2 ms | loose read 224x 14.7 MB 3 ms | open 25x 2 ms | unpack 286x 10.2->15.4 MB 15 ms | wait 27x (0 polls) 154 ms
+18:30:51.579 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 256x (0:0 1:256) 393 ms
+18:30:51.579 load-trace:   tid=39748 start=0066F607 cpu=31 ms (8%) | loose read 7x 14.0 MB 9 ms | open 8x 1 ms | sleep 247x (0:0 1:247) 381 ms
+18:30:51.579 load-trace:   tid=32412 start=0066F607 cpu=250 ms (64%) | loose read 53x 0.2 MB 0 ms | wait 22691x (0 polls) 93 ms | present 21x 54 ms (max 37.1)
+18:30:51.579 load-trace:   tid=47388 start=6FCA7500 cpu=62 ms (16%) | no traced call
+18:30:51.579 load-trace:   tid=36588 start=55FB0460 cpu=78 ms (20%) | no traced call
+18:30:51.579 load-trace: window 9 totals | dzip read 370x 10.2 MB 2 ms | loose read 284x 28.9 MB 12 ms | open 33x 2 ms | unpack 286x 10.2->15.4 MB 15 ms | sleep 503x (0:0 1:503) 774 ms | wait 22718x (0 polls) 247 ms | present 21x 54 ms
+18:30:51.579 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:30:58.298 load-trace: window 10 start (streaming door): task 60ED8520 vtable 00EF0410, ticking for 0 ms (46 threads)
+18:30:58.485 load-trace: window 10 +250 ms | loose read 57x 0.2 MB 0 ms | sleep 314x (0:0 1:314) 488 ms | wait 10561x (0 polls) 49 ms | present 17x 123 ms
+18:30:58.630 doors: interior ready after 140 ms - picture back now (state 2)
+18:30:58.689 load-trace: window 10 end: streaming door (22 ticks, 0 overlapping) 390 ms; process CPU 453 ms = 1.16 cores; timer resolution 0.500 ms
+18:30:58.689 load-trace:   tid=31684 (main) start=029262EE cpu=328 ms (84%) | dzip read 627x 16.4 MB 4 ms | loose read 163x 10.8 MB 2 ms | open 18x 1 ms | unpack 486x 16.4->24.4 MB 19 ms | wait 21x (0 polls) 55 ms
+18:30:58.689 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 253x (0:0 1:253) 392 ms
+18:30:58.689 load-trace:   tid=39748 start=0066F607 cpu=0 ms (0%) | loose read 1x 0.5 MB 0 ms | open 1x 0 ms | sleep 257x (0:0 1:257) 396 ms
+18:30:58.689 load-trace:   tid=32412 start=0066F607 cpu=125 ms (32%) | loose read 57x 0.2 MB 0 ms | wait 21373x (0 polls) 110 ms | present 21x 148 ms (max 37.1)
+18:30:58.689 load-trace:   tid=47388 start=6FCA7500 cpu=78 ms (20%) | no traced call
+18:30:58.689 load-trace:   tid=38244 start=55FB0460 cpu=62 ms (16%) | no traced call
+18:30:58.689 load-trace:   tid=36588 start=55FB0460 cpu=62 ms (16%) | no traced call
+18:30:58.689 load-trace: window 10 totals | dzip read 627x 16.4 MB 4 ms | loose read 221x 11.5 MB 2 ms | open 19x 1 ms | unpack 486x 16.4->24.4 MB 19 ms | sleep 510x (0:0 1:510) 788 ms | wait 21394x (0 polls) 164 ms | present 21x 148 ms
+18:30:58.690 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:31:10.185 load-trace: window 11 start (streaming door): task 6FA06048 vtable 00EF0410, ticking for 0 ms (46 threads)
+18:31:10.373 load-trace: window 11 +250 ms | loose read 51x 0.2 MB 0 ms | sleep 316x (0:0 1:316) 487 ms | wait 12267x (0 polls) 38 ms | present 17x 130 ms
+18:31:10.626 load-trace: window 11 +500 ms | dzip read 667x 21.1 MB 5 ms | loose read 198x 17.3 MB 15 ms | open 23x 2 ms | unpack 560x 21.1->31.3 MB 27 ms | sleep 327x (0:0 1:327) 506 ms | wait 65856x (0 polls) 145 ms | present 4x 36 ms
+18:31:10.876 load-trace: window 11 +750 ms | dzip read 1597x 39.6 MB 10 ms | loose read 766x 54.5 MB 38 ms | open 87x 6 ms | unpack 1164x 39.6->55.6 MB 54 ms | sleep 328x (0:0 1:328) 501 ms | wait 1610x (0 polls) 252 ms
+18:31:11.122 load-trace: window 11 +1000 ms | dzip read 1645x 48.3 MB 11 ms | loose read 448x 31.1 MB 31 ms | open 52x 4 ms | unpack 1319x 48.3->68.4 MB 61 ms | sleep 317x (0:0 1:317) 490 ms | wait 1189x (0 polls) 245 ms
+18:31:11.327 doors: interior ready after 937 ms - picture back now (state 2)
+18:31:11.426 load-trace: window 11 end: streaming door (23 ticks, 0 overlapping) 1235 ms; process CPU 1359 ms = 1.10 cores; timer resolution 0.500 ms
+18:31:11.426 load-trace:   tid=31684 (main) start=029262EE cpu=969 ms (78%) | dzip read 4440x 113.5 MB 28 ms | loose read 1440x 104.3 MB 87 ms | open 165x 12 ms | unpack 3348x 113.5->162.4 MB 148 ms | wait 22x (0 polls) 52 ms
+18:31:11.426 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 801x (0:0 1:801) 1229 ms
+18:31:11.426 load-trace:   tid=39748 start=0066F607 cpu=94 ms (8%) | dzip read 244x 10.2 MB 3 ms | loose read 21x 1.3 MB 2 ms | open 2x 0 ms | unpack 228x 10.1->13.9 MB 12 ms | sleep 769x (0:0 1:769) 1181 ms
+18:31:11.426 load-trace:   tid=32412 start=0066F607 cpu=297 ms (24%) | loose read 51x 0.2 MB 0 ms | wait 103308x (0 polls) 828 ms | present 22x 165 ms (max 37.1)
+18:31:11.426 load-trace:   tid=47388 start=6FCA7500 cpu=62 ms (5%) | no traced call
+18:31:11.426 load-trace: window 11 totals | dzip read 4684x 123.7 MB 31 ms | loose read 1512x 105.9 MB 89 ms | open 167x 13 ms | unpack 3576x 123.6->176.4 MB 159 ms | sleep 1570x (0:0 1:1570) 2410 ms | wait 103330x (0 polls) 880 ms | present 22x 165 ms
+18:31:11.426 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:31:11.608 load-trace: streaming burst 250 ms | dzip read 20x 1.1 MB 0 ms | loose read 22x 50.0 MB 42 ms | open 20x 2 ms | unpack 18x 1.1->1.1 MB 1 ms | sleep 182x (0:0 1:182) 278 ms | wait 13933x (0 polls) 38 ms | present 14x 74 ms
+18:31:13.108 load-trace: streaming burst 250 ms | loose read 11x 33.5 MB 29 ms | open 11x 1 ms | sleep 298x (0:0 1:298) 454 ms | wait 17333x (0 polls) 83 ms | present 17x 103 ms
+18:31:14.859 load-trace: streaming burst 250 ms | dzip read 93x 4.2 MB 1 ms | loose read 3x 12.0 MB 10 ms | open 2x 0 ms | unpack 90x 4.2->5.6 MB 5 ms | sleep 304x (0:0 1:304) 466 ms | wait 18074x (0 polls) 88 ms | present 19x 134 ms
+18:31:15.110 load-trace: streaming burst 250 ms | dzip read 44x 1.9 MB 1 ms | loose read 8x 22.0 MB 19 ms | open 7x 1 ms | unpack 42x 1.9->2.6 MB 2 ms | sleep 301x (0:0 1:301) 464 ms | wait 17303x (0 polls) 40 ms | present 18x 116 ms
+18:31:15.357 load-trace: streaming burst 250 ms | dzip read 174x 7.6 MB 2 ms | loose read 83x 6.1 MB 10 ms | open 9x 7 ms | unpack 166x 7.6->10.2 MB 9 ms | sleep 274x (0:0 1:274) 413 ms | wait 15264x (0 polls) 93 ms | present 16x 120 ms
+18:31:15.606 load-trace: streaming burst 250 ms | dzip read 86x 4.4 MB 1 ms | loose read 16x 37.2 MB 32 ms | open 13x 1 ms | unpack 83x 4.4->5.2 MB 5 ms | sleep 284x (0:0 1:284) 436 ms | wait 17551x (0 polls) 67 ms | present 18x 112 ms
+18:31:15.859 load-trace: streaming burst 250 ms | dzip read 187x 8.6 MB 2 ms | loose read 26x 22.0 MB 18 ms | open 7x 1 ms | unpack 178x 8.6->10.9 MB 9 ms | sleep 280x (0:0 1:280) 428 ms | wait 17571x (0 polls) 103 ms | present 18x 102 ms
+18:31:16.357 load-trace: streaming burst 250 ms | dzip read 251x 12.0 MB 3 ms | loose read 42x 15.7 MB 14 ms | open 6x 1 ms | unpack 238x 12.0->14.5 MB 15 ms | sleep 288x (0:0 1:288) 431 ms | wait 17722x (0 polls) 131 ms | present 18x 76 ms
+18:31:16.860 load-trace: streaming burst 250 ms | dzip read 147x 6.7 MB 2 ms | loose read 21x 1.3 MB 3 ms | open 3x 0 ms | unpack 142x 6.7->8.7 MB 8 ms | sleep 308x (0:0 1:308) 474 ms | wait 17487x (0 polls) 135 ms | present 18x 81 ms
+18:31:17.107 load-trace: streaming burst 250 ms | loose read 5x 27.0 MB 19 ms | open 4x 1 ms | sleep 297x (0:0 1:297) 462 ms | wait 17712x (0 polls) 123 ms | present 18x 68 ms
+18:31:17.359 load-trace: streaming burst 250 ms | dzip read 57x 2.0 MB 1 ms | loose read 9x 31.0 MB 24 ms | open 7x 1 ms | unpack 51x 2.0->3.0 MB 2 ms | sleep 297x (0:0 1:297) 451 ms | wait 18109x (0 polls) 94 ms | present 18x 76 ms
+18:31:17.858 load-trace: streaming burst 250 ms | dzip read 198x 8.6 MB 3 ms | loose read 55x 17.4 MB 17 ms | open 8x 1 ms | unpack 187x 8.6->11.5 MB 12 ms | sleep 281x (0:0 1:281) 432 ms | wait 18222x (0 polls) 115 ms | present 18x 90 ms
+18:31:18.858 load-trace: streaming burst 250 ms | dzip read 34x 1.9 MB 0 ms | loose read 10x 26.0 MB 20 ms | open 4x 1 ms | unpack 33x 1.9->2.1 MB 2 ms | sleep 299x (0:0 1:299) 458 ms | wait 17227x (0 polls) 134 ms | present 17x 59 ms
+18:31:19.857 load-trace: streaming burst 250 ms | dzip read 79x 3.6 MB 1 ms | loose read 6x 10.5 MB 9 ms | open 2x 0 ms | unpack 77x 3.6->4.8 MB 4 ms | sleep 306x (0:0 1:306) 472 ms | wait 18506x (0 polls) 103 ms | present 18x 99 ms
+18:31:20.106 load-trace: streaming burst 250 ms | loose read 4x 6.2 MB 5 ms | open 3x 0 ms | sleep 314x (0:0 1:314) 483 ms | wait 19290x (0 polls) 94 ms | present 18x 97 ms
+18:31:21.111 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 5x 7.5 MB 8 ms | open 5x 1 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 313x (0:0 1:313) 479 ms | wait 19590x (0 polls) 119 ms | present 18x 97 ms
+18:31:21.360 load-trace: streaming burst 250 ms | loose read 6x 13.0 MB 12 ms | open 6x 1 ms | sleep 306x (0:0 1:306) 465 ms | wait 19367x (0 polls) 135 ms | present 18x 65 ms
+18:31:21.610 load-trace: streaming burst 250 ms | dzip read 236x 10.0 MB 5 ms | loose read 66x 20.0 MB 20 ms | open 10x 1 ms | unpack 221x 10.0->13.5 MB 14 ms | sleep 271x (0:0 1:271) 415 ms | wait 19604x (0 polls) 125 ms | present 18x 65 ms
+18:31:22.861 load-trace: streaming burst 250 ms | loose read 6x 7.3 MB 6 ms | open 4x 1 ms | sleep 314x (0:0 1:314) 479 ms | wait 20241x (0 polls) 110 ms | present 18x 102 ms
+18:31:24.607 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 4 ms | open 1x 0 ms | sleep 310x (0:0 1:310) 475 ms | wait 20011x (0 polls) 27 ms | present 18x 139 ms
+18:31:25.107 load-trace: streaming burst 250 ms | dzip read 19x 0.8 MB 0 ms | loose read 2x 6.0 MB 5 ms | open 2x 0 ms | unpack 18x 0.8->1.1 MB 1 ms | sleep 316x (0:0 1:316) 482 ms | wait 19920x (0 polls) 21 ms | present 18x 148 ms
+18:31:26.106 load-trace: streaming burst 250 ms | dzip read 34x 1.8 MB 0 ms | loose read 8x 10.1 MB 11 ms | open 4x 1 ms | unpack 33x 1.8->2.1 MB 2 ms | sleep 299x (0:0 1:299) 456 ms | wait 20676x (0 polls) 20 ms | present 18x 143 ms
+18:31:27.349 load-trace: window 12 start (streaming door): task 59665490 vtable 00EF0410, ticking for 16 ms (46 threads)
+18:31:27.548 load-trace: window 12 +266 ms | loose read 51x 0.2 MB 0 ms | sleep 327x (0:0 1:327) 499 ms | wait 20207x (0 polls) 27 ms | present 18x 138 ms
+18:31:27.793 load-trace: window 12 +516 ms | dzip read 851x 22.6 MB 6 ms | loose read 498x 36.8 MB 29 ms | open 55x 4 ms | unpack 628x 22.6->31.9 MB 35 ms | sleep 323x (0:0 1:323) 490 ms | wait 17126x (0 polls) 209 ms | present 2x 18 ms
+18:31:27.872 doors: interior ready after 344 ms - picture back now (state 2)
+18:31:27.967 load-trace: window 12 end: streaming door (22 ticks, 0 overlapping) 625 ms; process CPU 844 ms = 1.35 cores; timer resolution 0.500 ms
+18:31:27.967 load-trace:   tid=31684 (main) start=029262EE cpu=500 ms (80%) | dzip read 1113x 27.9 MB 7 ms | loose read 568x 40.4 MB 31 ms | open 64x 5 ms | unpack 813x 27.9->40.1 MB 43 ms | wait 21x (0 polls) 36 ms
+18:31:27.967 load-trace:   tid=16444 start=0066F607 cpu=0 ms (0%) | sleep 399x (0:0 1:399) 610 ms
+18:31:27.967 load-trace:   tid=39748 start=0066F607 cpu=62 ms (10%) | dzip read 102x 3.9 MB 1 ms | loose read 42x 2.8 MB 6 ms | open 4x 1 ms | unpack 94x 3.9->5.7 MB 6 ms | sleep 376x (0:0 1:376) 572 ms
+18:31:27.967 load-trace:   tid=48212 start=77088D10 cpu=0 ms (0%) | open 1x 0 ms
+18:31:27.967 load-trace:   tid=32412 start=0066F607 cpu=188 ms (30%) | loose read 51x 0.2 MB 0 ms | wait 43934x (0 polls) 287 ms | present 21x 156 ms (max 37.1)
+18:31:27.967 load-trace:   tid=36588 start=55FB0460 cpu=78 ms (12%) | no traced call
+18:31:27.967 load-trace: window 12 totals | dzip read 1215x 31.8 MB 8 ms | loose read 661x 43.4 MB 37 ms | open 69x 5 ms | unpack 907x 31.8->45.8 MB 49 ms | sleep 775x (0:0 1:775) 1182 ms | wait 43955x (0 polls) 323 ms | present 21x 156 ms
+18:31:27.967 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+18:31:28.155 load-trace: streaming burst 250 ms | dzip read 1002x 43.0 MB 12 ms | loose read 54x 4.3 MB 7 ms | open 5x 1 ms | unpack 953x 43.0->58.1 MB 50 ms | sleep 104x (0:0 1:104) 164 ms | wait 19358x (0 polls) 12 ms | present 14x 119 ms
+18:31:28.407 load-trace: streaming burst 250 ms | dzip read 294x 12.6 MB 3 ms | loose read 48x 105.6 MB 87 ms | open 26x 3 ms | unpack 278x 12.7->17.0 MB 16 ms | sleep 172x (0:0 1:172) 261 ms | wait 26269x (0 polls) 39 ms | present 18x 111 ms
+18:31:29.406 load-trace: streaming burst 250 ms | dzip read 34x 1.7 MB 0 ms | loose read 5x 18.0 MB 15 ms | open 4x 1 ms | unpack 33x 1.7->2.1 MB 2 ms | sleep 291x (0:0 1:291) 441 ms | wait 29080x (0 polls) 26 ms | present 18x 147 ms
+18:31:31.157 load-trace: streaming burst 250 ms | loose read 6x 12.0 MB 11 ms | open 5x 1 ms | sleep 305x (0:0 1:305) 470 ms | wait 23302x (0 polls) 57 ms | present 18x 127 ms
+18:31:32.905 load-trace: streaming burst 250 ms | loose read 2x 4.0 MB 4 ms | open 2x 0 ms | sleep 319x (0:0 1:319) 489 ms | wait 23210x (0 polls) 14 ms | present 18x 171 ms
+18:31:33.154 load-trace: streaming burst 250 ms | loose read 3x 7.0 MB 7 ms | open 3x 0 ms | sleep 300x (0:0 1:300) 464 ms | wait 23621x (0 polls) 21 ms | present 18x 162 ms
+18:31:35.908 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 7 ms | open 2x 0 ms | sleep 330x (0:0 1:330) 508 ms | wait 5015x (0 polls) 1 ms | present 5x 52 ms
