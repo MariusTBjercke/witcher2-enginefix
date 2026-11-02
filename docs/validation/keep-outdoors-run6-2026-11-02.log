@@ -1,0 +1,1057 @@
+20:31:10.177 witcher2_enginefix 0.7.1 loaded (image base 0x00400000)
+20:31:10.177 diagnostics: crash_dump=1 (previous log kept as witcher2_enginefix.prev.log)
+20:31:10.177 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+20:31:10.177 distance config: experimental=1 visibility=3.00x shadow=3.00x
+20:31:10.177 saves: fix_thumbnails=1 save_trace=0
+20:31:10.177 startup: skip_intro=1
+20:31:10.177 diagnostics: file_trace=0 load_trace=1
+20:31:10.177 loading: fast_doors=1 door_fade=0.25 keep_outdoors=1
+20:31:10.177 scriptpatches: book_marker=1 continue=1 pause_quit=1 window_mode=1
+20:31:10.177 window: enabled=1 borderless=0 dpi_aware=1
+20:31:10.177 presets: default=extreme, cycle modifiers=1 VK=79 (Options > Graphics remembers the level)
+20:31:10.180 script-patcher: hooked kernel32.dll!CreateFileW
+20:31:10.180 script-patcher: hooked kernel32.dll!FindFirstFileW
+20:31:10.180 script-patcher: hooked kernel32.dll!FindNextFileW
+20:31:10.180 script patches: hooks installed after 0 ms (3/3 slots)
+20:31:10.180 load-trace: hooked kernel32.dll!ReadFile
+20:31:10.180 load-trace: hooked kernel32.dll!Sleep
+20:31:10.180 load-trace: hooked kernel32.dll!WaitForSingleObject
+20:31:10.180 load-trace: hooked kernel32.dll!WaitForSingleObjectEx
+20:31:10.180 load-trace: hooked after 0 ms (5/5 import slots), main thread 49556
+20:31:10.180 load-trace: streaming door timer hooked
+20:31:10.183 presets: startup=extreme (options menu)
+20:31:10.183 window: dpi awareness = system aware (fallback)
+20:31:10.183 window: borderless=1 (options menu), dpi_aware=1, menu=1
+20:31:10.324 load-trace: block unpack call hooked after 141 ms
+20:31:10.324 startup: movie list and tick hooked after 141 ms
+20:31:10.324 partition: switch calls hooked/hooked, sync run hooked (load_trace=1 keep_outdoors=1)
+20:31:10.339 window: startup borderless style patched
+20:31:10.340 window: menu channel hooked (Options > Graphics applies borderless at once)
+20:31:10.340 window: viewport tick hooked (Full screen switches at once)
+20:31:10.444 script overlay: cache <game>\bin\witcher2_enginefix_cache
+20:31:10.452 script overlay: cache: reused (4 redirects)
+20:31:10.452 script patches: book_marker=on continue=on pause_quit=on window_mode=on cache=reused
+20:31:10.845 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+20:31:10.849 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+20:31:11.185 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+20:31:11.686 crash: filter armed, chaining to 0x5F492571 (CSERHelper.dll+0x12571)
+20:31:11.694 osd: window ready (font 34 px)
+20:31:11.694 stability: ray cast guard installed (collector slot 00D41A38)
+20:31:11.695 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
+20:31:11.695 osd: Graphics: extreme  (LOD only)
+20:31:11.700 lod enforced: mesh=8.000 foliage=5.000
+20:31:11.700 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=3.00x shadow=3.00x
+20:31:11.700 osd: Graphics: extreme  (4/4)
+20:31:11.701 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+20:31:11.701 thumbnail: menu image registry hooked (QuickSave preview refresh)
+20:31:11.701 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=1 trace=0
+20:31:11.701 saves: ISteamRemoteStorage 11910BE8 FileWrite hooked; thumbnail fix=1
+20:31:11.701 doors: fade-out patched, fade-in patched, 0.25 s (game 0.5 s); fast_doors=1
+20:31:13.444 load-trace: streaming burst 250 ms | dzip read 264x 0.6 MB 1 ms | loose read 2158x 8.4 MB 4 ms | other read 1x 0.0 MB 0 ms | open 34x 1 ms | unpack 150x 0.6->3.8 MB 2 ms | sleep 45x (0:21 1:24) 369 ms
+20:31:13.695 load-trace: streaming burst 250 ms | loose read 25812x 5.7 MB 26 ms | open 1x 0 ms | sleep 31x (0:0 1:31) 486 ms
+20:31:26.315 window: game window 3840x2160, User.ini viewport 3840x2160
+20:31:26.367 load-trace: device 13D61B00 Present hooked after 16188 ms
+20:31:26.367 load-trace: device found: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:31:26.533 load-trace: window 1 start (loading screen): render thread 0BC53700 movie 0B5855C0 screen 00000000 shown=0 (40 threads)
+20:31:26.703 load-trace: window 1 +250 ms | dzip read 2125x 91.3 MB 22 ms | loose read 21x 1.4 MB 0 ms | open 3x 0 ms | unpack 2037x 91.4->124.4 MB 93 ms | sleep 312x (0:0 1:312) 504 ms | wait 4x (0 polls) 0 ms | present 8x 45 ms
+20:31:26.891 input: CreateDevice hook installed
+20:31:26.892 input: keyboard state filter installed
+20:31:26.892 input: keyboard cooperative level hook installed
+20:31:26.893 input: window procedure hooked (key messages ignored while DirectInput reads the keyboard)
+20:31:26.893 input: keyboard cooperative level 0x05 -> 0x06 (Windows keys and Print Screen work in game)
+20:31:26.895 startup: movie list built (1 entries), skip armed
+20:31:26.916 load-trace: window 1 end: loading screen (screen object 0 ms) 407 ms; process CPU 672 ms = 1.65 cores; timer resolution 0.500 ms
+20:31:26.916 load-trace:   tid=49556 (main) start=029262EE cpu=359 ms (88%) | dzip read 3208x 123.7 MB 30 ms | loose read 62x 4.6 MB 1 ms | open 9x 1 ms | unpack 2932x 123.7->171.9 MB 128 ms
+20:31:26.916 load-trace:   tid=46996 start=0066F607 cpu=0 ms (0%) | loose read 3x 0.4 MB 0 ms | sleep 258x (0:0 1:258) 410 ms
+20:31:26.916 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 259x (0:0 1:259) 410 ms
+20:31:26.916 load-trace:   tid=17508 start=77088D10 cpu=0 ms (0%) | open 1x 0 ms
+20:31:26.916 load-trace:   tid=44544 start=0066F607 cpu=312 ms (77%) | wait 426x (0 polls) 0 ms | present 13x 45 ms (max 32.8)
+20:31:26.916 load-trace: window 1 totals | dzip read 3208x 123.7 MB 30 ms | loose read 65x 5.0 MB 2 ms | open 10x 1 ms | unpack 2932x 123.7->171.9 MB 128 ms | sleep 517x (0:0 1:517) 820 ms | wait 426x (0 polls) 0 ms | present 13x 45 ms
+20:31:26.916 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:31:27.208 startup: stopping startup movie 1 of 1
+20:31:27.283 startup: 1 startup movie(s) stopped, main menu reached
+20:31:27.359 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 8x 31.7 MB 6 ms | open 3x 0 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 404x (0:0 1:404) 622 ms | wait 305x (0 polls) 729 ms | present 9x 116 ms
+20:31:31.610 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 3 ms | open 1x 0 ms | sleep 450x (0:0 1:450) 689 ms | wait 9x (0 polls) 2128 ms | present 1x 0 ms
+20:33:37.900 load-trace: window 2 start (loading screen): render thread 0BC53700 movie 0B5855C0 screen 00000000 shown=0 (45 threads)
+20:33:38.094 load-trace: window 2 +250 ms | dzip read 174x 2.3 MB 1 ms | unpack 153x 2.3->8.6 MB 8 ms | sleep 486x (0:0 1:486) 748 ms | wait 19x (0 polls) 0 ms | present 7x 0 ms
+20:33:38.166 partition: switch '' -> 'Outdoor\global\village-city-forest\Binduga' (load)
+20:33:38.166 partition: at the switch - player unknown (0.00, 0.00, 0.00)
+20:33:38.166 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 0 layers, load 787 layers in 1 buckets
+20:33:38.166 partition:   load   act1_quest
+20:33:38.166 partition:   load   armwrestling
+20:33:38.166 partition:   load   city_lights
+20:33:38.166 partition:   load   collisions
+20:33:38.166 partition:   load   community_areas
+20:33:38.166 partition:   load   community_stickers
+20:33:38.166 partition:   load   community_streaming
+20:33:38.166 partition:   load   containers
+20:33:38.166 partition:   load   cutscene_waypoints
+20:33:38.166 partition:   load   denied_areas
+20:33:38.166 partition:   load   exploration_stickers
+20:33:38.166 partition:   load   foliage_system
+20:33:38.166 partition:   load   fow_triggers
+20:33:38.166 partition:   load   intervention_points
+20:33:38.166 partition:   load   Loader
+20:33:38.167 partition:   load   lores terrain
+20:33:38.167 partition:   load   map_areas
+20:33:38.167 partition:   load   map_prop
+20:33:38.167 partition:   load   map_waypoints
+20:33:38.167 partition:   load   navigation surfaces
+20:33:38.167 partition:   load   npc_spawnsets
+20:33:38.167 partition:   load   occluders
+20:33:38.167 partition:   load   pablo_tempLayer
+20:33:38.167 partition:   load   paths
+20:33:38.167 partition:   load   places_mappins
+20:33:38.167 partition:   load   player_storage
+20:33:38.167 partition:   load   skybox
+20:33:38.167 partition:   load   streaming_stickers
+20:33:38.167 partition:   load   streaming_triggers
+20:33:38.167 partition:   load   temp
+20:33:38.167 partition:   load   traps
+20:33:38.167 partition:   load   waittime_bench
+20:33:38.167 partition:   load   WitcherStartingPoint
+20:33:38.167 partition:   load   worldEnvironment
+20:33:38.167 partition:   load   zagnica_blokady
+20:33:38.167 partition:   load   distillery
+20:33:38.167 partition:   load   environment_cave_forest
+20:33:38.167 partition:   load   forest_shadow
+20:33:38.167 partition:   load   global_environments
+20:33:38.167 partition:   load   lights
+20:33:38.167 partition:   load   environment_forest
+20:33:38.167 partition:   load   light_shaft_morning
+20:33:38.167 partition:   load   light_shaft_noon
+20:33:38.167 partition:   load   environment_landing
+20:33:38.167 partition:   load   q105_tentacle_molo
+20:33:38.167 partition:   load   a1_npc_default_phases
+20:33:38.167 partition:   load   cedric_seherim_platform
+20:33:38.167 partition:   load   q101_q102_paths_to_hanging
+20:33:38.167 partition:   load   q103_eardropping
+20:33:38.167 partition:   load   q106_barge_guards
+20:33:38.167 partition:   load   q106_blockade_to_spider_crab
+20:33:38.167 partition:   load   q109_firecamp2
+20:33:38.167 partition:   load   scoia_sroches_scene_forest
+20:33:38.167 partition:   load   sheala_tr_in_room
+20:33:38.167 partition:   load   sq109_guards_despawn
+20:33:38.167 partition:   load   sroches_scene_forest
+20:33:38.167 partition:   load   temp_teleportq110
+20:33:38.167 partition:   load   q101_mappins
+20:33:38.167 partition:   load   q101_bianka
+20:33:38.167 partition:   load   q101_roche_ship_captain
+20:33:38.167 partition:   load   q101_s1_beach
+20:33:38.167 partition:   load   q101_s1_rocheship
+20:33:38.167 partition:   load   q101_s1_rocheship_sailors
+20:33:38.167 partition:   load   q101_s1_trissstart
+20:33:38.167 partition:   load   q101_s2_iorweth
+20:33:38.167 partition:   load   q101_s3_escape
+20:33:38.167 partition:   load   q101_s3_escape_arch1
+20:33:38.167 partition:   load   q101_s3_escape_arch2
+20:33:38.167 partition:   load   q101_s3_escape_arch3
+20:33:38.167 partition:   load   q101_s3_escape_point1
+20:33:38.167 partition:   load   q101_s3_escape_point2
+20:33:38.167 partition:   load   q101_s3_escape_point2a
+20:33:38.167 partition:   load   q101_s3_escape_point3
+20:33:38.167 partition:   load   q101_s3_escape_point3a
+20:33:38.167 partition:   load   q101_s3_escape_point4
+20:33:38.167 partition:   load   q101_s3_gotohanging
+20:33:38.167 partition:   load   q101_s3_gotoinn
+20:33:38.167 partition:   load   q101_s3_guards_before
+20:33:38.167 partition:   load   q101_s3_guards_during_dialogue
+20:33:38.167 partition:   load   q102_gallow
+20:33:38.167 partition:   (names cut at 80)
+20:33:38.214 load-trace: window 2 +359 ms: screen object 0BD80558 shown=1
+20:33:38.341 load-trace: window 2 +500 ms | dzip read 874x 19.4 MB 6 ms | loose read 555x 9.6 MB 3 ms | open 15x 1 ms | unpack 654x 19.4->29.7 MB 25 ms | sleep 376x (0:0 1:376) 591 ms | wait 719x (0 polls) 453 ms | present 6x 0 ms
+20:33:38.591 load-trace: window 2 +750 ms | dzip read 1443x 42.2 MB 10 ms | loose read 550x 38.0 MB 8 ms | open 60x 4 ms | unpack 1171x 42.1->62.0 MB 58 ms | sleep 324x (0:0 1:324) 503 ms | wait 680x (0 polls) 0 ms | present 8x 0 ms
+20:33:38.843 load-trace: window 2 +1000 ms | dzip read 1518x 36.9 MB 10 ms | loose read 633x 48.3 MB 11 ms | open 69x 6 ms | unpack 1099x 36.9->50.4 MB 54 ms | sleep 320x (0:0 1:320) 502 ms | wait 1006x (0 polls) 0 ms | present 7x 0 ms
+20:33:39.091 load-trace: window 2 +1250 ms | dzip read 1208x 44.7 MB 11 ms | loose read 398x 28.7 MB 6 ms | open 41x 3 ms | unpack 1057x 44.7->60.6 MB 62 ms | sleep 318x (0:0 1:318) 497 ms | wait 438x (0 polls) 0 ms | present 8x 0 ms
+20:33:39.343 load-trace: window 2 +1500 ms | dzip read 1447x 44.0 MB 11 ms | loose read 566x 37.9 MB 8 ms | open 96x 6 ms | unpack 1211x 44.0->67.7 MB 67 ms | sleep 322x (0:0 1:322) 503 ms | wait 680x (0 polls) 0 ms | present 7x 0 ms
+20:33:39.591 load-trace: window 2 +1750 ms | dzip read 1485x 45.2 MB 11 ms | loose read 861x 56.4 MB 13 ms | open 134x 8 ms | unpack 1154x 45.2->60.4 MB 55 ms | sleep 318x (0:0 1:318) 495 ms | wait 956x (0 polls) 1 ms | present 8x 0 ms
+20:33:39.844 load-trace: window 2 +2000 ms | dzip read 1609x 52.6 MB 13 ms | loose read 583x 41.4 MB 8 ms | open 88x 5 ms | unpack 1326x 52.6->72.2 MB 62 ms | sleep 326x (0:0 1:326) 509 ms | wait 778x (0 polls) 0 ms | present 7x 0 ms
+20:33:40.091 load-trace: window 2 +2250 ms | dzip read 1956x 24.3 MB 8 ms | loose read 6x 0.2 MB 0 ms | open 2x 0 ms | unpack 1271x 24.3->42.1 MB 27 ms | sleep 318x (0:0 1:318) 493 ms | wait 1354x (0 polls) 1 ms | present 8x 0 ms
+20:33:40.249 partition: sync job ran 2083 ms
+20:33:40.250 partition: switch returned 1 after 2083 ms
+20:33:40.345 load-trace: window 2 +2500 ms | dzip read 372x 7.4 MB 2 ms | loose read 7x 0.3 MB 0 ms | open 3x 0 ms | unpack 270x 7.4->12.0 MB 11 ms | sleep 328x (0:0 1:328) 506 ms | wait 8310x (0 polls) 3 ms | present 7x 0 ms
+20:33:40.595 load-trace: window 2 +2750 ms | dzip read 536x 14.7 MB 4 ms | loose read 271x 17.1 MB 3 ms | open 31x 2 ms | unpack 409x 14.7->20.9 MB 21 ms | sleep 278x (0:0 1:278) 432 ms | wait 48447x (0 polls) 26 ms | present 8x 0 ms
+20:33:40.802 load-trace: window 2 end: loading screen (screen object 2516 ms) 2875 ms; process CPU 5703 ms = 1.98 cores; timer resolution 0.500 ms
+20:33:40.802 load-trace:   tid=49556 (main) start=029262EE cpu=2609 ms (91%) | dzip read 12283x 322.8 MB 86 ms | loose read 3779x 261.9 MB 55 ms | open 513x 35 ms | unpack 9498x 322.8->470.9 MB 434 ms | sleep 4x (0:0 1:4) 6 ms | wait 87x (0 polls) 11 ms
+20:33:40.802 load-trace:   tid=46996 start=0066F607 cpu=266 ms (9%) | dzip read 972x 34.8 MB 9 ms | loose read 421x 27.8 MB 6 ms | open 43x 4 ms | unpack 848x 34.8->49.5 MB 49 ms | sleep 1728x (0:0 1:1728) 2689 ms
+20:33:40.802 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | dzip read 3x 0.0 MB 0 ms | unpack 2x 0.0->0.1 MB 0 ms | sleep 1846x (0:0 1:1846) 2872 ms
+20:33:40.802 load-trace:   tid=17508 start=77088D10 cpu=0 ms (0%) | open 3x 0 ms
+20:33:40.802 load-trace:   tid=44544 start=0066F607 cpu=2906 ms (101%) | loose read 431x 1.7 MB 1 ms | open 1x 0 ms | wait 88024x (0 polls) 34 ms | present 85x 1 ms (max 32.8)
+20:33:40.802 load-trace:   tid=30096 start=00000000 cpu=-1 ms (0%) | wait 15x (0 polls) 452 ms
+20:33:40.802 load-trace:   tid=18332 start=00000000 cpu=-1 ms (0%) | sleep 220x (0:0 1:220) 340 ms | wait 1x (0 polls) 0 ms
+20:33:40.802 load-trace:   tid=36860 start=6FCA7950 cpu=78 ms (3%) | no traced call
+20:33:40.803 load-trace: window 2 totals | dzip read 13258x 357.6 MB 94 ms | loose read 4631x 291.4 MB 61 ms | open 560x 39 ms | unpack 10348x 357.6->520.5 MB 483 ms | sleep 3798x (0:0 1:3798) 5908 ms | wait 88127x (0 polls) 497 ms | present 85x 1 ms
+20:33:40.803 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:33:40.966 load-trace: streaming burst 250 ms | dzip read 68x 3.2 MB 1 ms | loose read 14x 33.4 MB 18 ms | open 9x 1 ms | unpack 66x 3.2->4.1 MB 4 ms | sleep 189x (0:0 1:189) 293 ms
+20:33:41.216 load-trace: streaming burst 250 ms | dzip read 192x 10.5 MB 2 ms | loose read 102x 264.8 MB 143 ms | open 90x 5 ms | unpack 184x 10.5->11.5 MB 10 ms | sleep 162x (0:0 1:162) 252 ms
+20:33:41.470 load-trace: streaming burst 250 ms | dzip read 233x 10.2 MB 3 ms | loose read 61x 25.5 MB 11 ms | open 8x 1 ms | unpack 221x 10.2->13.6 MB 15 ms | sleep 319x (0:0 1:319) 493 ms | wait 4580x (0 polls) 691 ms | present 5x 2 ms
+20:33:43.427 distance stats: mesh=774826 shadow=130236 baseline_reject=111166 admitted=58305 (3.00x/3.00x)
+20:33:43.465 load-trace: streaming burst 250 ms | dzip read 34x 1.6 MB 0 ms | loose read 6x 16.1 MB 8 ms | open 5x 1 ms | unpack 33x 1.6->2.1 MB 2 ms | sleep 309x (0:0 1:309) 486 ms | wait 11129x (0 polls) 176 ms | present 18x 90 ms
+20:33:44.219 load-trace: streaming burst 250 ms | dzip read 111x 5.4 MB 1 ms | loose read 17x 64.0 MB 34 ms | open 11x 1 ms | unpack 104x 5.3->6.4 MB 5 ms | sleep 292x (0:0 1:292) 448 ms | wait 9853x (0 polls) 163 ms | present 16x 32 ms
+20:33:44.466 load-trace: streaming burst 250 ms | dzip read 142x 6.2 MB 2 ms | loose read 59x 34.4 MB 16 ms | open 12x 1 ms | unpack 137x 6.2->8.5 MB 8 ms | sleep 291x (0:0 1:291) 447 ms | wait 11180x (0 polls) 172 ms | present 18x 14 ms
+20:33:44.718 load-trace: streaming burst 250 ms | dzip read 118x 5.7 MB 1 ms | loose read 8x 22.0 MB 10 ms | open 7x 1 ms | unpack 117x 5.7->7.3 MB 5 ms | sleep 302x (0:0 1:302) 472 ms | wait 12040x (0 polls) 179 ms | present 19x 17 ms
+20:33:45.468 load-trace: streaming burst 250 ms | loose read 2x 5.0 MB 3 ms | open 1x 0 ms | sleep 319x (0:0 1:319) 493 ms | wait 10639x (0 polls) 175 ms | present 18x 110 ms
+20:33:46.220 load-trace: streaming burst 250 ms | dzip read 10x 0.6 MB 0 ms | loose read 3x 6.5 MB 3 ms | open 2x 0 ms | unpack 9x 0.6->0.6 MB 0 ms | sleep 320x (0:0 1:320) 496 ms | wait 10894x (0 polls) 170 ms | present 18x 93 ms
+20:33:46.970 load-trace: streaming burst 250 ms | dzip read 34x 1.8 MB 0 ms | loose read 3x 12.0 MB 7 ms | open 2x 0 ms | unpack 33x 1.8->2.1 MB 2 ms | sleep 319x (0:0 1:319) 489 ms | wait 10866x (0 polls) 140 ms | present 18x 136 ms
+20:33:48.481 distance stats: mesh=2545035 shadow=306541 baseline_reject=293031 admitted=109852 (3.00x/3.00x)
+20:33:49.130 partition: door task starts - player (135.75, 181.39, 4.12), door (134.87, 180.74, 4.19)
+20:33:49.187 load-trace: window 3 start (streaming door): task 0E94DAE8 vtable 00EF0410, ticking for 0 ms (44 threads)
+20:33:49.375 load-trace: window 3 +250 ms | loose read 73x 0.3 MB 0 ms | sleep 312x (0:0 1:312) 489 ms | wait 9516x (0 polls) 25 ms | present 17x 166 ms
+20:33:49.393 partition: switch 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\village-city-forest\03_elves_village' (door)
+20:33:49.393 partition: at the switch - player (135.72, 181.43, 4.16)
+20:33:49.394 partition: sync job to 'Outdoor\global\village-city-forest\03_elves_village': unload 48 layers, load 3 layers in 1 buckets
+20:33:49.394 partition:   unload binduga_animals
+20:33:49.394 partition:   unload binduga_forest_animals
+20:33:49.394 partition:   unload explorations
+20:33:49.394 partition:   unload fake
+20:33:49.394 partition:   unload flying_insect
+20:33:49.394 partition:   unload fog
+20:33:49.394 partition:   unload leaf
+20:33:49.394 partition:   unload light_shaft
+20:33:49.394 partition:   unload ipoints
+20:33:49.394 partition:   unload itriggers
+20:33:49.394 partition:   unload vcf_fspots
+20:33:49.394 partition:   unload bushes
+20:33:49.394 partition:   unload bushes
+20:33:49.394 partition:   unload bushes
+20:33:49.394 partition:   unload bushes
+20:33:49.394 partition:   unload bushes
+20:33:49.394 partition:   unload bushes_dense
+20:33:49.394 partition:   unload bushes_tall
+20:33:49.394 partition:   unload bushes
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload explorations
+20:33:49.394 partition:   unload parawan
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload west_coast
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload rocks
+20:33:49.394 partition:   unload full_collision
+20:33:49.394 partition:   unload endriag_nest01
+20:33:49.394 partition:   unload endriag_nest02
+20:33:49.394 partition:   unload endriag_nest03
+20:33:49.394 partition:   unload endriag_nest04
+20:33:49.394 partition:   unload blood
+20:33:49.394 partition:   unload bones
+20:33:49.394 partition:   unload nekker_nest03
+20:33:49.394 partition:   unload blood
+20:33:49.394 partition:   unload bones
+20:33:49.394 partition:   unload nekker_nest04
+20:33:49.394 partition:   unload blood
+20:33:49.394 partition:   unload bones
+20:33:49.394 partition:   unload nekker_nest05
+20:33:49.394 partition:   unload blood
+20:33:49.394 partition:   unload bones
+20:33:49.394 partition:   unload nekker_nest06
+20:33:49.394 partition:   unload terrain_shadows
+20:33:49.394 partition:   load   anezka_bird
+20:33:49.394 partition:   load   interior
+20:33:49.394 partition:   load   lights_port_01
+20:33:49.479 partition: sync job ran 84 ms - keep_outdoors: outdoor layers left loaded
+20:33:49.479 partition: switch returned 1 after 86 ms
+20:33:49.484 doors: interior ready after 110 ms - picture back now (state 2)
+20:33:49.499 partition: door task ends - player (135.78, 181.43, 4.16), door (134.87, 180.74, 4.19)
+20:33:49.564 load-trace: window 3 end: streaming door (22 ticks, 0 overlapping) 375 ms; process CPU 578 ms = 1.54 cores; timer resolution 0.500 ms
+20:33:49.564 load-trace:   tid=49556 (main) start=029262EE cpu=375 ms (100%) | dzip read 350x 9.1 MB 2 ms | loose read 213x 12.7 MB 2 ms | open 25x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | wait 22x (0 polls) 32 ms
+20:33:49.564 load-trace:   tid=46996 start=0066F607 cpu=47 ms (12%) | loose read 5x 10.0 MB 5 ms | open 5x 0 ms | sleep 235x (0:0 1:235) 365 ms
+20:33:49.564 load-trace:   tid=36080 start=0066F607 cpu=16 ms (4%) | sleep 240x (0:0 1:240) 374 ms
+20:33:49.564 load-trace:   tid=44544 start=0066F607 cpu=94 ms (25%) | loose read 73x 0.3 MB 0 ms | wait 17787x (0 polls) 77 ms | present 22x 199 ms (max 32.8)
+20:33:49.564 load-trace:   tid=36860 start=6FCA7950 cpu=78 ms (21%) | no traced call
+20:33:49.564 load-trace:   tid=46028 start=55FB0460 cpu=62 ms (17%) | no traced call
+20:33:49.564 load-trace: window 3 totals | dzip read 350x 9.1 MB 2 ms | loose read 291x 22.9 MB 7 ms | open 30x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | sleep 475x (0:0 1:475) 739 ms | wait 17809x (0 polls) 109 ms | present 22x 199 ms
+20:33:49.564 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:33:49.999 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 323x (0:0 1:323) 494 ms | wait 9593x (0 polls) 12 ms | present 18x 192 ms
+20:33:53.534 distance stats: mesh=585677 shadow=186979 baseline_reject=59902 admitted=48435 (3.00x/3.00x)
+20:33:58.586 distance stats: mesh=1217932 shadow=149223 baseline_reject=72857 admitted=37670 (3.00x/3.00x)
+20:34:03.640 distance stats: mesh=1526354 shadow=114464 baseline_reject=70268 admitted=25922 (3.00x/3.00x)
+20:34:08.693 distance stats: mesh=430046 shadow=95321 baseline_reject=15670 admitted=14738 (3.00x/3.00x)
+20:34:13.749 distance stats: mesh=698266 shadow=97473 baseline_reject=17680 admitted=16572 (3.00x/3.00x)
+20:34:18.805 distance stats: mesh=1903131 shadow=262653 baseline_reject=218580 admitted=94018 (3.00x/3.00x)
+20:34:23.333 partition: door task starts - player (134.35, 181.37, 4.24), door (134.87, 180.74, 4.19)
+20:34:23.399 load-trace: window 4 start (streaming door): task 07F2D200 vtable 00EF0410, ticking for 0 ms (44 threads)
+20:34:23.579 load-trace: window 4 +250 ms | loose read 31x 0.1 MB 0 ms | sleep 308x (0:0 1:308) 478 ms | wait 10357x (0 polls) 160 ms | present 17x 78 ms
+20:34:23.587 partition: switch 'Outdoor\global\village-city-forest\03_elves_village' -> 'Outdoor\global\village-city-forest\Binduga' (door)
+20:34:23.587 partition: at the switch - player (134.29, 181.36, 4.22)
+20:34:23.587 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 3 layers, load 0 layers in 0 buckets
+20:34:23.587 partition:   unload lights_port_01
+20:34:23.587 partition:   unload anezka_bird
+20:34:23.587 partition:   unload interior
+20:34:23.611 partition: sync job ran 23 ms
+20:34:23.611 partition: switch returned 1 after 24 ms
+20:34:23.616 doors: interior ready after 32 ms - picture back now (state 2)
+20:34:23.625 partition: door task ends - player (134.30, 181.36, 4.22), door (134.87, 180.74, 4.19)
+20:34:23.686 load-trace: window 4 end: streaming door (22 ticks, 0 overlapping) 297 ms; process CPU 328 ms = 1.10 cores; timer resolution 0.500 ms
+20:34:23.686 load-trace:   tid=49556 (main) start=029262EE cpu=156 ms (53%) | wait 21x (0 polls) 170 ms
+20:34:23.686 load-trace:   tid=46996 start=0066F607 cpu=0 ms (0%) | sleep 186x (0:0 1:186) 289 ms
+20:34:23.686 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 186x (0:0 1:186) 288 ms
+20:34:23.686 load-trace:   tid=44544 start=0066F607 cpu=156 ms (53%) | loose read 31x 0.1 MB 0 ms | wait 12849x (0 polls) 4 ms | present 21x 98 ms (max 32.8)
+20:34:23.686 load-trace:   tid=46028 start=55FB0460 cpu=62 ms (21%) | no traced call
+20:34:23.686 load-trace: window 4 totals | loose read 31x 0.1 MB 0 ms | sleep 372x (0:0 1:372) 577 ms | wait 12870x (0 polls) 174 ms | present 21x 98 ms
+20:34:23.686 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:34:23.861 distance stats: mesh=1824671 shadow=280817 baseline_reject=218406 admitted=111634 (3.00x/3.00x)
+20:34:26.623 load-trace: streaming burst 250 ms | dzip read 34x 1.7 MB 0 ms | loose read 3x 12.0 MB 7 ms | open 2x 0 ms | unpack 33x 1.7->2.1 MB 2 ms | sleep 312x (0:0 1:312) 477 ms | wait 11067x (0 polls) 150 ms | present 18x 147 ms
+20:34:28.875 load-trace: streaming burst 250 ms | dzip read 64x 2.7 MB 1 ms | loose read 23x 11.3 MB 5 ms | open 3x 0 ms | unpack 59x 2.7->3.6 MB 4 ms | sleep 297x (0:0 1:297) 460 ms | wait 10066x (0 polls) 11 ms | present 18x 191 ms
+20:34:28.913 distance stats: mesh=997051 shadow=225212 baseline_reject=110530 admitted=73745 (3.00x/3.00x)
+20:34:31.541 partition: door task starts - player (135.46, 181.43, 4.14), door (134.87, 180.74, 4.19)
+20:34:31.602 load-trace: window 5 start (streaming door): task 41065D48 vtable 00EF0410, ticking for 16 ms (44 threads)
+20:34:31.797 load-trace: window 5 +266 ms | loose read 27x 0.1 MB 0 ms | sleep 328x (0:0 1:328) 501 ms | wait 9816x (0 polls) 19 ms | present 18x 184 ms
+20:34:31.805 partition: switch 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\village-city-forest\03_elves_village' (door)
+20:34:31.805 partition: at the switch - player (135.62, 181.45, 4.17)
+20:34:31.806 partition: sync job to 'Outdoor\global\village-city-forest\03_elves_village': unload 48 layers, load 3 layers in 1 buckets
+20:34:31.806 partition:   unload binduga_animals
+20:34:31.806 partition:   unload binduga_forest_animals
+20:34:31.806 partition:   unload explorations
+20:34:31.806 partition:   unload fake
+20:34:31.806 partition:   unload flying_insect
+20:34:31.806 partition:   unload fog
+20:34:31.806 partition:   unload leaf
+20:34:31.806 partition:   unload light_shaft
+20:34:31.806 partition:   unload ipoints
+20:34:31.806 partition:   unload itriggers
+20:34:31.806 partition:   unload vcf_fspots
+20:34:31.806 partition:   unload bushes
+20:34:31.806 partition:   unload bushes
+20:34:31.806 partition:   unload bushes
+20:34:31.806 partition:   unload bushes
+20:34:31.806 partition:   unload bushes
+20:34:31.806 partition:   unload bushes_dense
+20:34:31.806 partition:   unload bushes_tall
+20:34:31.806 partition:   unload bushes
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload explorations
+20:34:31.806 partition:   unload parawan
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload west_coast
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload rocks
+20:34:31.806 partition:   unload full_collision
+20:34:31.806 partition:   unload endriag_nest01
+20:34:31.806 partition:   unload endriag_nest02
+20:34:31.806 partition:   unload endriag_nest03
+20:34:31.806 partition:   unload endriag_nest04
+20:34:31.806 partition:   unload blood
+20:34:31.806 partition:   unload bones
+20:34:31.806 partition:   unload nekker_nest03
+20:34:31.806 partition:   unload blood
+20:34:31.806 partition:   unload bones
+20:34:31.806 partition:   unload nekker_nest04
+20:34:31.806 partition:   unload blood
+20:34:31.806 partition:   unload bones
+20:34:31.806 partition:   unload nekker_nest05
+20:34:31.806 partition:   unload blood
+20:34:31.806 partition:   unload bones
+20:34:31.806 partition:   unload nekker_nest06
+20:34:31.806 partition:   unload terrain_shadows
+20:34:31.806 partition:   load   anezka_bird
+20:34:31.806 partition:   load   interior
+20:34:31.806 partition:   load   lights_port_01
+20:34:31.888 partition: sync job ran 82 ms - keep_outdoors: outdoor layers left loaded
+20:34:31.888 partition: switch returned 1 after 83 ms
+20:34:31.894 doors: interior ready after 110 ms - picture back now (state 2)
+20:34:31.906 partition: door task ends - player (135.68, 181.46, 4.17), door (134.87, 180.74, 4.19)
+20:34:31.967 load-trace: window 5 end: streaming door (22 ticks, 0 overlapping) 375 ms; process CPU 531 ms = 1.42 cores; timer resolution 0.500 ms
+20:34:31.967 load-trace:   tid=49556 (main) start=029262EE cpu=359 ms (96%) | dzip read 350x 9.1 MB 2 ms | loose read 213x 12.7 MB 2 ms | open 25x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | wait 21x (0 polls) 24 ms
+20:34:31.967 load-trace:   tid=46996 start=0066F607 cpu=16 ms (4%) | loose read 4x 8.0 MB 4 ms | open 5x 0 ms | sleep 229x (0:0 1:229) 353 ms
+20:34:31.967 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 237x (0:0 1:237) 362 ms
+20:34:31.967 load-trace:   tid=44544 start=0066F607 cpu=78 ms (21%) | loose read 27x 0.1 MB 0 ms | wait 16970x (0 polls) 75 ms | present 21x 205 ms (max 32.8)
+20:34:31.967 load-trace: window 5 totals | dzip read 350x 9.1 MB 2 ms | loose read 244x 20.7 MB 7 ms | open 30x 2 ms | unpack 257x 9.1->13.1 MB 13 ms | sleep 466x (0:0 1:466) 716 ms | wait 16991x (0 polls) 98 ms | present 21x 205 ms
+20:34:31.967 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:34:33.966 distance stats: mesh=294795 shadow=193154 baseline_reject=40473 admitted=40037 (3.00x/3.00x)
+20:34:35.154 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 313x (0:0 1:313) 483 ms | wait 9192x (0 polls) 12 ms | present 17x 184 ms
+20:34:39.019 distance stats: mesh=586563 shadow=140619 baseline_reject=42994 admitted=27229 (3.00x/3.00x)
+20:34:44.073 distance stats: mesh=905895 shadow=103600 baseline_reject=43254 admitted=15631 (3.00x/3.00x)
+20:34:49.127 distance stats: mesh=1534789 shadow=110697 baseline_reject=66777 admitted=22643 (3.00x/3.00x)
+20:34:54.181 distance stats: mesh=1159784 shadow=198928 baseline_reject=111966 admitted=68062 (3.00x/3.00x)
+20:34:56.155 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 3 ms | open 2x 0 ms | sleep 324x (0:0 1:324) 499 ms | wait 4161x (0 polls) 63 ms | present 7x 54 ms
+20:34:59.238 distance stats: mesh=1150529 shadow=233554 baseline_reject=143419 admitted=99144 (3.00x/3.00x)
+20:35:04.294 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:09.350 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:14.405 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:19.461 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:24.516 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:29.572 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:34.625 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:39.680 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:44.733 distance stats: mesh=1309813 shadow=264264 baseline_reject=162449 admitted=112280 (3.00x/3.00x)
+20:35:49.791 distance stats: mesh=1311715 shadow=265720 baseline_reject=162967 admitted=112672 (3.00x/3.00x)
+20:35:54.847 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:35:59.902 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:04.956 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:10.014 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:15.068 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:20.125 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:25.180 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:30.237 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:35.293 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:40.348 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:45.403 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:50.458 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:36:55.516 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:00.570 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:05.627 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:10.682 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:15.738 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:20.794 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:25.848 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:30.905 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:35.960 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:41.016 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:46.072 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:51.126 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:37:56.182 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:01.238 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:06.294 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:11.349 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:16.405 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:21.459 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:26.513 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:31.569 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:36.627 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:41.681 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:46.739 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:51.798 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:38:56.854 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:39:01.910 distance stats: mesh=1310764 shadow=264992 baseline_reject=162708 admitted=112476 (3.00x/3.00x)
+20:39:06.969 distance stats: mesh=1312433 shadow=264992 baseline_reject=162765 admitted=112518 (3.00x/3.00x)
+20:39:12.025 distance stats: mesh=1310053 shadow=264992 baseline_reject=162681 admitted=112461 (3.00x/3.00x)
+20:39:17.080 distance stats: mesh=1311323 shadow=264992 baseline_reject=162723 admitted=112486 (3.00x/3.00x)
+20:39:22.137 distance stats: mesh=1355066 shadow=248449 baseline_reject=153676 admitted=103255 (3.00x/3.00x)
+20:39:27.193 distance stats: mesh=2218051 shadow=248506 baseline_reject=232094 admitted=97932 (3.00x/3.00x)
+20:39:32.248 distance stats: mesh=3183749 shadow=310352 baseline_reject=356067 admitted=122579 (3.00x/3.00x)
+20:39:37.301 distance stats: mesh=3725726 shadow=337637 baseline_reject=440442 admitted=133214 (3.00x/3.00x)
+20:39:42.355 distance stats: mesh=3284449 shadow=328789 baseline_reject=386651 admitted=132326 (3.00x/3.00x)
+20:39:42.441 partition: door task starts - player (134.11, 181.24, 4.24), door (134.87, 180.74, 4.19)
+20:39:42.500 load-trace: window 6 start (streaming door): task 4106A818 vtable 00EF0410, ticking for 0 ms (44 threads)
+20:39:42.687 load-trace: window 6 +250 ms | loose read 51x 0.2 MB 0 ms | sleep 316x (0:0 1:316) 488 ms | wait 10136x (0 polls) 161 ms | present 17x 67 ms
+20:39:42.709 partition: switch 'Outdoor\global\village-city-forest\03_elves_village' -> 'Outdoor\global\village-city-forest\Binduga' (door)
+20:39:42.709 partition: at the switch - player (134.14, 181.27, 4.22)
+20:39:42.710 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 3 layers, load 0 layers in 0 buckets
+20:39:42.710 partition:   unload lights_port_01
+20:39:42.710 partition:   unload anezka_bird
+20:39:42.710 partition:   unload interior
+20:39:42.738 partition: sync job ran 27 ms
+20:39:42.738 partition: switch returned 1 after 28 ms
+20:39:42.743 doors: interior ready after 32 ms - picture back now (state 2)
+20:39:42.750 partition: door task ends - player (134.15, 181.27, 4.22), door (134.87, 180.74, 4.19)
+20:39:42.810 load-trace: window 6 end: streaming door (23 ticks, 0 overlapping) 312 ms; process CPU 375 ms = 1.20 cores; timer resolution 0.500 ms
+20:39:42.810 load-trace:   tid=49556 (main) start=029262EE cpu=109 ms (35%) | wait 22x (0 polls) 179 ms
+20:39:42.810 load-trace:   tid=46996 start=0066F607 cpu=0 ms (0%) | sleep 198x (0:0 1:198) 307 ms
+20:39:42.810 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 197x (0:0 1:197) 306 ms
+20:39:42.810 load-trace:   tid=44544 start=0066F607 cpu=156 ms (50%) | loose read 51x 0.2 MB 0 ms | wait 13145x (0 polls) 12 ms | present 22x 93 ms (max 32.8)
+20:39:42.810 load-trace:   tid=36860 start=6FCA7950 cpu=62 ms (20%) | no traced call
+20:39:42.810 load-trace:   tid=12484 start=55FB0460 cpu=62 ms (20%) | no traced call
+20:39:42.810 load-trace:   tid=46028 start=55FB0460 cpu=94 ms (30%) | no traced call
+20:39:42.810 load-trace: window 6 totals | loose read 51x 0.2 MB 0 ms | sleep 395x (0:0 1:395) 613 ms | wait 13167x (0 polls) 191 ms | present 22x 93 ms
+20:39:42.810 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:39:44.502 load-trace: streaming burst 250 ms | dzip read 160x 6.7 MB 2 ms | loose read 43x 9.4 MB 3 ms | open 7x 1 ms | unpack 153x 6.7->9.4 MB 9 ms | sleep 287x (0:0 1:287) 443 ms | wait 10445x (0 polls) 165 ms | present 18x 112 ms
+20:39:47.411 distance stats: mesh=1912424 shadow=300383 baseline_reject=226384 admitted=115363 (3.00x/3.00x)
+20:39:49.247 load-trace: streaming burst 250 ms | dzip read 202x 8.2 MB 2 ms | loose read 58x 21.5 MB 11 ms | open 11x 1 ms | unpack 190x 8.2->11.7 MB 10 ms | sleep 279x (0:0 1:279) 429 ms | wait 11346x (0 polls) 151 ms | present 18x 119 ms
+20:39:49.497 load-trace: streaming burst 250 ms | dzip read 373x 15.2 MB 4 ms | loose read 130x 26.1 MB 13 ms | open 20x 2 ms | unpack 351x 15.2->21.5 MB 25 ms | sleep 233x (0:0 1:233) 360 ms | wait 11258x (0 polls) 142 ms | present 18x 119 ms
+20:39:49.748 load-trace: streaming burst 250 ms | dzip read 34x 1.5 MB 0 ms | loose read 5x 16.0 MB 8 ms | open 4x 1 ms | unpack 33x 1.5->2.0 MB 2 ms | sleep 310x (0:0 1:310) 477 ms | wait 11688x (0 polls) 153 ms | present 18x 100 ms
+20:39:51.997 load-trace: streaming burst 250 ms | dzip read 106x 4.9 MB 1 ms | loose read 9x 10.2 MB 5 ms | open 2x 0 ms | unpack 100x 4.9->6.2 MB 7 ms | sleep 309x (0:0 1:309) 472 ms | wait 13404x (0 polls) 87 ms | present 18x 126 ms
+20:39:52.467 distance stats: mesh=1429091 shadow=297645 baseline_reject=184942 admitted=107807 (3.00x/3.00x)
+20:39:55.247 load-trace: streaming burst 250 ms | dzip read 269x 11.1 MB 3 ms | loose read 106x 24.7 MB 11 ms | open 15x 2 ms | unpack 253x 11.1->15.5 MB 18 ms | sleep 264x (0:0 1:264) 407 ms | wait 15250x (0 polls) 85 ms | present 18x 104 ms
+20:39:55.501 load-trace: streaming burst 250 ms | dzip read 38x 1.8 MB 0 ms | loose read 12x 7.3 MB 3 ms | open 3x 0 ms | unpack 35x 1.8->2.1 MB 2 ms | sleep 323x (0:0 1:323) 493 ms | wait 15414x (0 polls) 134 ms | present 18x 102 ms
+20:39:56.998 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 320x (0:0 1:320) 492 ms | wait 16206x (0 polls) 124 ms | present 18x 86 ms
+20:39:57.521 distance stats: mesh=1339979 shadow=328792 baseline_reject=181355 admitted=121018 (3.00x/3.00x)
+20:40:01.705 partition: door task starts - player (173.13, 214.72, 3.26), door (172.34, 214.27, 3.37)
+20:40:01.768 load-trace: window 7 start (streaming door): task 4106E190 vtable 00EF0410, ticking for 0 ms (44 threads)
+20:40:01.953 load-trace: window 7 +250 ms | loose read 51x 0.2 MB 0 ms | sleep 315x (0:0 1:315) 486 ms | wait 14443x (0 polls) 128 ms | present 17x 60 ms
+20:40:01.974 partition: switch 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\village-city-forest\01_chorab_village' (door)
+20:40:01.974 partition: at the switch - player (173.24, 214.77, 3.31)
+20:40:01.975 partition: sync job to 'Outdoor\global\village-city-forest\01_chorab_village': unload 48 layers, load 2 layers in 1 buckets
+20:40:01.975 partition:   unload binduga_animals
+20:40:01.975 partition:   unload binduga_forest_animals
+20:40:01.975 partition:   unload explorations
+20:40:01.975 partition:   unload fake
+20:40:01.975 partition:   unload flying_insect
+20:40:01.975 partition:   unload fog
+20:40:01.975 partition:   unload leaf
+20:40:01.975 partition:   unload light_shaft
+20:40:01.975 partition:   unload ipoints
+20:40:01.975 partition:   unload itriggers
+20:40:01.975 partition:   unload vcf_fspots
+20:40:01.975 partition:   unload bushes
+20:40:01.975 partition:   unload bushes
+20:40:01.975 partition:   unload bushes
+20:40:01.975 partition:   unload bushes
+20:40:01.975 partition:   unload bushes
+20:40:01.975 partition:   unload bushes_dense
+20:40:01.975 partition:   unload bushes_tall
+20:40:01.975 partition:   unload bushes
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload explorations
+20:40:01.975 partition:   unload parawan
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload west_coast
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload rocks
+20:40:01.975 partition:   unload full_collision
+20:40:01.975 partition:   unload endriag_nest01
+20:40:01.975 partition:   unload endriag_nest02
+20:40:01.975 partition:   unload endriag_nest03
+20:40:01.975 partition:   unload endriag_nest04
+20:40:01.975 partition:   unload blood
+20:40:01.975 partition:   unload bones
+20:40:01.975 partition:   unload nekker_nest03
+20:40:01.975 partition:   unload blood
+20:40:01.975 partition:   unload bones
+20:40:01.975 partition:   unload nekker_nest04
+20:40:01.975 partition:   unload blood
+20:40:01.975 partition:   unload bones
+20:40:01.975 partition:   unload nekker_nest05
+20:40:01.975 partition:   unload blood
+20:40:01.975 partition:   unload bones
+20:40:01.975 partition:   unload nekker_nest06
+20:40:01.975 partition:   unload terrain_shadows
+20:40:01.975 partition:   load   interior
+20:40:01.975 partition:   load   lights_port_01
+20:40:02.071 partition: sync job ran 96 ms - keep_outdoors: outdoor layers left loaded
+20:40:02.072 partition: switch returned 1 after 97 ms
+20:40:02.079 doors: interior ready after 109 ms - picture back now (state 2)
+20:40:02.102 partition: door task ends - player (173.30, 214.76, 3.31), door (172.34, 214.27, 3.37)
+20:40:02.168 load-trace: window 7 end: streaming door (23 ticks, 0 overlapping) 391 ms; process CPU 484 ms = 1.24 cores; timer resolution 0.500 ms
+20:40:02.168 load-trace:   tid=49556 (main) start=029262EE cpu=188 ms (48%) | dzip read 370x 10.2 MB 3 ms | loose read 224x 14.7 MB 3 ms | open 25x 2 ms | unpack 286x 10.2->15.4 MB 15 ms | wait 22x (0 polls) 153 ms
+20:40:02.168 load-trace:   tid=46996 start=0066F607 cpu=16 ms (4%) | loose read 6x 12.0 MB 6 ms | open 6x 0 ms | sleep 250x (0:0 1:250) 384 ms
+20:40:02.168 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 256x (0:0 1:256) 395 ms
+20:40:02.168 load-trace:   tid=44544 start=0066F607 cpu=203 ms (52%) | loose read 51x 0.2 MB 0 ms | wait 24153x (0 polls) 83 ms | present 22x 79 ms (max 32.8)
+20:40:02.168 load-trace:   tid=36860 start=6FCA7950 cpu=78 ms (20%) | no traced call
+20:40:02.168 load-trace:   tid=12484 start=55FB0460 cpu=94 ms (24%) | no traced call
+20:40:02.168 load-trace:   tid=46028 start=55FB0460 cpu=94 ms (24%) | no traced call
+20:40:02.168 load-trace: window 7 totals | dzip read 370x 10.2 MB 3 ms | loose read 281x 26.9 MB 9 ms | open 31x 3 ms | unpack 286x 10.2->15.4 MB 15 ms | sleep 506x (0:0 1:506) 779 ms | wait 24175x (0 polls) 236 ms | present 22x 79 ms
+20:40:02.168 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:40:02.575 distance stats: mesh=3210070 shadow=337520 baseline_reject=369465 admitted=120722 (3.00x/3.00x)
+20:40:07.631 distance stats: mesh=2866275 shadow=287535 baseline_reject=269006 admitted=81082 (3.00x/3.00x)
+20:40:12.686 distance stats: mesh=1128061 shadow=319415 baseline_reject=129390 admitted=83606 (3.00x/3.00x)
+20:40:17.740 distance stats: mesh=1402179 shadow=341001 baseline_reject=159802 admitted=92511 (3.00x/3.00x)
+20:40:22.796 distance stats: mesh=1794015 shadow=342595 baseline_reject=190345 admitted=101135 (3.00x/3.00x)
+20:40:26.187 partition: door task starts - player (171.68, 214.90, 3.28), door (172.34, 214.27, 3.37)
+20:40:26.245 load-trace: window 8 start (streaming door): task 51081DE8 vtable 00EF0410, ticking for 0 ms (43 threads)
+20:40:26.435 load-trace: window 8 +250 ms | loose read 49x 0.2 MB 0 ms | sleep 320x (0:0 1:320) 486 ms | wait 10702x (0 polls) 116 ms | present 17x 114 ms
+20:40:26.450 partition: switch 'Outdoor\global\village-city-forest\01_chorab_village' -> 'Outdoor\global\village-city-forest\Binduga' (door)
+20:40:26.450 partition: at the switch - player (171.75, 214.94, 3.32)
+20:40:26.451 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 2 layers, load 0 layers in 0 buckets
+20:40:26.451 partition:   unload lights_port_01
+20:40:26.451 partition:   unload interior
+20:40:26.478 partition: sync job ran 26 ms
+20:40:26.478 partition: switch returned 1 after 27 ms
+20:40:26.483 doors: interior ready after 47 ms - picture back now (state 2)
+20:40:26.489 partition: door task ends - player (171.76, 214.94, 3.32), door (172.34, 214.27, 3.37)
+20:40:26.548 load-trace: window 8 end: streaming door (22 ticks, 0 overlapping) 297 ms; process CPU 359 ms = 1.21 cores; timer resolution 0.500 ms
+20:40:26.548 load-trace:   tid=49556 (main) start=029262EE cpu=203 ms (68%) | wait 22x (0 polls) 113 ms
+20:40:26.548 load-trace:   tid=46996 start=0066F607 cpu=0 ms (0%) | sleep 200x (0:0 1:200) 304 ms
+20:40:26.548 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 197x (0:0 1:197) 297 ms
+20:40:26.548 load-trace:   tid=44544 start=0066F607 cpu=109 ms (37%) | loose read 49x 0.2 MB 0 ms | wait 13466x (0 polls) 22 ms | present 22x 138 ms (max 32.8)
+20:40:26.548 load-trace:   tid=46028 start=55FB0460 cpu=94 ms (32%) | no traced call
+20:40:26.548 load-trace: window 8 totals | loose read 49x 0.2 MB 0 ms | sleep 397x (0:0 1:397) 600 ms | wait 13488x (0 polls) 135 ms | present 22x 138 ms
+20:40:26.548 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:40:27.851 distance stats: mesh=1045230 shadow=307205 baseline_reject=106856 admitted=72681 (3.00x/3.00x)
+20:40:32.908 distance stats: mesh=1621923 shadow=284565 baseline_reject=162776 admitted=82606 (3.00x/3.00x)
+20:40:34.484 load-trace: streaming burst 250 ms | dzip read 26x 1.1 MB 0 ms | loose read 21x 22.2 MB 17 ms | open 3x 0 ms | unpack 23x 1.1->1.4 MB 1 ms | sleep 311x (0:0 1:311) 477 ms | wait 13719x (0 polls) 135 ms | present 18x 101 ms
+20:40:37.963 distance stats: mesh=1416600 shadow=281248 baseline_reject=133168 admitted=65948 (3.00x/3.00x)
+20:40:39.229 partition: door task starts - player (196.90, 236.91, 8.01), door (197.73, 237.39, 8.08)
+20:40:39.288 load-trace: window 9 start (streaming door): task 41EAC0A8 vtable 00EF0410, ticking for 16 ms (44 threads)
+20:40:39.481 load-trace: window 9 +266 ms | loose read 31x 0.1 MB 0 ms | sleep 324x (0:0 1:324) 492 ms | wait 12381x (0 polls) 66 ms | present 18x 136 ms
+20:40:39.505 partition: switch 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\landing_site\outside\Flotsam' (door)
+20:40:39.505 partition: at the switch - player (196.81, 236.92, 8.01)
+20:40:39.506 partition: sync job to 'Outdoor\global\landing_site\outside\Flotsam': unload 195 layers, load 348 layers in 2 buckets
+20:40:39.506 partition:   unload binduga_animals
+20:40:39.506 partition:   unload binduga_forest_animals
+20:40:39.506 partition:   unload explorations
+20:40:39.506 partition:   unload birds
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload cliffs
+20:40:39.506 partition:   unload cliffs_soil
+20:40:39.506 partition:   unload denied areas
+20:40:39.506 partition:   unload exploration
+20:40:39.506 partition:   unload fence
+20:40:39.506 partition:   unload grass
+20:40:39.506 partition:   unload grass_short
+20:40:39.506 partition:   unload graves
+20:40:39.506 partition:   unload graveyard
+20:40:39.506 partition:   unload roots
+20:40:39.506 partition:   unload shrines
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload explorations
+20:40:39.506 partition:   unload bushes_dense
+20:40:39.506 partition:   unload grass
+20:40:39.506 partition:   unload lod
+20:40:39.506 partition:   unload ships_lowpoly
+20:40:39.506 partition:   unload herbs
+20:40:39.506 partition:   unload chests
+20:40:39.506 partition:   unload herbs
+20:40:39.506 partition:   unload herbs
+20:40:39.506 partition:   unload herbs
+20:40:39.506 partition:   unload chest
+20:40:39.506 partition:   unload herbs
+20:40:39.506 partition:   unload fake
+20:40:39.506 partition:   unload flying_insect
+20:40:39.506 partition:   unload fog
+20:40:39.506 partition:   unload leaf
+20:40:39.506 partition:   unload light_shaft
+20:40:39.506 partition:   unload ipoints
+20:40:39.506 partition:   unload itriggers
+20:40:39.506 partition:   unload vcf_fspots
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes_dense
+20:40:39.506 partition:   unload bushes_tall
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes_dense
+20:40:39.506 partition:   unload bushes_tall
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload bushes_dense
+20:40:39.506 partition:   unload bushes_tall
+20:40:39.506 partition:   unload bushes
+20:40:39.506 partition:   unload rocks
+20:40:39.506 partition:   unload rocks
+20:40:39.506 partition:   unload rocks
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload full_collision
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload trees
+20:40:39.506 partition:   unload tile 001x001
+20:40:39.506 partition:   unload tile 001x002
+20:40:39.506 partition:   unload tile 001x003
+20:40:39.506 partition:   unload endriag_nest01
+20:40:39.506 partition:   unload endriag_nest02
+20:40:39.506 partition:   unload endriag_nest03
+20:40:39.506 partition:   unload endriag_nest04
+20:40:39.506 partition:   unload blood
+20:40:39.506 partition:   unload bones
+20:40:39.506 partition:   unload nekker_nest03
+20:40:39.506 partition:   unload blood
+20:40:39.506 partition:   unload bones
+20:40:39.506 partition:   unload nekker_nest04
+20:40:39.506 partition:   unload blood
+20:40:39.506 partition:   (names cut at 80)
+20:40:39.732 load-trace: window 9 +516 ms | dzip read 837x 24.6 MB 6 ms | loose read 288x 24.9 MB 4 ms | open 33x 3 ms | unpack 673x 24.6->36.2 MB 31 ms | sleep 323x (0:0 1:323) 502 ms | wait 65273x (0 polls) 152 ms | present 3x 26 ms
+20:40:39.984 load-trace: window 9 +766 ms | dzip read 1893x 51.6 MB 12 ms | loose read 831x 55.1 MB 9 ms | open 98x 7 ms | unpack 1442x 51.5->72.7 MB 68 ms | sleep 326x (0:0 1:326) 503 ms | wait 1734x (0 polls) 252 ms
+20:40:40.236 load-trace: window 9 +1016 ms | dzip read 1629x 34.9 MB 10 ms | loose read 301x 23.3 MB 4 ms | open 32x 3 ms | unpack 1170x 34.9->50.4 MB 44 ms | sleep 325x (0:0 1:325) 504 ms | wait 3283x (0 polls) 250 ms
+20:40:40.311 partition: sync job ran 803 ms
+20:40:40.311 partition: switch returned 1 after 805 ms
+20:40:40.354 doors: interior ready after 859 ms - picture back now (state 2)
+20:40:40.385 partition: door task ends - player (196.74, 236.94, 8.01), door (197.73, 237.39, 8.08)
+20:40:40.459 load-trace: window 9 end: streaming door (23 ticks, 0 overlapping) 1156 ms; process CPU 1547 ms = 1.34 cores; timer resolution 0.500 ms
+20:40:40.459 load-trace:   tid=49556 (main) start=029262EE cpu=1109 ms (96%) | dzip read 4446x 113.5 MB 29 ms | loose read 1447x 104.5 MB 18 ms | open 166x 12 ms | unpack 3351x 113.5->162.5 MB 146 ms | wait 22x (0 polls) 83 ms
+20:40:40.459 load-trace:   tid=46996 start=0066F607 cpu=125 ms (11%) | dzip read 260x 10.8 MB 3 ms | loose read 22x 1.5 MB 0 ms | open 2x 0 ms | unpack 244x 10.8->14.9 MB 12 ms | sleep 716x (0:0 1:716) 1104 ms
+20:40:40.459 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 746x (0:0 1:746) 1151 ms
+20:40:40.459 load-trace:   tid=44544 start=0066F607 cpu=297 ms (26%) | loose read 31x 0.1 MB 0 ms | wait 102362x (0 polls) 754 ms | present 22x 162 ms (max 32.8)
+20:40:40.459 load-trace:   tid=36860 start=6FCA7950 cpu=78 ms (7%) | no traced call
+20:40:40.459 load-trace:   tid=46028 start=55FB0460 cpu=62 ms (5%) | no traced call
+20:40:40.459 load-trace: window 9 totals | dzip read 4706x 124.3 MB 31 ms | loose read 1500x 106.1 MB 19 ms | open 168x 12 ms | unpack 3595x 124.3->177.3 MB 158 ms | sleep 1462x (0:0 1:1462) 2255 ms | wait 102384x (0 polls) 837 ms | present 22x 162 ms
+20:40:40.459 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:40:40.640 load-trace: streaming burst 250 ms | dzip read 20x 1.1 MB 0 ms | loose read 19x 45.0 MB 26 ms | open 16x 1 ms | unpack 18x 1.1->1.1 MB 1 ms | sleep 198x (0:0 1:198) 305 ms | wait 12621x (0 polls) 40 ms | present 13x 79 ms
+20:40:41.890 load-trace: streaming burst 250 ms | loose read 10x 29.5 MB 16 ms | open 10x 1 ms | sleep 305x (0:0 1:305) 469 ms | wait 17884x (0 polls) 34 ms | present 18x 131 ms
+20:40:42.139 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 319x (0:0 1:319) 488 ms | wait 16512x (0 polls) 28 ms | present 17x 145 ms
+20:40:43.018 distance stats: mesh=550703 shadow=301406 baseline_reject=126353 admitted=94911 (3.00x/3.00x)
+20:40:43.639 load-trace: streaming burst 250 ms | dzip read 39x 1.6 MB 0 ms | loose read 5x 14.0 MB 7 ms | open 5x 1 ms | unpack 37x 1.6->2.2 MB 2 ms | sleep 309x (0:0 1:309) 474 ms | wait 16400x (0 polls) 73 ms | present 19x 137 ms
+20:40:43.889 load-trace: streaming burst 250 ms | dzip read 60x 2.6 MB 1 ms | loose read 4x 8.0 MB 4 ms | open 4x 0 ms | unpack 58x 2.6->3.6 MB 3 ms | sleep 312x (0:0 1:312) 471 ms | wait 16696x (0 polls) 61 ms | present 18x 139 ms
+20:40:44.141 load-trace: streaming burst 250 ms | dzip read 113x 5.3 MB 1 ms | loose read 7x 23.0 MB 11 ms | open 6x 1 ms | unpack 108x 5.3->6.6 MB 6 ms | sleep 298x (0:0 1:298) 456 ms | wait 17751x (0 polls) 109 ms | present 18x 103 ms
+20:40:44.389 load-trace: streaming burst 250 ms | dzip read 182x 8.1 MB 2 ms | loose read 74x 12.7 MB 5 ms | open 11x 1 ms | unpack 176x 8.1->10.9 MB 9 ms | sleep 284x (0:0 1:284) 439 ms | wait 16460x (0 polls) 135 ms | present 18x 101 ms
+20:40:44.641 load-trace: streaming burst 250 ms | dzip read 52x 3.0 MB 1 ms | loose read 8x 22.0 MB 10 ms | open 5x 1 ms | unpack 50x 3.0->3.1 MB 3 ms | sleep 304x (0:0 1:304) 468 ms | wait 17212x (0 polls) 136 ms | present 18x 95 ms
+20:40:44.887 load-trace: streaming burst 250 ms | dzip read 60x 2.4 MB 1 ms | loose read 21x 7.0 MB 3 ms | open 4x 1 ms | unpack 54x 2.4->3.2 MB 3 ms | sleep 303x (0:0 1:303) 464 ms | wait 16329x (0 polls) 137 ms | present 17x 93 ms
+20:40:45.143 load-trace: streaming burst 250 ms | dzip read 163x 7.8 MB 2 ms | loose read 12x 11.2 MB 6 ms | open 2x 0 ms | unpack 159x 7.8->9.8 MB 8 ms | sleep 312x (0:0 1:312) 481 ms | wait 18794x (0 polls) 145 ms | present 19x 99 ms
+20:40:45.391 load-trace: streaming burst 250 ms | dzip read 209x 9.8 MB 2 ms | loose read 37x 17.0 MB 7 ms | open 7x 1 ms | unpack 199x 9.8->12.1 MB 12 ms | sleep 280x (0:0 1:280) 432 ms | wait 17910x (0 polls) 140 ms | present 18x 93 ms
+20:40:46.139 load-trace: streaming burst 250 ms | dzip read 147x 6.7 MB 2 ms | loose read 24x 13.3 MB 7 ms | open 5x 1 ms | unpack 142x 6.7->8.7 MB 8 ms | sleep 299x (0:0 1:299) 455 ms | wait 17136x (0 polls) 131 ms | present 17x 82 ms
+20:40:46.392 load-trace: streaming burst 250 ms | dzip read 73x 3.7 MB 1 ms | loose read 8x 32.0 MB 16 ms | open 6x 1 ms | unpack 71x 3.7->4.4 MB 4 ms | sleep 306x (0:0 1:306) 468 ms | wait 19069x (0 polls) 138 ms | present 19x 72 ms
+20:40:46.890 load-trace: streaming burst 250 ms | dzip read 124x 5.1 MB 1 ms | loose read 53x 3.6 MB 1 ms | open 6x 1 ms | unpack 113x 5.1->6.9 MB 9 ms | sleep 299x (0:0 1:299) 461 ms | wait 17828x (0 polls) 101 ms | present 18x 112 ms
+20:40:47.139 load-trace: streaming burst 250 ms | dzip read 74x 3.6 MB 1 ms | loose read 5x 14.1 MB 10 ms | open 3x 0 ms | unpack 74x 3.6->4.6 MB 4 ms | sleep 306x (0:0 1:306) 460 ms | wait 17660x (0 polls) 127 ms | present 18x 119 ms
+20:40:48.073 distance stats: mesh=1223574 shadow=423805 baseline_reject=296062 admitted=248541 (3.00x/3.00x)
+20:40:49.139 load-trace: streaming burst 250 ms | dzip read 79x 3.6 MB 1 ms | loose read 10x 12.8 MB 7 ms | open 4x 1 ms | unpack 77x 3.6->4.8 MB 4 ms | sleep 305x (0:0 1:305) 464 ms | wait 17702x (0 polls) 141 ms | present 18x 103 ms
+20:40:49.389 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 317x (0:0 1:317) 488 ms | wait 19342x (0 polls) 110 ms | present 18x 111 ms
+20:40:51.391 load-trace: streaming burst 250 ms | loose read 4x 8.0 MB 5 ms | open 4x 1 ms | sleep 320x (0:0 1:320) 493 ms | wait 21684x (0 polls) 137 ms | present 19x 81 ms
+20:40:51.891 load-trace: streaming burst 250 ms | dzip read 168x 8.4 MB 2 ms | loose read 22x 93.0 MB 45 ms | open 16x 2 ms | unpack 164x 8.4->10.2 MB 9 ms | sleep 272x (0:0 1:272) 413 ms | wait 14804x (0 polls) 145 ms | present 13x 36 ms
+20:40:52.142 load-trace: streaming burst 250 ms | dzip read 445x 20.8 MB 5 ms | loose read 79x 61.5 MB 30 ms | open 21x 2 ms | unpack 425x 20.8->26.1 MB 26 ms | sleep 240x (0:0 1:240) 367 ms | wait 20718x (0 polls) 128 ms | present 18x 42 ms
+20:40:52.639 load-trace: streaming burst 250 ms | dzip read 19x 0.8 MB 0 ms | loose read 5x 7.2 MB 3 ms | open 4x 1 ms | unpack 18x 0.8->1.1 MB 1 ms | sleep 311x (0:0 1:311) 480 ms | wait 21414x (0 polls) 65 ms | present 18x 113 ms
+20:40:53.126 distance stats: mesh=1237430 shadow=410336 baseline_reject=257917 admitted=234510 (3.00x/3.00x)
+20:40:53.892 load-trace: streaming burst 250 ms | dzip read 31x 1.3 MB 0 ms | loose read 2x 3.0 MB 3 ms | open 2x 0 ms | unpack 29x 1.3->1.8 MB 1 ms | sleep 318x (0:0 1:318) 488 ms | wait 21580x (0 polls) 61 ms | present 18x 129 ms
+20:40:54.890 load-trace: streaming burst 250 ms | loose read 2x 6.0 MB 3 ms | open 2x 0 ms | sleep 316x (0:0 1:316) 490 ms | wait 21814x (0 polls) 19 ms | present 18x 145 ms
+20:40:58.178 distance stats: mesh=537536 shadow=318355 baseline_reject=96656 admitted=92873 (3.00x/3.00x)
+20:40:58.888 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 4 ms | open 2x 0 ms | sleep 322x (0:0 1:322) 494 ms | wait 11374x (0 polls) 3 ms | present 12x 107 ms
+20:41:03.234 distance stats: mesh=410760 shadow=265690 baseline_reject=74980 admitted=72372 (3.00x/3.00x)
+20:41:08.289 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:13.347 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:18.403 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:23.458 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:28.514 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:33.568 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:38.625 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:43.682 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:48.740 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:53.796 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:41:58.853 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:03.909 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:08.965 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:14.021 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:19.079 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:24.133 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:29.192 distance stats: mesh=459900 shadow=297475 baseline_reject=83950 admitted=81030 (3.00x/3.00x)
+20:42:34.250 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:39.304 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:42:44.358 distance stats: mesh=457839 shadow=295860 baseline_reject=83518 admitted=80611 (3.00x/3.00x)
+20:42:49.412 distance stats: mesh=458181 shadow=296645 baseline_reject=83692 admitted=80783 (3.00x/3.00x)
+20:42:54.468 distance stats: mesh=458791 shadow=296660 baseline_reject=83734 admitted=80819 (3.00x/3.00x)
+20:42:59.526 distance stats: mesh=459749 shadow=297475 baseline_reject=83936 admitted=81019 (3.00x/3.00x)
+20:43:04.581 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:09.637 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:14.695 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:19.750 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:24.805 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:29.860 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:34.916 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:39.972 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:45.028 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:50.083 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:43:55.136 distance stats: mesh=458640 shadow=296660 baseline_reject=83720 admitted=80808 (3.00x/3.00x)
+20:44:00.191 distance stats: mesh=457585 shadow=295845 baseline_reject=83504 admitted=80597 (3.00x/3.00x)
+20:44:00.890 load-trace: streaming burst 250 ms | dzip read 136x 6.5 MB 2 ms | loose read 20x 64.0 MB 33 ms | open 16x 2 ms | unpack 132x 6.5->8.2 MB 8 ms | sleep 273x (0:0 1:273) 418 ms | wait 18766x (0 polls) 110 ms | present 18x 82 ms
+20:44:01.142 load-trace: streaming burst 250 ms | dzip read 102x 5.7 MB 1 ms | loose read 12x 42.1 MB 21 ms | open 9x 1 ms | unpack 99x 5.7->6.2 MB 6 ms | sleep 292x (0:0 1:292) 448 ms | wait 19727x (0 polls) 101 ms | present 18x 96 ms
+20:44:02.390 load-trace: streaming burst 250 ms | loose read 2x 10.0 MB 5 ms | sleep 322x (0:0 1:322) 496 ms | wait 19826x (0 polls) 18 ms | present 18x 129 ms
+20:44:05.245 distance stats: mesh=584110 shadow=329371 baseline_reject=121953 admitted=117785 (3.00x/3.00x)
+20:44:05.399 partition: door task starts - player (231.64, 208.90, 8.06), door (232.35, 207.98, 8.01)
+20:44:05.455 load-trace: window 10 start (streaming door): task 59F1B820 vtable 00EF0410, ticking for 0 ms (44 threads)
+20:44:05.642 load-trace: window 10 +250 ms | loose read 53x 0.2 MB 0 ms | sleep 311x (0:0 1:311) 476 ms | wait 19694x (0 polls) 27 ms | present 17x 129 ms
+20:44:05.676 partition: switch 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\inn_interior' (door)
+20:44:05.676 partition: at the switch - player (231.65, 208.93, 8.04)
+20:44:05.678 partition: sync job to 'Outdoor\global\landing_site\outside\inn_interior': unload 58 layers, load 19 layers in 1 buckets
+20:44:05.678 partition:   unload floatsam_craftsman_animals
+20:44:05.678 partition:   unload floatsam_market_animals
+20:44:05.678 partition:   unload city_lights
+20:44:05.678 partition:   unload lights_port_01
+20:44:05.678 partition:   unload fake
+20:44:05.678 partition:   unload ipoints
+20:44:05.678 partition:   unload itriggers
+20:44:05.678 partition:   unload out_fspots
+20:44:05.678 partition:   unload bushes
+20:44:05.678 partition:   unload bushes
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload explorations
+20:44:05.678 partition:   unload parawan
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload west_coast
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload rocks
+20:44:05.678 partition:   unload collisions_full
+20:44:05.678 partition:   unload explorations
+20:44:05.678 partition:   unload grass
+20:44:05.678 partition:   unload containers
+20:44:05.678 partition:   unload lights_background
+20:44:05.678 partition:   unload ship
+20:44:05.678 partition:   unload balista
+20:44:05.678 partition:   unload exterior
+20:44:05.678 partition:   unload lights
+20:44:05.678 partition:   unload windows
+20:44:05.678 partition:   unload exterior
+20:44:05.678 partition:   unload interior
+20:44:05.678 partition:   unload occluders
+20:44:05.678 partition:   unload flotsam_out_occ
+20:44:05.678 partition:   unload exterior
+20:44:05.678 partition:   unload placebles
+20:44:05.678 partition:   unload exterior
+20:44:05.678 partition:   unload decorations
+20:44:05.678 partition:   unload q110_scoia_bodies
+20:44:05.678 partition:   unload trap_to_barge
+20:44:05.678 partition:   unload exterior
+20:44:05.678 partition:   unload placebles
+20:44:05.678 partition:   unload mesh
+20:44:05.678 partition:   unload 07_prison_ship_departed
+20:44:05.678 partition:   unload comm_roche_ship_guards
+20:44:05.678 partition:   unload comm_roche_ship_sailors
+20:44:05.678 partition:   unload ship
+20:44:05.678 partition:   unload q110_boats
+20:44:05.678 partition:   unload q110_bodies_on_barge
+20:44:05.678 partition:   unload q110_roche_ship_depart
+20:44:05.678 partition:   unload iorveth_captured
+20:44:05.678 partition:   unload iorveth_wanted
+20:44:05.678 partition:   unload q109_okiennica
+20:44:05.678 partition:   unload loredo_shadow
+20:44:05.678 partition:   unload l02_town
+20:44:05.678 partition:   unload l02_town_feast
+20:44:05.678 partition:   unload l02_town_riot
+20:44:05.678 partition:   load   basement
+20:44:05.678 partition:   load   interior
+20:44:05.678 partition:   load   lights
+20:44:05.678 partition:   load   occluders
+20:44:05.678 partition:   load   occluders2
+20:44:05.678 partition:   load   inn_basement_chat
+20:44:05.678 partition:   load   inn_basement_inn
+20:44:05.678 partition:   load   inn_basement_whorehouse
+20:44:05.678 partition:   load   inn_basemen_community_area
+20:44:05.678 partition:   load   inn_whorehouse_chats
+20:44:05.678 partition:   load   inn_whorehouse_roooms
+20:44:05.678 partition:   load   lights
+20:44:05.678 partition:   load   windows
+20:44:05.678 partition:   load   interior
+20:44:05.678 partition:   load   q107_dead_garwena
+20:44:05.678 partition:   load   l02_flotsam_inn_normal
+20:44:05.678 partition:   load   l02_floatsam_inn_riot
+20:44:05.678 partition:   load   ships_lowpoly
+20:44:05.678 partition:   load   roche_lowpoly
+20:44:05.889 load-trace: window 10 +500 ms | dzip read 851x 22.6 MB 6 ms | loose read 489x 36.1 MB 6 ms | open 54x 4 ms | unpack 628x 22.6->31.9 MB 36 ms | sleep 326x (0:0 1:326) 495 ms | wait 19338x (0 polls) 188 ms | present 4x 36 ms
+20:44:05.952 partition: sync job ran 275 ms
+20:44:05.952 partition: switch returned 1 after 276 ms
+20:44:05.967 doors: interior ready after 313 ms - picture back now (state 2)
+20:44:05.997 partition: door task ends - player (231.65, 209.00, 8.04), door (232.35, 207.98, 8.01)
+20:44:06.061 load-trace: window 10 end: streaming door (23 ticks, 0 overlapping) 609 ms; process CPU 781 ms = 1.28 cores; timer resolution 0.500 ms
+20:44:06.061 load-trace:   tid=49556 (main) start=029262EE cpu=500 ms (82%) | dzip read 1113x 27.9 MB 7 ms | loose read 568x 40.4 MB 7 ms | open 64x 5 ms | unpack 813x 27.9->40.1 MB 44 ms | wait 22x (0 polls) 35 ms
+20:44:06.061 load-trace:   tid=46996 start=0066F607 cpu=94 ms (15%) | dzip read 141x 5.5 MB 1 ms | loose read 52x 3.5 MB 1 ms | open 5x 1 ms | unpack 128x 5.4->7.8 MB 8 ms | sleep 365x (0:0 1:365) 559 ms
+20:44:06.061 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 389x (0:0 1:389) 595 ms
+20:44:06.061 load-trace:   tid=17508 start=77088D10 cpu=0 ms (0%) | open 1x 0 ms
+20:44:06.061 load-trace:   tid=44544 start=0066F607 cpu=188 ms (31%) | loose read 53x 0.2 MB 0 ms | wait 45716x (0 polls) 264 ms | present 22x 165 ms (max 32.8)
+20:44:06.061 load-trace:   tid=46028 start=55FB0460 cpu=94 ms (15%) | no traced call
+20:44:06.061 load-trace: window 10 totals | dzip read 1254x 33.4 MB 9 ms | loose read 673x 44.1 MB 8 ms | open 70x 6 ms | unpack 941x 33.3->47.9 MB 52 ms | sleep 754x (0:0 1:754) 1153 ms | wait 45738x (0 polls) 299 ms | present 22x 165 ms
+20:44:06.061 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:44:06.248 load-trace: streaming burst 250 ms | dzip read 1029x 44.2 MB 11 ms | loose read 44x 3.6 MB 1 ms | open 4x 1 ms | unpack 979x 44.2->59.8 MB 50 ms | sleep 112x (0:0 1:112) 172 ms | wait 19224x (0 polls) 5 ms | present 13x 120 ms
+20:44:06.498 load-trace: streaming burst 250 ms | dzip read 295x 13.0 MB 3 ms | loose read 54x 101.6 MB 58 ms | open 33x 3 ms | unpack 281x 13.0->17.3 MB 15 ms | sleep 193x (0:0 1:193) 294 ms | wait 26403x (0 polls) 50 ms | present 18x 109 ms
+20:44:09.251 load-trace: streaming burst 250 ms | loose read 4x 5.0 MB 2 ms | open 4x 1 ms | sleep 308x (0:0 1:308) 471 ms | wait 23620x (0 polls) 14 ms | present 18x 163 ms
+20:44:09.997 load-trace: streaming burst 250 ms | loose read 6x 15.0 MB 10 ms | open 6x 1 ms | sleep 291x (0:0 1:291) 444 ms | wait 24138x (0 polls) 42 ms | present 18x 145 ms
+20:44:10.299 distance stats: mesh=400508 shadow=311697 baseline_reject=48901 admitted=44575 (3.00x/3.00x)
+20:44:10.747 load-trace: streaming burst 250 ms | loose read 2x 4.0 MB 4 ms | open 1x 0 ms | sleep 312x (0:0 1:312) 477 ms | wait 23341x (0 polls) 13 ms | present 18x 174 ms
+20:44:15.352 distance stats: mesh=609478 shadow=428641 baseline_reject=139361 admitted=129502 (3.00x/3.00x)
+20:44:20.404 distance stats: mesh=532785 shadow=393099 baseline_reject=102544 admitted=95522 (3.00x/3.00x)
+20:44:21.506 partition: door task starts - player (231.75, 207.24, 8.03), door (232.35, 207.98, 8.01)
+20:44:21.570 load-trace: window 11 start (streaming door): task 2E70DDE8 vtable 00EF0410, ticking for 0 ms (44 threads)
+20:44:21.752 load-trace: window 11 +250 ms | loose read 67x 0.3 MB 0 ms | sleep 317x (0:0 1:317) 484 ms | wait 21544x (0 polls) 26 ms | present 17x 153 ms
+20:44:21.769 partition: switch 'Outdoor\global\landing_site\outside\inn_interior' -> 'Outdoor\global\landing_site\outside\Flotsam' (door)
+20:44:21.769 partition: at the switch - player (231.74, 207.28, 8.03)
+20:44:21.770 partition: sync job to 'Outdoor\global\landing_site\outside\Flotsam': unload 19 layers, load 58 layers in 1 buckets
+20:44:21.770 partition:   unload roche_lowpoly
+20:44:21.770 partition:   unload ships_lowpoly
+20:44:21.770 partition:   unload interior
+20:44:21.770 partition:   unload basement
+20:44:21.770 partition:   unload interior
+20:44:21.770 partition:   unload lights
+20:44:21.770 partition:   unload occluders
+20:44:21.770 partition:   unload occluders2
+20:44:21.770 partition:   unload lights
+20:44:21.770 partition:   unload windows
+20:44:21.770 partition:   unload inn_basement_chat
+20:44:21.770 partition:   unload inn_basement_inn
+20:44:21.770 partition:   unload inn_basement_whorehouse
+20:44:21.770 partition:   unload inn_basemen_community_area
+20:44:21.770 partition:   unload inn_whorehouse_chats
+20:44:21.770 partition:   unload inn_whorehouse_roooms
+20:44:21.770 partition:   unload q107_dead_garwena
+20:44:21.770 partition:   unload l02_flotsam_inn_normal
+20:44:21.770 partition:   unload l02_floatsam_inn_riot
+20:44:21.770 partition:   load   city_lights
+20:44:21.770 partition:   load   occluders
+20:44:21.770 partition:   load   mesh
+20:44:21.770 partition:   load   fake
+20:44:21.770 partition:   load   lights_port_01
+20:44:21.770 partition:   load   containers
+20:44:21.770 partition:   load   lights_background
+20:44:21.770 partition:   load   ship
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   explorations
+20:44:21.770 partition:   load   parawan
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   west_coast
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   explorations
+20:44:21.770 partition:   load   exterior
+20:44:21.770 partition:   load   placebles
+20:44:21.770 partition:   load   interior
+20:44:21.770 partition:   load   exterior
+20:44:21.770 partition:   load   balista
+20:44:21.770 partition:   load   exterior
+20:44:21.770 partition:   load   lights
+20:44:21.770 partition:   load   windows
+20:44:21.770 partition:   load   iorveth_captured
+20:44:21.770 partition:   load   iorveth_wanted
+20:44:21.770 partition:   load   bushes
+20:44:21.770 partition:   load   exterior
+20:44:21.770 partition:   load   placebles
+20:44:21.770 partition:   load   flotsam_out_occ
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   q109_okiennica
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   bushes
+20:44:21.770 partition:   load   rocks
+20:44:21.770 partition:   load   l02_town
+20:44:21.770 partition:   load   l02_town_riot
+20:44:21.770 partition:   load   loredo_shadow
+20:44:21.770 partition:   load   q110_roche_ship_depart
+20:44:21.770 partition:   load   q110_boats
+20:44:21.770 partition:   load   q110_bodies_on_barge
+20:44:21.770 partition:   load   comm_roche_ship_guards
+20:44:21.770 partition:   load   comm_roche_ship_sailors
+20:44:21.770 partition:   load   ship
+20:44:21.770 partition:   load   exterior
+20:44:21.770 partition:   load   decorations
+20:44:21.770 partition:   load   q110_scoia_bodies
+20:44:21.770 partition:   load   trap_to_barge
+20:44:21.770 partition:   load   07_prison_ship_departed
+20:44:21.770 partition:   load   collisions_full
+20:44:21.770 partition:   load   grass
+20:44:21.770 partition:   load   ipoints
+20:44:21.770 partition:   load   itriggers
+20:44:21.770 partition:   load   out_fspots
+20:44:21.770 partition:   load   floatsam_market_animals
+20:44:21.770 partition:   load   floatsam_craftsman_animals
+20:44:21.770 partition:   load   l02_town_feast
+20:44:21.999 load-trace: window 11 +500 ms | dzip read 1173x 38.3 MB 9 ms | loose read 336x 22.4 MB 4 ms | open 40x 3 ms | unpack 988x 38.3->54.8 MB 46 ms | sleep 322x (0:0 1:322) 494 ms | wait 10557x (0 polls) 212 ms | present 3x 30 ms
+20:44:22.062 partition: sync job ran 291 ms
+20:44:22.062 partition: switch returned 1 after 293 ms
+20:44:22.083 doors: interior ready after 328 ms - picture back now (state 2)
+20:44:22.094 partition: door task ends - player (231.73, 207.30, 8.03), door (232.35, 207.98, 8.01)
+20:44:22.156 load-trace: window 11 end: streaming door (22 ticks, 0 overlapping) 594 ms; process CPU 672 ms = 1.13 cores; timer resolution 0.500 ms
+20:44:22.156 load-trace:   tid=49556 (main) start=029262EE cpu=531 ms (89%) | dzip read 1280x 41.7 MB 10 ms | loose read 373x 24.4 MB 5 ms | open 44x 3 ms | unpack 1076x 41.7->59.6 MB 51 ms | wait 21x (0 polls) 19 ms
+20:44:22.156 load-trace:   tid=46996 start=0066F607 cpu=16 ms (3%) | loose read 3x 0.8 MB 0 ms | open 1x 0 ms | sleep 382x (0:0 1:382) 586 ms
+20:44:22.156 load-trace:   tid=36080 start=0066F607 cpu=0 ms (0%) | sleep 383x (0:0 1:383) 587 ms
+20:44:22.156 load-trace:   tid=17508 start=77088D10 cpu=0 ms (0%) | open 1x 0 ms
+20:44:22.156 load-trace:   tid=44544 start=0066F607 cpu=78 ms (13%) | loose read 67x 0.3 MB 0 ms | wait 45405x (0 polls) 295 ms | present 21x 183 ms (max 32.8)
+20:44:22.156 load-trace:   tid=36860 start=6FCA7950 cpu=62 ms (11%) | no traced call
+20:44:22.156 load-trace:   tid=46028 start=55FB0460 cpu=78 ms (13%) | no traced call
+20:44:22.156 load-trace: window 11 totals | dzip read 1280x 41.7 MB 10 ms | loose read 443x 25.4 MB 5 ms | open 46x 3 ms | unpack 1076x 41.7->59.6 MB 51 ms | sleep 765x (0:0 1:765) 1173 ms | wait 45426x (0 polls) 314 ms | present 21x 183 ms
+20:44:22.157 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:44:25.343 load-trace: streaming burst 250 ms | dzip read 136x 6.3 MB 1 ms | loose read 22x 68.0 MB 35 ms | open 18x 2 ms | unpack 132x 6.3->8.2 MB 7 ms | sleep 280x (0:0 1:280) 425 ms | wait 17768x (0 polls) 129 ms | present 16x 62 ms
+20:44:25.458 distance stats: mesh=857012 shadow=356253 baseline_reject=216085 admitted=193204 (3.00x/3.00x)
+20:44:25.595 load-trace: streaming burst 250 ms | dzip read 66x 3.3 MB 1 ms | loose read 34x 91.0 MB 46 ms | open 32x 3 ms | unpack 65x 3.3->4.1 MB 4 ms | sleep 271x (0:0 1:271) 416 ms | wait 16629x (0 polls) 132 ms | present 15x 23 ms
+20:44:25.842 load-trace: streaming burst 250 ms | dzip read 68x 2.8 MB 1 ms | loose read 7x 24.0 MB 12 ms | open 6x 1 ms | unpack 66x 2.8->4.1 MB 5 ms | sleep 299x (0:0 1:299) 454 ms | wait 19398x (0 polls) 77 ms | present 18x 99 ms
+20:44:26.091 load-trace: streaming burst 250 ms | dzip read 166x 8.9 MB 2 ms | loose read 17x 54.0 MB 28 ms | open 14x 2 ms | unpack 163x 8.9->10.2 MB 9 ms | sleep 277x (0:0 1:277) 423 ms | wait 19426x (0 polls) 72 ms | present 18x 78 ms
+20:44:26.341 load-trace: streaming burst 250 ms | dzip read 34x 1.7 MB 0 ms | loose read 2x 10.0 MB 5 ms | open 1x 0 ms | unpack 33x 1.7->2.1 MB 2 ms | sleep 318x (0:0 1:318) 488 ms | wait 20056x (0 polls) 39 ms | present 18x 136 ms
+20:44:26.845 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 323x (0:0 1:323) 493 ms | wait 19644x (0 polls) 86 ms | present 18x 115 ms
+20:44:27.343 load-trace: streaming burst 250 ms | loose read 4x 7.0 MB 3 ms | open 4x 1 ms | sleep 312x (0:0 1:312) 482 ms | wait 19555x (0 polls) 54 ms | present 18x 123 ms
+20:44:27.593 load-trace: streaming burst 250 ms | dzip read 102x 4.9 MB 1 ms | loose read 14x 48.0 MB 24 ms | open 11x 1 ms | unpack 99x 4.9->6.2 MB 5 ms | sleep 290x (0:0 1:290) 440 ms | wait 19276x (0 polls) 60 ms | present 18x 97 ms
+20:44:27.842 load-trace: streaming burst 250 ms | dzip read 34x 1.9 MB 0 ms | loose read 7x 22.0 MB 10 ms | open 6x 1 ms | unpack 33x 1.9->2.1 MB 2 ms | sleep 300x (0:0 1:300) 457 ms | wait 20804x (0 polls) 38 ms | present 18x 117 ms
+20:44:29.592 load-trace: streaming burst 250 ms | loose read 4x 4.0 MB 3 ms | open 2x 0 ms | sleep 313x (0:0 1:313) 480 ms | wait 21473x (0 polls) 12 ms | present 18x 161 ms
+20:44:30.183 partition: door task starts - player (231.77, 208.84, 8.05), door (232.35, 207.98, 8.01)
+20:44:30.238 load-trace: window 12 start (streaming door): task 5DF63EA0 vtable 00EF0410, ticking for 16 ms (44 threads)
+20:44:30.439 load-trace: window 12 +266 ms | loose read 51x 0.2 MB 0 ms | sleep 329x (0:0 1:329) 501 ms | wait 22036x (0 polls) 30 ms | present 18x 131 ms
+20:44:30.460 partition: switch 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\inn_interior' (door)
+20:44:30.460 partition: at the switch - player (231.77, 208.92, 8.05)
+20:44:30.461 partition: sync job to 'Outdoor\global\landing_site\outside\inn_interior': unload 58 layers, load 19 layers in 1 buckets
+20:44:30.461 partition:   unload floatsam_craftsman_animals
+20:44:30.461 partition:   unload floatsam_market_animals
+20:44:30.461 partition:   unload city_lights
+20:44:30.461 partition:   unload lights_port_01
+20:44:30.461 partition:   unload fake
+20:44:30.461 partition:   unload ipoints
+20:44:30.461 partition:   unload itriggers
+20:44:30.461 partition:   unload out_fspots
+20:44:30.461 partition:   unload bushes
+20:44:30.461 partition:   unload bushes
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload explorations
+20:44:30.461 partition:   unload parawan
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload west_coast
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload rocks
+20:44:30.461 partition:   unload collisions_full
+20:44:30.461 partition:   unload explorations
+20:44:30.461 partition:   unload grass
+20:44:30.461 partition:   unload containers
+20:44:30.461 partition:   unload lights_background
+20:44:30.461 partition:   unload ship
+20:44:30.461 partition:   unload balista
+20:44:30.461 partition:   unload exterior
+20:44:30.461 partition:   unload lights
+20:44:30.461 partition:   unload windows
+20:44:30.461 partition:   unload exterior
+20:44:30.461 partition:   unload interior
+20:44:30.461 partition:   unload occluders
+20:44:30.461 partition:   unload flotsam_out_occ
+20:44:30.461 partition:   unload exterior
+20:44:30.461 partition:   unload placebles
+20:44:30.461 partition:   unload exterior
+20:44:30.461 partition:   unload decorations
+20:44:30.461 partition:   unload q110_scoia_bodies
+20:44:30.461 partition:   unload trap_to_barge
+20:44:30.461 partition:   unload exterior
+20:44:30.461 partition:   unload placebles
+20:44:30.461 partition:   unload mesh
+20:44:30.461 partition:   unload 07_prison_ship_departed
+20:44:30.461 partition:   unload comm_roche_ship_guards
+20:44:30.461 partition:   unload comm_roche_ship_sailors
+20:44:30.461 partition:   unload ship
+20:44:30.461 partition:   unload q110_boats
+20:44:30.461 partition:   unload q110_bodies_on_barge
+20:44:30.461 partition:   unload q110_roche_ship_depart
+20:44:30.461 partition:   unload iorveth_captured
+20:44:30.461 partition:   unload iorveth_wanted
+20:44:30.461 partition:   unload q109_okiennica
+20:44:30.461 partition:   unload loredo_shadow
+20:44:30.461 partition:   unload l02_town
+20:44:30.461 partition:   unload l02_town_feast
+20:44:30.461 partition:   unload l02_town_riot
+20:44:30.461 partition:   load   basement
+20:44:30.461 partition:   load   interior
+20:44:30.461 partition:   load   lights
+20:44:30.461 partition:   load   occluders
+20:44:30.461 partition:   load   occluders2
+20:44:30.461 partition:   load   inn_basement_chat
+20:44:30.461 partition:   load   inn_basement_inn
+20:44:30.461 partition:   load   inn_basement_whorehouse
+20:44:30.461 partition:   load   inn_basemen_community_area
+20:44:30.461 partition:   load   inn_whorehouse_chats
+20:44:30.461 partition:   load   inn_whorehouse_roooms
+20:44:30.461 partition:   load   lights
+20:44:30.461 partition:   load   windows
+20:44:30.461 partition:   load   interior
+20:44:30.461 partition:   load   q107_dead_garwena
+20:44:30.461 partition:   load   l02_flotsam_inn_normal
+20:44:30.461 partition:   load   l02_floatsam_inn_riot
+20:44:30.461 partition:   load   ships_lowpoly
+20:44:30.461 partition:   load   roche_lowpoly
+20:44:30.515 distance stats: mesh=596397 shadow=322114 baseline_reject=108225 admitted=101180 (3.00x/3.00x)
+20:44:30.684 load-trace: window 12 +516 ms | dzip read 959x 25.3 MB 6 ms | loose read 538x 38.4 MB 7 ms | open 60x 4 ms | unpack 708x 25.3->35.8 MB 40 ms | sleep 332x (0:0 1:332) 490 ms | wait 18508x (0 polls) 196 ms | present 3x 28 ms
+20:44:30.734 partition: sync job ran 272 ms
+20:44:30.734 partition: switch returned 1 after 274 ms
+20:44:30.748 doors: interior ready after 312 ms - picture back now (state 2)
+20:44:30.765 partition: door task ends - player (231.78, 208.99, 8.05), door (232.35, 207.98, 8.01)
+20:44:30.831 load-trace: window 12 end: streaming door (23 ticks, 0 overlapping) 594 ms; process CPU 828 ms = 1.39 cores; timer resolution 0.500 ms
+20:44:30.831 load-trace:   tid=49556 (main) start=029262EE cpu=562 ms (95%) | dzip read 1113x 27.9 MB 7 ms | loose read 568x 40.4 MB 7 ms | open 64x 4 ms | unpack 813x 27.9->40.1 MB 43 ms | wait 22x (0 polls) 22 ms
+20:44:30.831 load-trace:   tid=46996 start=0066F607 cpu=62 ms (11%) | loose read 8x 12.2 MB 7 ms | open 6x 0 ms | sleep 381x (0:0 1:381) 568 ms
+20:44:30.831 load-trace:   tid=36080 start=0066F607 cpu=31 ms (5%) | sleep 371x (0:0 1:371) 556 ms
+20:44:30.831 load-trace:   tid=17508 start=77088D10 cpu=0 ms (0%) | open 1x 0 ms
+20:44:30.831 load-trace:   tid=44544 start=0066F607 cpu=156 ms (26%) | loose read 51x 0.2 MB 0 ms | wait 47162x (0 polls) 261 ms | present 22x 159 ms (max 32.8)
+20:44:30.831 load-trace:   tid=36860 start=6FCA7950 cpu=62 ms (11%) | no traced call
+20:44:30.831 load-trace:   tid=46028 start=55FB0460 cpu=109 ms (18%) | no traced call
+20:44:30.831 load-trace: window 12 totals | dzip read 1113x 27.9 MB 7 ms | loose read 627x 52.9 MB 14 ms | open 71x 5 ms | unpack 813x 27.9->40.1 MB 43 ms | sleep 752x (0:0 1:752) 1123 ms | wait 47184x (0 polls) 283 ms | present 22x 159 ms
+20:44:30.831 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+20:44:31.266 load-trace: streaming burst 250 ms | dzip read 102x 5.3 MB 1 ms | loose read 14x 40.8 MB 21 ms | open 9x 1 ms | unpack 99x 5.3->6.2 MB 6 ms | sleep 294x (0:0 1:294) 439 ms | wait 28613x (0 polls) 31 ms | present 18x 141 ms
+20:44:31.764 load-trace: streaming burst 250 ms | dzip read 34x 1.7 MB 0 ms | loose read 3x 12.0 MB 6 ms | open 2x 0 ms | unpack 33x 1.7->2.1 MB 2 ms | sleep 295x (0:0 1:295) 456 ms | wait 36030x (0 polls) 15 ms | present 18x 159 ms
+20:44:32.013 load-trace: streaming burst 250 ms | loose read 2x 6.0 MB 3 ms | open 2x 0 ms | sleep 308x (0:0 1:308) 464 ms | wait 36571x (0 polls) 10 ms | present 18x 159 ms
+20:44:33.767 load-trace: streaming burst 250 ms | loose read 3x 4.0 MB 2 ms | open 3x 0 ms | sleep 309x (0:0 1:309) 471 ms | wait 23543x (0 polls) 22 ms | present 18x 168 ms
+20:44:35.573 distance stats: mesh=393663 shadow=308277 baseline_reject=34335 admitted=31693 (3.00x/3.00x)
+20:44:35.766 load-trace: streaming burst 250 ms | loose read 2x 4.0 MB 2 ms | open 2x 0 ms | sleep 318x (0:0 1:318) 485 ms | wait 24245x (0 polls) 14 ms | present 18x 169 ms
+20:44:37.514 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 3 ms | open 2x 0 ms | sleep 318x (0:0 1:318) 494 ms | wait 7877x (0 polls) 2 ms | present 7x 69 ms
+20:44:40.628 distance stats: mesh=529912 shadow=383871 baseline_reject=120974 admitted=112402 (3.00x/3.00x)
+20:44:40.869 crash: filter armed, chaining to 0x00676B04 (witcher2.EXE+0x276B04)
+20:44:40.981 unloaded

@@ -117,7 +117,15 @@ static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos be
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
 static int cfg_load_trace;      // [diagnostics] load_trace: where loading-screen time goes
 static int cfg_fast_doors = 1;  // [loading] fast_doors: picture back once a house interior is in
-static float cfg_door_fade = 0.25f; // [loading] door_fade: seconds of the door fade-out/in (game: 0.5)
+static float cfg_door_fade = 0.05f; // [loading] door_fade: seconds of the door fade-out/in (game: 0.5)
+static float cfg_area_fade = 0.25f; // [loading] area_fade: door fade when the door changes area (Flotsam gate)
+static int cfg_interiors = 2;   // [loading] interiors: 0 game, 1 keep the outdoors, 2 also preload interiors
+static int cfg_keep_outdoors = 1; // [loading] keep_outdoors: house doors leave the outdoor layers loaded
+static int cfg_skip_door_gc = 1; // [loading] skip_door_gc: no full object GC on a keep_outdoors house door
+static int cfg_instant_doors = 1; // [loading] instant_doors: no fade on a house door known to load nothing
+static int cfg_indoor_outdoors = 1; // [loading] indoor_outdoors: keep drawing terrain/grass behind kept doors
+static int cfg_preload_interiors = 1; // [loading] preload_interiors: load every building interior with the area
+static int cfg_keep_interiors = 1; // [loading] keep_interiors: a visited house interior stays loaded, no fake rooms back
 static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
 static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
 static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
@@ -336,7 +344,18 @@ static void load_config(void)
     cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
     cfg_load_trace = ini_int("diagnostics", "load_trace", 0);
     cfg_fast_doors = ini_int("loading", "fast_doors", 1);
-    cfg_door_fade = ini_float("loading", "door_fade", 0.25f);
+    cfg_door_fade = ini_float("loading", "door_fade", 0.05f);
+    cfg_area_fade = ini_float("loading", "area_fade", 0.25f);
+    if (cfg_area_fade < 0.05f || cfg_area_fade > 2.0f) cfg_area_fade = 0.5f;
+    // One switch for users; the separate keys below still override it (docs/fixes/interior-preload.md).
+    cfg_interiors = ini_int("loading", "interiors", 2);
+    if (cfg_interiors < 0 || cfg_interiors > 2) cfg_interiors = 2;
+    cfg_keep_outdoors = ini_int("loading", "keep_outdoors", cfg_interiors >= 1);
+    cfg_keep_interiors = ini_int("loading", "keep_interiors", cfg_interiors >= 1);
+    cfg_preload_interiors = ini_int("loading", "preload_interiors", cfg_interiors >= 2);
+    cfg_indoor_outdoors = ini_int("loading", "indoor_outdoors", 1);
+    cfg_skip_door_gc = ini_int("loading", "skip_door_gc", 1);
+    cfg_instant_doors = ini_int("loading", "instant_doors", 1);
     if (cfg_door_fade < 0.05f || cfg_door_fade > 2.0f) cfg_door_fade = 0.5f;
     cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
     cfg_continue = ini_int("scriptpatches", "continue", 1);
@@ -2477,6 +2496,644 @@ static HRESULT WINAPI hook_Present(void* self, const RECT* src, const RECT* dst,
     return hr;
 }
 
+// ---- partition trace ----------------------------------------------------
+// Part of load_trace: what each world-partition switch swaps, research for interior
+// preloading (docs/fixes/interior-preload.md). Interiors are partitions: lists of layer
+// groups, one current at a time. FUN_00a91bf9 (thiscall world, (String* name, mode,
+// String* loadingScreen), RET 0xC; mode 0 = StreamWorldPartition, 1 = LoadWorldPartition,
+// 4 = house door) diffs the current partition's layers against the target's and builds a
+// job (FUN_00a90fc4): +0x2C target name, +0x0C/+0x10 layers to unload, +0x1C/+0x20 load
+// buckets by layer priority (bucket +0x08/+0x0C layers). Mode 0 keeps the job at world+0x30C
+// and streams it over the next frames; every other mode runs it at once through FUN_00a91952
+// (stdcall job, RET 4; called at 00A91DAD). The partition requests reach FUN_00a91bf9 from
+// 00AAA1FF (the game's request queue) and 00AAB089. A layer info's name is at +0x78. The
+// player is CWitcherGame+0x250 (m_player); an entity's world position is at +0xA0.
+// Passive unless keep_outdoors or preload_interiors is on: the hooks log and call the real
+// function.
+//
+// keep_outdoors: a house door (mode 4) unloads the outdoor layers around it (bushes, rocks,
+// animals, fog, collision; in Flotsam also far buildings, ships and the town's sound) and
+// loads the house's rooms, which sit inside its own shell; leaving reloads them (runs 5, 11).
+// For a door within one partition folder (a building and its street; an area change such as
+// the Flotsam gate is between folders) the job's unload list is cut to the layers a partition
+// swaps for its own (ko_class: the area's `fake` rooms, sound, occluders, the indoor
+// environment, low-poly stand-ins), so the rest of the outdoors stays loaded. The lists are
+// pointed at the DLL's own arrays for the run and put back after it. The loader skips layers
+// already loaded (FUN_00a91600, layer info +0x38) and the unloader skips unloaded ones
+// (FUN_00a5aa35).
+//
+// keep_interiors (needs keep_outdoors): leaving a house also unloads its rooms and reloads
+// the area's `fake` layer (one per area, fake_interiors\<area>\fake.w2l), ~45 ms and a dark
+// box popping up around Geralt. With keep_interiors=1 the rooms stay and `fake` is not loaded
+// back, so re-entering loads nothing; other houses' open doors show no fake room until the
+// next area change.
+//
+// preload_interiors: an area change (mode 1, or a door between folders) also loads every
+// building interior of the world (layer infos under `\buildings\<name>\interior\`, found in
+// the world's layer tree, appended to the job's last load bucket) and drops `fake`; no job
+// unloads them again. Open doors then show the real rooms and no house door loads its rooms.
+//
+// skip_door_gc: every job runs the same stages whatever is in it (FUN_00a91952: flush,
+// unload, "GC...", load, flush the async loader, attach entities, apply the partition), and
+// the GC stage (00A91AD7: call FUN_00abd770, stdcall, a full object GC; it locks and unlocks
+// its own counter) cost a house door 25-40 ms with nothing loaded or unloaded (run 9). For a
+// job keep_outdoors handled the call is skipped: at most the swapped layers' objects wait
+// for the next GC (area changes, save loads).
+#define VA_GAME             0x01404950u   // CGame*: +0x40 world, +0xE8 queued world requests
+#define VA_PART_SWITCH      0x00A91BF9u
+#define VA_PART_SWITCH_A    0x00AAA1FFu   // call from the request queue
+#define VA_PART_SWITCH_B    0x00AAB089u
+#define VA_PART_RUN         0x00A91952u
+#define VA_PART_RUN_CALL    0x00A91DADu   // the synchronous run in FUN_00a91bf9
+#define OFF_GAME_PLAYER     0x250
+#define OFF_NODE_POS        0xA0
+#define PT_MAX_NAMES        80
+#define VA_PART_GC_CALL     0x00A91AD7u   // call FUN_00abd770 (GC) in FUN_00a91952
+#define VA_GC               0x00ABD770u
+
+static int g_ptMode = -1;   // mode of the switch in progress (game thread)
+static wchar_t g_ptFrom[160], g_ptTo[160];   // its partitions
+// instant_doors: door switches (from, to) that keep_interiors/preload_interiors have made
+// load nothing; forgotten on an area change unless every interior stays loaded.
+// With preload_interiors every door within one folder is taken as ready (no fade) until one
+// is measured slow (KO_SLOW_MS for the job itself): those pairs keep door_fade.
+#define KO_PAIRS 128
+#define KO_SLOW_MS 50
+static DWORD g_koPairs[KO_PAIRS];
+static int   g_koPairCount;
+static DWORD g_koSlow[KO_PAIRS];
+static int   g_koSlowCount;
+
+static DWORD ko_pair(const wchar_t* from, const wchar_t* to)
+{
+    DWORD h = 2166136261u;
+    for (; *from; from++) h = (h ^ (DWORD)towlower(*from)) * 16777619u;
+    h = (h ^ 0x7C) * 16777619u;
+    for (; *to; to++) h = (h ^ (DWORD)towlower(*to)) * 16777619u;
+    return h ? h : 1;
+}
+
+static int ko_pair_in(const DWORD* set, int n, const wchar_t* from, const wchar_t* to)
+{
+    DWORD h = ko_pair(from, to);
+    int i;
+    for (i = 0; i < n; i++) if (set[i] == h) return 1;
+    return 0;
+}
+
+static void ko_pair_put(DWORD* set, int* n, const wchar_t* from, const wchar_t* to)
+{
+    if (!from[0] || !to[0] || ko_pair_in(set, *n, from, to)) return;
+    set[*n < KO_PAIRS ? (*n)++ : (KO_PAIRS - 1)] = ko_pair(from, to);
+}
+
+static int ko_pair_known(const wchar_t* from, const wchar_t* to) { return ko_pair_in(g_koPairs, g_koPairCount, from, to); }
+static void ko_pair_add(const wchar_t* from, const wchar_t* to) { ko_pair_put(g_koPairs, &g_koPairCount, from, to); }
+
+// Length of a partition name's folder part (up to the last backslash).
+static int part_folder(const wchar_t* name)
+{
+    const wchar_t* slash = wcsrchr(name, L'\\');
+    return slash ? (int)(slash - name) : 0;
+}
+
+typedef unsigned char (__fastcall *PartSwitch_t)(void* world, void* edx, void* name, int mode, void* screen);
+typedef void (__stdcall *PartRun_t)(void* job);
+typedef void (__stdcall *Gc_t)(void* arg);
+
+static int      g_koSkipGc;      // set by hook_PartRun for the job it runs (game thread)
+static int      g_ptGcSkipped;
+static LONGLONG g_ptGcUs;
+
+static void __stdcall hook_PartGc(void* arg)
+{
+    LONGLONG t0;
+    if (g_koSkipGc) { g_ptGcSkipped = 1; return; }
+    t0 = qpc_us();
+    ((Gc_t)(uintptr_t)VA_GC)(arg);
+    g_ptGcUs = qpc_us() - t0;
+}
+
+// A String's text (first field), copied under SEH; "" when unreadable.
+static const wchar_t* pt_text(const void* str, wchar_t* buf, int cap)
+{
+    buf[0] = 0;
+    __try {
+        const wchar_t* s = str ? *(const wchar_t* const*)str : NULL;
+        int i;
+        for (i = 0; s && i < cap - 1 && s[i]; i++) buf[i] = s[i];
+        buf[i] = 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { buf[0] = 0; }
+    return buf;
+}
+
+static const char* pt_mode(int mode)
+{
+    static char other[16];
+    switch (mode) {
+    case 0: return "stream";
+    case 1: return "load";
+    case 4: return "door";
+    }
+    sprintf_s(other, sizeof other, "mode %d", mode);
+    return other;
+}
+
+static void pt_where(const char* what, const void* door)
+{
+    void* game = read_ptr((void*)(uintptr_t)VA_GAME);
+    void* player = game ? read_ptr((char*)game + OFF_GAME_PLAYER) : NULL;
+    float p[3] = { 0, 0, 0 }, d[3] = { 0, 0, 0 };
+    int i, havePlayer = player != NULL, haveDoor = door != NULL;
+    for (i = 0; i < 3; i++) {
+        if (havePlayer) havePlayer = read_f32((const char*)player + OFF_NODE_POS + 4 * i, &p[i]);
+        if (haveDoor) haveDoor = read_f32((const char*)door + OFF_NODE_POS + 4 * i, &d[i]);
+    }
+    if (door)
+        logf_("partition: %s - player %s(%.2f, %.2f, %.2f), door (%.2f, %.2f, %.2f)", what,
+              havePlayer ? "" : "unknown ", p[0], p[1], p[2], d[0], d[1], d[2]);
+    else
+        logf_("partition: %s - player %s(%.2f, %.2f, %.2f)", what, havePlayer ? "" : "unknown ", p[0], p[1], p[2]);
+}
+
+// Research: the other text fields of a layer info (its path or group), as " [+off text]".
+// A field counts when it points at >= 3 printable UTF-16 characters.
+static void pt_probe(const void* layer, char* out, size_t cap)
+{
+    wchar_t text[120];
+    size_t used = 0;
+    int off, found = 0;
+    out[0] = 0;
+    if (!layer) return;
+    for (off = 0; off < 0x100 && found < 3; off += 4) {
+        int i, ok = 1;
+        if (off == 0x78) continue;
+        pt_text((const char*)layer + off, text, 120);
+        for (i = 0; text[i]; i++) if (text[i] < 0x20 || text[i] > 0x7E) { ok = 0; break; }
+        if (!ok || i < 3) continue;
+        used += (size_t)_snprintf_s(out + used, cap - used, _TRUNCATE, " [+%02X %ls]", off, text);
+        if (used >= cap - 1) break;
+        found++;
+    }
+}
+
+// One list of layer infos: count, then a line per layer.
+static int pt_layers(const char* what, const void* data, DWORD count, int shown)
+{
+    wchar_t name[200];
+    DWORD i;
+    for (i = 0; i < count && shown < PT_MAX_NAMES; i++, shown++) {
+        void* layer = read_ptr((const char*)data + 4 * i);
+        void* str = layer ? (char*)layer + 0x78 : NULL;
+        char extra[400];
+        pt_probe(layer, extra, sizeof extra);
+        logf_("partition:   %s %ls%s", what, str ? pt_text(str, name, 200) : L"(null)", extra);
+    }
+    return shown;
+}
+
+static void pt_job(const char* why, const void* job)
+{
+    wchar_t to[160];
+    DWORD unload, buckets, load = 0, i;
+    const void *unloadData, *bucketData;
+    int shown = 0;
+    if (!job) return;
+    unloadData = read_ptr((const char*)job + 0x0C);
+    unload = (DWORD)(uintptr_t)read_ptr((const char*)job + 0x10);
+    bucketData = read_ptr((const char*)job + 0x1C);
+    buckets = (DWORD)(uintptr_t)read_ptr((const char*)job + 0x20);
+    if (unload > 4096 || buckets > 5) {
+        logf_("partition: %s job %08X not recognised (unload %lu, buckets %lu)", why,
+              (unsigned)(uintptr_t)job, unload, buckets);
+        return;
+    }
+    for (i = 0; i < buckets; i++) {
+        void* b = read_ptr((const char*)bucketData + 4 * i);
+        if (b) load += (DWORD)(uintptr_t)read_ptr((char*)b + 0x0C);
+    }
+    logf_("partition: %s job to '%ls': unload %lu layers, load %lu layers in %lu buckets", why,
+          pt_text((const char*)job + 0x2C, to, 160), unload, load, buckets);
+    shown = pt_layers("unload", unloadData, unload, shown);
+    for (i = 0; i < buckets; i++) {
+        void* b = read_ptr((const char*)bucketData + 4 * i);
+        DWORD n = b ? (DWORD)(uintptr_t)read_ptr((char*)b + 0x0C) : 0;
+        if (n > 4096) break;
+        if (b) shown = pt_layers("load  ", read_ptr((char*)b + 0x08), n, shown);
+    }
+    if (shown >= PT_MAX_NAMES) logf_("partition:   (names cut at %d)", PT_MAX_NAMES);
+}
+
+// Layer classes for the door rules, from the layer info's path (+0x68) and name (+0x78):
+//   FAKE      the area's flat "fake room" boxes (fake_interiors\<area>\fake.w2l)
+//   SWAP      what each partition swaps for its own and must not be kept: ambient sound
+//             (`\sounds\`), occluders (`occ` in the name: outdoor occluders around a building
+//             the camera is inside, or an interior's own) and the indoor environment
+//             (`\environments\interior`)
+//   LOWPOLY   low-poly stand-ins an interior loads for the view out of its windows
+//             (`city_building_lowpoly\ships_lowpoly`); the real objects stay when kept
+//   INTERIOR  a building's own rooms (`\buildings\<name>\interior\`; the prologue village's
+//             `island\village_b_ints\interior<N>\`)
+enum { LC_OTHER, LC_FAKE, LC_SWAP, LC_LOWPOLY, LC_INTERIOR };
+
+static int ko_class(const void* layer)
+{
+    wchar_t name[64], path[260];
+    if (!layer) return LC_OTHER;
+    pt_text((const char*)layer + 0x78, name, 64);
+    pt_text((const char*)layer + 0x68, path, 260);
+    if (!_wcsicmp(name, L"fake")) return LC_FAKE;
+    if (wcsistr(path, L"\\sounds\\") || wcsistr(name, L"occ") || wcsistr(path, L"\\environments\\interior"))
+        return LC_SWAP;
+    if (wcsistr(path, L"_lowpoly\\")) return LC_LOWPOLY;
+    if ((wcsistr(path, L"\\buildings\\") && wcsistr(path, L"\\interior\\")) || wcsistr(path, L"_ints\\"))
+        return LC_INTERIOR;
+    return LC_OTHER;
+}
+
+// A door between two partitions of one folder (a building and its street), not an area change.
+static int ko_same_folder(const wchar_t* a, const wchar_t* b)
+{
+    int na = part_folder(a), nb = part_folder(b);
+    return a[0] && b[0] && na == nb && !_wcsnicmp(a, b, na);
+}
+
+static int ko_loads_class(const void* job, int cls)
+{
+    const void* bucketData = read_ptr((const char*)job + 0x1C);
+    DWORD buckets = (DWORD)(uintptr_t)read_ptr((const char*)job + 0x20), i, k;
+    for (i = 0; i < buckets && i < 5; i++) {
+        void* b = read_ptr((const char*)bucketData + 4 * i);
+        void** d = b ? (void**)read_ptr((char*)b + 0x08) : NULL;
+        DWORD n = b ? (DWORD)(uintptr_t)read_ptr((char*)b + 0x0C) : 0;
+        if (!d || n > 4096) continue;
+        for (k = 0; k < n; k++) if (ko_class(read_ptr(d + k)) == cls) return 1;
+    }
+    return 0;
+}
+
+// keep_outdoors: does this door job keep the outdoors? A door within one folder, a recognised
+// job, and not the way out of a house when neither keep_interiors nor preload_interiors keeps
+// the interior (that job loads `fake` back; it is left to the game as in 0.8.0).
+static int ko_allowed(const void* job)
+{
+    DWORD unload = (DWORD)(uintptr_t)read_ptr((const char*)job + 0x10);
+    DWORD buckets = (DWORD)(uintptr_t)read_ptr((const char*)job + 0x20);
+    if (g_ptMode != 4 || unload > 4096 || buckets > 5 || !ko_same_folder(g_ptFrom, g_ptTo)) return 0;
+    if (!cfg_keep_interiors && !cfg_preload_interiors && ko_loads_class(job, LC_FAKE)) return 0;
+    return 1;
+}
+
+static unsigned char __fastcall hook_PartSwitch(void* world, void* edx, void* name, int mode, void* screen)
+{
+    wchar_t from[160], to[160];
+    void* streaming = read_ptr((char*)world + 0x30C);
+    LONGLONG t0 = qpc_us();
+    unsigned char ok;
+    pt_text(streaming ? (char*)streaming + 0x2C : (char*)world + 0x310, from, 160);
+    pt_text(name, to, 160);
+    memcpy(g_ptFrom, from, sizeof from);
+    memcpy(g_ptTo, to, sizeof to);
+    if (cfg_load_trace) {
+        logf_("partition: switch '%ls' -> '%ls' (%s)%s", from, to, pt_mode(mode),
+              streaming ? ", a stream job is still running" : "");
+        pt_where("at the switch", NULL);
+    }
+    g_ptMode = mode;
+    ok = ((PartSwitch_t)(uintptr_t)VA_PART_SWITCH)(world, edx, name, mode, screen);
+    g_ptMode = -1;
+    if (cfg_load_trace) {
+        streaming = read_ptr((char*)world + 0x30C);
+        if (mode == 0 && streaming) pt_job("async", streaming);
+        logf_("partition: switch returned %d after %lu ms", ok, (DWORD)((qpc_us() - t0) / 1000));
+    }
+    return ok;
+}
+
+// The world's layer tree (static analysis, FUN_00a90f59): root group *(world+0x50); a group
+// holds layer infos at +0x90 (count +0x94) and child groups at +0x80 (count +0x84). Layer
+// info +0x38 = loaded layer, +0x5C = load in progress.
+typedef struct { DWORD total, loaded, interiors, interiorsLoaded, added, max; void** out; } ko_tree;
+
+static int kp_in_set(void* info);
+
+static void ko_walk(const void* group, int depth, ko_tree* t)
+{
+    void** infos;
+    DWORD n, i;
+    if (!group || depth > 40) return;
+    infos = (void**)read_ptr((const char*)group + 0x90);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x94);
+    for (i = 0; infos && n < 100000 && i < n; i++) {
+        void* info = read_ptr(infos + i);
+        int loaded;
+        if (!info) continue;
+        loaded = read_ptr((char*)info + 0x38) || read_ptr((char*)info + 0x5C);
+        t->total++;
+        if (loaded) t->loaded++;
+        if (ko_class(info) != LC_INTERIOR) continue;
+        t->interiors++;
+        if (loaded) t->interiorsLoaded++;
+        else if (t->out && t->added < t->max && !kp_in_set(info)) t->out[t->added++] = info;
+    }
+    infos = (void**)read_ptr((const char*)group + 0x80);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x84);
+    for (i = 0; infos && n < 100000 && i < n; i++) ko_walk(read_ptr(infos + i), depth + 1, t);
+}
+
+static void ko_count(const char* when, void* world)
+{
+    ko_tree t;
+    memset(&t, 0, sizeof t);
+    ko_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &t);
+    logf_("interiors: %s - %lu layers in the world, %lu loaded; %lu building interiors, %lu loaded",
+          when, t.total, t.loaded, t.interiors, t.interiorsLoaded);
+    log_mem(when);
+}
+
+// Which layers are interiors, from the game's own data rather than folder names (the
+// prologue and Act 1 name their folders differently). The world's partitions form a tree
+// (static analysis: FUN_00a82c99 walks it by name, FUN_00a83097 collects a partition's layer
+// groups, FUN_00aa95fa reads inherited properties): root *(*(world+0x358)+0x48); a node has
+// its name at +0x04 (String), its location type at +0x28 (0 = inherit from the parent; 1 =
+// LT_INDOOR), its parent at +0x60, children at +0x64 (count +0x68) and its own layer groups at
+// +0x74 (count +0x78; a String path each, 0x10 apart). A partition gets its own groups plus
+// its parents'. The interiors of an area are its indoor siblings (the area's outdoor partition
+// and its houses share a parent, e.g. `landing_site\outside\Flotsam` and
+// `landing_site\outside\03_clerk_marketplace`): their own groups hold the rooms. Layers in
+// those groups are preloaded, except what a door swaps (sound, occluders, the indoor
+// environment, low-poly stand-ins) and the townspeople (`comm*`, `community`), who stay with
+// the door. g_kpSet remembers what was preloaded so no job unloads it.
+#define KP_GROUPS 512
+#define KP_SET    4096
+static wchar_t g_kpGroup[KP_GROUPS][200];
+static int     g_kpGroups;
+static void*   g_kpSet[KP_SET];
+static int     g_kpSetCount;
+
+static void* kp_find(void* world, const wchar_t* name)
+{
+    void* parts = world ? read_ptr((char*)world + 0x358) : NULL;
+    void* node = parts ? read_ptr((char*)parts + 0x48) : NULL;
+    const wchar_t* at = name;
+    while (node && at && *at) {
+        const wchar_t* slash = wcschr(at, L'\\');
+        size_t n = slash ? (size_t)(slash - at) : wcslen(at);
+        void** kids = (void**)read_ptr((char*)node + 0x64);
+        DWORD k = (DWORD)(uintptr_t)read_ptr((char*)node + 0x68), i;
+        void* next = NULL;
+        wchar_t nm[96];
+        for (i = 0; kids && k < 10000 && i < k; i++) {
+            void* c = read_ptr(kids + i);
+            pt_text(c ? (char*)c + 0x04 : NULL, nm, 96);
+            if (wcslen(nm) == n && !_wcsnicmp(nm, at, n)) { next = c; break; }
+        }
+        node = next;
+        at = slash ? slash + 1 : NULL;
+    }
+    return node;
+}
+
+static LONG kp_location(void* node)
+{
+    int d;
+    for (d = 0; node && d < 32; d++) {
+        LONG t = (LONG)(uintptr_t)read_ptr((char*)node + 0x28);
+        if (t) return t;
+        node = read_ptr((char*)node + 0x60);
+    }
+    return 0;
+}
+
+// The own layer groups of `target`'s indoor siblings into g_kpGroup; the number of siblings.
+static int kp_interior_groups(void* world, const wchar_t* target)
+{
+    void* node = kp_find(world, target);
+    void* parent = node ? read_ptr((char*)node + 0x60) : NULL;
+    void** kids = parent ? (void**)read_ptr((char*)parent + 0x64) : NULL;
+    DWORD k = parent ? (DWORD)(uintptr_t)read_ptr((char*)parent + 0x68) : 0, i, j;
+    int sibs = 0;
+    g_kpGroups = 0;
+    for (i = 0; kids && k < 10000 && i < k; i++) {
+        void* c = read_ptr(kids + i);
+        char* groups;
+        DWORD n;
+        if (!c || c == node || kp_location(c) != 1) continue;
+        sibs++;
+        groups = (char*)read_ptr((char*)c + 0x74);
+        n = (DWORD)(uintptr_t)read_ptr((char*)c + 0x78);
+        for (j = 0; groups && n < 10000 && j < n && g_kpGroups < KP_GROUPS; j++) {
+            pt_text(groups + 0x10 * j, g_kpGroup[g_kpGroups], 200);
+            if (g_kpGroup[g_kpGroups][0]) g_kpGroups++;
+        }
+    }
+    if (cfg_load_trace)
+        logf_("preload: '%ls' %s, %d indoor siblings, %d layer groups", target,
+              node ? "found" : "NOT found in the partition tree", sibs, g_kpGroups);
+    return sibs;
+}
+
+// Is a layer path inside one of the groups? Group paths are matched as whole path segments.
+static int kp_in_groups(const wchar_t* path)
+{
+    int g;
+    for (g = 0; g < g_kpGroups; g++) {
+        const wchar_t* hit = wcsistr(path, g_kpGroup[g]);
+        size_t n = wcslen(g_kpGroup[g]);
+        if (hit && (hit == path || hit[-1] == L'\\') && (hit[n] == L'\\' || hit[n] == 0)) return 1;
+    }
+    return 0;
+}
+
+static int kp_cmp(const void* a, const void* b)
+{
+    uintptr_t x = (uintptr_t)*(void* const*)a, y = (uintptr_t)*(void* const*)b;
+    return x < y ? -1 : x > y;
+}
+
+static int kp_in_set(void* info)
+{
+    return g_kpSetCount && bsearch(&info, g_kpSet, g_kpSetCount, sizeof(void*), kp_cmp) != NULL;
+}
+
+typedef struct { void** out; DWORD added, max; } kp_collect_t;
+
+static void kp_walk(const void* group, int depth, kp_collect_t* t)
+{
+    void** infos;
+    DWORD n, i;
+    if (!group || depth > 40) return;
+    infos = (void**)read_ptr((const char*)group + 0x90);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x94);
+    for (i = 0; infos && n < 100000 && i < n; i++) {
+        void* info = read_ptr(infos + i);
+        wchar_t path[260], name[64];
+        int c;
+        if (!info) continue;
+        pt_text((char*)info + 0x68, path, 260);
+        if (!kp_in_groups(path)) continue;
+        c = ko_class(info);
+        if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
+        pt_text((char*)info + 0x78, name, 64);
+        if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\community")) continue;
+        if (g_kpSetCount < KP_SET && !kp_in_set(info)) {
+            g_kpSet[g_kpSetCount++] = info;
+            qsort(g_kpSet, g_kpSetCount, sizeof(void*), kp_cmp);
+        }
+        if (read_ptr((char*)info + 0x38) || read_ptr((char*)info + 0x5C)) continue;
+        if (t->added < t->max) t->out[t->added++] = info;
+    }
+    infos = (void**)read_ptr((const char*)group + 0x80);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x84);
+    for (i = 0; infos && n < 100000 && i < n; i++) kp_walk(read_ptr(infos + i), depth + 1, t);
+}
+
+// The job's lists are pointed at our own arrays for the run (its own arrays are left untouched
+// and put back after it). Game thread only.
+#define KO_LIST 4096
+static void* g_koUnloadOut[KO_LIST];
+static int   g_koPreloaded;   // preload_interiors ran on the current area
+static void* g_koLoadOut[5][KO_LIST];
+
+static void __stdcall hook_PartRun(void* job)
+{
+    LONGLONG t0 = qpc_us();
+    void** unloadData = (void**)read_ptr((char*)job + 0x0C);
+    LONG unloadN = (LONG)(uintptr_t)read_ptr((char*)job + 0x10);
+    void** buckets = (void**)read_ptr((char*)job + 0x1C);
+    LONG nb = (LONG)(uintptr_t)read_ptr((char*)job + 0x20);
+    void* savedData[5];
+    LONG savedN[5];
+    LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, i, b;
+    int on = 0, area = 0, filter;
+    LONGLONG tRun;
+    void* world = read_ptr((char*)job);
+    if (cfg_load_trace) pt_job("sync", job);
+    g_ptGcSkipped = 0;
+    g_ptGcUs = 0;
+    if (nb < 0 || nb > 5 || unloadN < 0 || unloadN > KO_LIST || (unloadN && !unloadData) || (nb && !buckets)) nb = -1;
+    if (nb >= 0) {
+        on = cfg_keep_outdoors && ko_allowed(job);
+        area = cfg_preload_interiors && (g_ptMode == 1 || (g_ptMode == 4 && !ko_same_folder(g_ptFrom, g_ptTo)));
+    }
+    filter = nb >= 0 && (on || cfg_preload_interiors);
+    if (area && g_ptMode == 1) g_kpSetCount = 0;
+    if (nb >= 0 && !cfg_preload_interiors && (g_ptMode == 1 || (g_ptMode == 4 && !ko_same_folder(g_ptFrom, g_ptTo))))
+        g_koPairCount = g_koSlowCount = 0;
+    if (area) ko_count("before the switch", world);
+    if (filter) {
+        // Unload: a kept door unloads only what each partition swaps; preload keeps interiors.
+        for (i = 0; i < unloadN; i++) {
+            void* l = unloadData[i];
+            int c = ko_class(l);
+            int go = on ? (c == LC_FAKE || c == LC_SWAP || c == LC_LOWPOLY)
+                        : !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
+            if (go) g_koUnloadOut[unloaded++] = l; else kept++;
+        }
+        *(void**)((char*)job + 0x0C) = g_koUnloadOut;
+        *(LONG*)((char*)job + 0x10) = unloaded;
+        // Load: no fake rooms back while interiors are kept, no low-poly stand-ins next to the
+        // real objects; an area change also loads every building interior of the world.
+        for (b = 0; b < nb; b++) {
+            void* bk = read_ptr(buckets + b);
+            void** d = bk ? (void**)read_ptr((char*)bk + 0x08) : NULL;
+            LONG n = bk ? (LONG)(uintptr_t)read_ptr((char*)bk + 0x0C) : 0, m = 0;
+            savedData[b] = d;
+            savedN[b] = n;
+            if (!bk || n < 0 || n > KO_LIST || (n && !d)) { savedN[b] = -1; continue; }
+            for (i = 0; i < n; i++) {
+                int c = ko_class(d[i]);
+                if ((c == LC_FAKE && (cfg_preload_interiors || (on && cfg_keep_interiors))) || (on && c == LC_LOWPOLY))
+                    skipped++;
+                else
+                    g_koLoadOut[b][m++] = d[i];
+            }
+            if (area && b == nb - 1) {
+                kp_collect_t t;
+                t.out = &g_koLoadOut[b][m];
+                t.added = 0;
+                t.max = KO_LIST - m;
+                if (kp_interior_groups(world, g_ptTo) && g_kpGroups)
+                    kp_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &t);
+                {
+                    // Act 1's houses are not marked LT_INDOOR (run 15: 0 indoor siblings for
+                    // Binduga and Flotsam), so the folder names add theirs.
+                    ko_tree f;
+                    DWORD tree = t.added;
+                    memset(&f, 0, sizeof f);
+                    f.out = t.out + t.added;
+                    f.max = t.max - t.added;
+                    ko_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &f);
+                    t.added += f.added;
+                    if (cfg_load_trace) logf_("preload: %lu interior layers from the partition tree, %lu more by folder name", tree, f.added);
+                }
+                added = (LONG)t.added;
+                g_koPreloaded = 1;
+                if (cfg_load_trace) pt_layers("preload", t.out, t.added, PT_MAX_NAMES - 400);
+                m += added;
+            }
+            loaded += m;
+            *(void***)((char*)bk + 0x08) = g_koLoadOut[b];
+            *(LONG*)((char*)bk + 0x0C) = m;
+        }
+    }
+    g_koSkipGc = on && cfg_skip_door_gc;
+    tRun = qpc_us();
+    ((PartRun_t)(uintptr_t)VA_PART_RUN)(job);
+    tRun = qpc_us() - tRun;
+    g_koSkipGc = 0;
+    if (filter) {
+        *(void**)((char*)job + 0x0C) = unloadData;
+        *(LONG*)((char*)job + 0x10) = unloadN;
+        for (b = 0; b < nb; b++) {
+            void* bk = read_ptr(buckets + b);
+            if (!bk || savedN[b] < 0) continue;
+            *(void**)((char*)bk + 0x08) = savedData[b];
+            *(LONG*)((char*)bk + 0x0C) = savedN[b];
+        }
+    }
+    if (on || area || cfg_load_trace)
+        logf_("partition: sync job ran %lu ms (GC %s %lu ms)%s", (DWORD)((qpc_us() - t0) / 1000),
+              g_ptGcSkipped ? "skipped," : "", (DWORD)(g_ptGcUs / 1000),
+              on ? " - keep_outdoors: outdoor layers left loaded" : "");
+    if (filter)
+        logf_("partition: %s kept %ld of %ld layers, unloaded %ld; loaded %ld (%ld interiors added), skipped %ld (fake rooms, low-poly)",
+              on ? "keep_outdoors" : "preload", kept, unloadN, unloaded, loaded, added, skipped);
+    if (area) ko_count("after the switch", world);
+    // A kept door that loaded nothing will not load anything next time either: no fade then.
+    // When it only dropped fake rooms (no sound/occluder swap) the way back loads nothing too.
+    if (on && loaded == 0 && (cfg_keep_interiors || cfg_preload_interiors)) {
+        int swaps = 0;
+        for (i = 0; i < unloaded; i++) if (ko_class(g_koUnloadOut[i]) != LC_FAKE) swaps = 1;
+        ko_pair_add(g_ptFrom, g_ptTo);
+        if (!swaps) ko_pair_add(g_ptTo, g_ptFrom);
+    }
+    if (on && tRun / 1000 >= KO_SLOW_MS) {
+        ko_pair_put(g_koSlow, &g_koSlowCount, g_ptFrom, g_ptTo);
+        logf_("doors: '%ls' -> '%ls' took %lu ms - it keeps its fade", g_ptFrom, g_ptTo, (DWORD)(tRun / 1000));
+    }
+}
+
+// .text is decrypted by the SteamStub: call once the fingerprints are there.
+static int pt_install(void)
+{
+    static int done;
+    int a, b, c;
+    if (done) return 1;
+    if (!code_matches(VA_PART_SWITCH, "55 8b ec 83 ec 50 53 56 57 ff 75 08") ||
+        !code_matches(VA_PART_RUN, "55 8b ec 83 ec 18 53 8b 5d 08 56 57"))
+        return 0;
+    a = patch_call(VA_PART_SWITCH_A, VA_PART_SWITCH, (void*)hook_PartSwitch);
+    b = patch_call(VA_PART_SWITCH_B, VA_PART_SWITCH, (void*)hook_PartSwitch);
+    c = patch_call(VA_PART_RUN_CALL, VA_PART_RUN, (void*)hook_PartRun);
+    if (!code_matches(VA_GC, "55 8b ec e8 df ba 94 ff") || !patch_call(VA_PART_GC_CALL, VA_GC, (void*)hook_PartGc))
+        logf_("partition: GC call not recognised - skip_door_gc off");
+    logf_("partition: switch calls %s/%s, sync run %s (load_trace=%d keep_outdoors=%d)", a ? "hooked" : "NOT hooked",
+          b ? "hooked" : "NOT hooked", c ? "hooked" : "NOT hooked", cfg_load_trace, cfg_keep_outdoors);
+    done = 1;
+    return 1;
+}
+
 // ---- fast doors ---------------------------------------------------------
 // [loading] fast_doors=1. A house door is a type 1 streaming-door task (vtable 00EF0410): its
 // constructor FUN_00502a7f fades to black, Tick 00502B18 queues the interior switch
@@ -2489,7 +3146,6 @@ static HRESULT WINAPI hook_Present(void* self, const RECT* src, const RECT* dst,
 // the game itself fades in and finishes the task; the real event later finds state 2 and does
 // nothing. [loading] door_fade repoints the two fades' `movss xmm0,[00E30444]` (the shared 0.5)
 // at a float of ours. Everything runs on the game thread inside the door's own OnTimer.
-#define VA_GAME             0x01404950u   // CGame*: +0x40 world, +0xE8 queued world requests
 #define VA_DOOR_TELEPORT_VT 0x00EF0410u   // type 1 task: +0x14 state (1 = switch queued)
 #define VA_DOOR_FADE_EVENT  0x00502B5Fu   // slot 2: thiscall (event, unused), RET 8
 #define VA_CNAME_FROM_STR   0x00B28D76u   // __stdcall (DWORD* out, const wchar_t*), RET 8
@@ -2555,6 +3211,7 @@ static void __fastcall hook_DoorTimer(void* door, void* edx, void* name, float d
         g_ltDoorFaded = 0;
         g_ltDoorStart = GetTickCount();
         g_ltDoorTask = before;
+        pt_where("door task starts", door);
     } else if (before != g_ltDoorTask || g_ltDoorEnd) {
         g_ltDoorOverlap++;
         return;
@@ -2563,7 +3220,10 @@ static void __fastcall hook_DoorTimer(void* door, void* edx, void* name, float d
     if (g_ltDoorVt == (void*)(uintptr_t)VA_DOOR_INTERIOR_VT && after == before &&
         *(const LONG*)((const char*)before + 0x14) == 1)
         g_ltDoorFaded = 1;
-    if (after != before) g_ltDoorEnd = GetTickCount();
+    if (after != before) {
+        g_ltDoorEnd = GetTickCount();
+        pt_where("door task ends", door);
+    }
 }
 
 // The door slot is in .rdata (not encrypted by the SteamStub): callable from DllMain's threads.
@@ -2585,6 +3245,32 @@ static void door_timer_install(const char* tag)
     VirtualProtect((void*)(uintptr_t)VA_DOOR_TIMER_SLOT, 4, old, &tmp);
 }
 
+// indoor_outdoors: applying a partition sends its location type to the renderer (FUN_00aa95fa
+// -> render command 00E7C3B0 -> renderer+0xA8 = partition+0x28; LT_DEFAULT 0, LT_INDOOR 1,
+// LT_OUTDOOR 2, LT_CAVE 3). Each frame's setup (FUN_009c011e) then turns three of the
+// frame's draw flags off (+0x2775, +0x2776, +0x278F: terrain, grass and the like) when
+// renderer+0xAC is set and the type is LT_INDOOR. With the outdoors kept loaded that makes
+// the ground vanish behind Geralt as he walks in (La Valette, run 13), and outside the windows.
+// The `cmp dword [eax+0xA8], 1` at 009C022C gets an immediate no type has (0x7F), so indoor
+// partitions draw them too. Only this check reads the value this way; light, sound and
+// weather come from elsewhere.
+#define VA_INDOOR_CMP       0x009C0223u   // cmp byte [eax+0xAC],0 / jz / cmp dword [eax+0xA8],1
+#define VA_INDOOR_IMM       0x009C0232u
+
+static int indoor_patch(void)
+{
+    DWORD old = 0, tmp = 0;
+    unsigned char* at = (unsigned char*)(uintptr_t)VA_INDOOR_IMM;
+    if (!range_readable(at, 1)) return 0;
+    if (*at == 0x7F) return 1;
+    if (!code_matches(VA_INDOOR_CMP, "80 b8 ac 00 00 00 00 74 0d 83 b8 a8 00 00 00 01 75 04")) return 0;
+    if (!VirtualProtect(at, 1, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    *at = 0x7F;
+    VirtualProtect(at, 1, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), at, 1);
+    return 1;
+}
+
 // Repoint one `movss xmm0,[00E30444]` (F3 0F 10 05 disp32) at g_doorFade.
 static int door_fade_patch(uintptr_t at)
 {
@@ -2601,21 +3287,131 @@ static int door_fade_patch(uintptr_t at)
     return *(LONG*)(at + 4) == mine;
 }
 
-// Worker tick: the door slot at once, the fade sites once the SteamStub has decrypted .text.
+// Door fade per door: the door's start method (vtable slot 00EF02E8 -> FUN_0095dcc4, thiscall
+// (SDoorPartition*), RET 4; the partition's name String first) creates the task whose
+// constructor reads the fade-out length, so g_doorFade is set here, on the game thread, before
+// the task exists; the fade-in later reads the same float. A door whose target partition is in
+// another folder than the current one changes area (`village-city-forest\Binduga` ->
+// `landing_site\outside\Flotsam`: 195 layers out, 348 in, ~0.8-1.2 s) and gets area_fade;
+// houses and the inn stay in their folder and get door_fade.
+#define VA_DOOR_START_SLOT  0x00EF02E8u
+#define VA_DOOR_START       0x0095DCC4u
+
+typedef int (__fastcall *DoorStart_t)(void* door, void* edx, void* part);
+
+// instant_doors: a house door both ways of which keep_interiors has already made load nothing
+// gets no fade at all. Its fade length is set to the KO_NO_FADE marker; the two render
+// commands' execute methods (slot 3 of the fade-out command 00E7C374 -> 009DC316, length at
+// +0x0C, and of the fade-in command 00E7C388 -> 009DC2C3, length at +0x08; thiscall, no
+// arguments) skip a command carrying it, so the screen never goes black. The door task waits
+// for "fade over" (FUN_00aa72de, renderer slot 0x7C): with no fade-out issued the last fade
+// is still complete (FUN_009d68e7 keeps its progress at 1.0), so the task goes straight on.
+#define VA_FADE_OUT_EXEC_SLOT 0x00E7C380u
+#define VA_FADE_OUT_EXEC      0x009DC316u
+#define VA_FADE_IN_EXEC_SLOT  0x00E7C394u
+#define VA_FADE_IN_EXEC       0x009DC2C3u
+#define KO_NO_FADE            0.00123f
+
+typedef void (__fastcall *FadeExec_t)(void* cmd, void* edx);
+static int g_fadeExecHooked;
+
+static void __fastcall hook_FadeOutExec(void* cmd, void* edx)
+{
+    float len = 0;
+    if (read_f32((char*)cmd + 0x0C, &len) && len == KO_NO_FADE) return;
+    ((FadeExec_t)(uintptr_t)VA_FADE_OUT_EXEC)(cmd, edx);
+}
+
+static void __fastcall hook_FadeInExec(void* cmd, void* edx)
+{
+    float len = 0;
+    if (read_f32((char*)cmd + 0x08, &len) && len == KO_NO_FADE) return;
+    ((FadeExec_t)(uintptr_t)VA_FADE_IN_EXEC)(cmd, edx);
+}
+
+static int slot_swap(uintptr_t slot, uintptr_t want, void* hook)
+{
+    DWORD old = 0, tmp = 0;
+    void* have = read_ptr((void*)slot);
+    int ok;
+    if (have == hook) return 1;
+    if (have != (void*)want || !VirtualProtect((void*)slot, 4, PAGE_READWRITE, &old)) return 0;
+    ok = InterlockedCompareExchangePointer((void* volatile*)slot, hook, have) == have;
+    VirtualProtect((void*)slot, 4, old, &tmp);
+    return ok;
+}
+
+static void fade_exec_install(void)
+{
+    int a = slot_swap(VA_FADE_OUT_EXEC_SLOT, VA_FADE_OUT_EXEC, (void*)hook_FadeOutExec);
+    int b = slot_swap(VA_FADE_IN_EXEC_SLOT, VA_FADE_IN_EXEC, (void*)hook_FadeInExec);
+    g_fadeExecHooked = a && b;
+    logf_("doors: fade commands %s/%s - instant_doors %s", a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked",
+          g_fadeExecHooked ? "on" : "off");
+}
+
+static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
+{
+    wchar_t from[160], to[160];
+    void* game = read_ptr((void*)(uintptr_t)VA_GAME);
+    void* world = game ? read_ptr((char*)game + 0x40) : NULL;
+    void* streaming = world ? read_ptr((char*)world + 0x30C) : NULL;
+    int nf, nt, area;
+    pt_text(streaming ? (char*)streaming + 0x2C : world ? (char*)world + 0x310 : NULL, from, 160);
+    pt_text(part, to, 160);
+    nf = part_folder(from);
+    nt = part_folder(to);
+    area = from[0] && to[0] && (nf != nt || _wcsnicmp(from, to, nf));
+    g_doorFade = area ? cfg_area_fade : cfg_door_fade;
+    if (area) logf_("doors: '%ls' -> '%ls' changes area - %.2f s fades", from, to, g_doorFade);
+    else if (cfg_instant_doors && g_fadeExecHooked && cfg_keep_outdoors && !ko_pair_in(g_koSlow, g_koSlowCount, from, to) &&
+             ((cfg_preload_interiors && g_koPreloaded) || (cfg_keep_interiors && ko_pair_known(from, to)))) {
+        g_doorFade = KO_NO_FADE;
+        logf_("doors: '%ls' -> '%ls' is loaded - no fade", from, to);
+    }
+    return ((DoorStart_t)(uintptr_t)VA_DOOR_START)(door, edx, part);
+}
+
+static void door_start_install(void)
+{
+    DWORD old = 0, tmp = 0;
+    void* have = read_ptr((void*)(uintptr_t)VA_DOOR_START_SLOT);
+    if (have == (void*)hook_DoorStart) return;
+    if (have != (void*)(uintptr_t)VA_DOOR_START) {
+        logf_("doors: door start slot %08X holds %08X, expected %08X - one fade for every door",
+              (unsigned)VA_DOOR_START_SLOT, (unsigned)(uintptr_t)have, (unsigned)VA_DOOR_START);
+        return;
+    }
+    if (!VirtualProtect((void*)(uintptr_t)VA_DOOR_START_SLOT, 4, PAGE_READWRITE, &old)) return;
+    if (InterlockedCompareExchangePointer((void* volatile*)(uintptr_t)VA_DOOR_START_SLOT,
+                                          (void*)hook_DoorStart, have) == have)
+        logf_("doors: door start hooked (door_fade %.2f s, area_fade %.2f s)", cfg_door_fade, cfg_area_fade);
+    VirtualProtect((void*)(uintptr_t)VA_DOOR_START_SLOT, 4, old, &tmp);
+}
+
+// Worker tick: the door slots at once, the fade sites once the SteamStub has decrypted .text.
 static void doors_tick(void)
 {
-    static int fades_done, tries;
-    if (!cfg_fast_doors && cfg_door_fade == 0.5f) return;
+    static int fades_done, tries, partTries, indoorTries;
+    if (cfg_indoor_outdoors && cfg_keep_outdoors && indoorTries >= 0 && indoorTries < 1000) {
+        if (indoor_patch()) { logf_("doors: indoor partitions keep drawing terrain and grass (indoor_outdoors=1)"); indoorTries = -1; }
+        else if (++indoorTries == 1000) logf_("doors: indoor draw check not recognised - indoor_outdoors off");
+    }
+    if ((cfg_keep_outdoors || cfg_preload_interiors) && partTries < 1000 && !pt_install() && ++partTries == 1000)
+        logf_("partition: switch not recognised - keep_outdoors off");
+    if (!cfg_fast_doors && cfg_door_fade == 0.5f && cfg_area_fade == 0.5f) return;
     door_timer_install("doors");
     if (fades_done || tries > 500) return;
     tries++;
-    if (cfg_door_fade == 0.5f) { fades_done = 1; return; }
+    if (cfg_door_fade == 0.5f && cfg_area_fade == 0.5f) { fades_done = 1; return; }
     g_doorFade = cfg_door_fade;
+    if (cfg_area_fade != cfg_door_fade || (cfg_instant_doors && (cfg_keep_interiors || cfg_preload_interiors))) door_start_install();
+    if (cfg_instant_doors && (cfg_keep_interiors || cfg_preload_interiors) && !g_fadeExecHooked && tries == 1) fade_exec_install();
     if (code_matches(VA_DOOR_FADE_OUT, "f3 0f 10 05 44 04 e3 00") || code_matches(VA_DOOR_FADE_IN, "f3 0f 10 05 44 04 e3 00")) {
         int a = door_fade_patch(VA_DOOR_FADE_OUT), b = door_fade_patch(VA_DOOR_FADE_IN);
         fades_done = 1;
-        logf_("doors: fade-out %s, fade-in %s, %.2f s (game 0.5 s); fast_doors=%d",
-              a ? "patched" : "NOT patched", b ? "patched" : "NOT patched", cfg_door_fade, cfg_fast_doors);
+        logf_("doors: fade-out %s, fade-in %s, %.2f s, area changes %.2f s (game 0.5 s); fast_doors=%d",
+              a ? "patched" : "NOT patched", b ? "patched" : "NOT patched", cfg_door_fade, cfg_area_fade, cfg_fast_doors);
     } else if (tries == 500) {
         logf_("doors: fade sites not recognised - fades left at 0.5 s");
     }
@@ -2814,7 +3610,7 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
     DWORD t0 = GetTickCount(), winStart = 0, screenStart = 0, screenMs = 0, lastTick = 0;
     HMODULE k32 = NULL, pinned;
     void* expect = NULL;
-    int n = 0, unpackOn = 0, presentOn = 0, inWin = 0, windows = 0, n0 = 0;   // inWin: 1 screen, 2 door
+    int n = 0, unpackOn = 0, presentOn = 0, partOn = 0, inWin = 0, windows = 0, n0 = 0;   // inWin: 1 screen, 2 door
     void* lastScreen = NULL;
     unsigned char lastShown = 0;
     ULONGLONG pcpu0 = 0;
@@ -2858,6 +3654,11 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
         } else if (!unpackOn && now - t0 > 120000) {
             unpackOn = -1;
             logf_("load-trace: block unpack function never appeared - not timed");
+        }
+        if (!partOn && pt_install()) partOn = 1;
+        else if (!partOn && now - t0 > 120000) {
+            partOn = -1;
+            logf_("load-trace: partition switch not recognised - partitions not traced");
         }
         if (!presentOn) {
             void* dev = read_ptr((void*)(uintptr_t)WF_D3D_DEVICE);
@@ -4230,7 +5031,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d", cfg_skip_intro);
         logf_("diagnostics: file_trace=%d load_trace=%d", cfg_file_trace, cfg_load_trace);
-        logf_("loading: fast_doors=%d door_fade=%.2f", cfg_fast_doors, cfg_door_fade);
+        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d)", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",

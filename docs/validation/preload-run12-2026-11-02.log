@@ -1,0 +1,871 @@
+21:47:41.189 witcher2_enginefix 0.8.0 loaded (image base 0x00400000)
+21:47:41.189 diagnostics: crash_dump=1 (previous log kept as witcher2_enginefix.prev.log)
+21:47:41.190 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+21:47:41.190 distance config: experimental=1 visibility=3.00x shadow=3.00x
+21:47:41.190 saves: fix_thumbnails=1 save_trace=0
+21:47:41.190 startup: skip_intro=1
+21:47:41.190 diagnostics: file_trace=0 load_trace=1
+21:47:41.190 loading: fast_doors=1 door_fade=0.05 area_fade=0.25 keep_outdoors=1 keep_interiors=1 preload_interiors=1 skip_door_gc=1 instant_doors=1
+21:47:41.190 scriptpatches: book_marker=1 continue=1 pause_quit=1 window_mode=1
+21:47:41.190 window: enabled=1 borderless=0 dpi_aware=1
+21:47:41.190 presets: default=extreme, cycle modifiers=1 VK=79 (Options > Graphics remembers the level)
+21:47:41.192 load-trace: hooked kernel32.dll!ReadFile
+21:47:41.192 load-trace: hooked kernel32.dll!CreateFileW
+21:47:41.192 load-trace: hooked kernel32.dll!Sleep
+21:47:41.192 load-trace: hooked kernel32.dll!WaitForSingleObject
+21:47:41.192 load-trace: hooked kernel32.dll!WaitForSingleObjectEx
+21:47:41.192 load-trace: hooked after 0 ms (5/5 import slots), main thread 44868
+21:47:41.192 load-trace: streaming door timer hooked
+21:47:41.195 presets: startup=extreme (options menu)
+21:47:41.195 window: dpi awareness = system aware (fallback)
+21:47:41.195 window: borderless=1 (options menu), dpi_aware=1, menu=1
+21:47:41.336 load-trace: block unpack call hooked after 140 ms
+21:47:41.336 startup: movie list and tick hooked after 140 ms
+21:47:41.336 partition: switch calls hooked/hooked, sync run hooked (load_trace=1 keep_outdoors=1)
+21:47:41.353 window: startup borderless style patched
+21:47:41.366 window: menu channel hooked (Options > Graphics applies borderless at once)
+21:47:41.366 window: viewport tick hooked (Full screen switches at once)
+21:47:41.460 script overlay: cache <game>\bin\witcher2_enginefix_cache
+21:47:41.468 script overlay: cache: reused (4 redirects)
+21:47:41.469 script patches: book_marker=on continue=on pause_quit=on window_mode=on cache=reused
+21:47:41.863 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+21:47:41.867 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+21:47:42.208 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+21:47:42.708 crash: filter armed, chaining to 0x5F492571 (CSERHelper.dll+0x12571)
+21:47:42.715 osd: window ready (font 34 px)
+21:47:42.715 stability: ray cast guard installed (collector slot 00D41A38)
+21:47:42.715 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
+21:47:42.715 osd: Graphics: extreme  (LOD only)
+21:47:42.721 lod enforced: mesh=8.000 foliage=5.000
+21:47:42.721 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=3.00x shadow=3.00x
+21:47:42.721 osd: Graphics: extreme  (4/4)
+21:47:42.722 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+21:47:42.722 thumbnail: menu image registry hooked (QuickSave preview refresh)
+21:47:42.722 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=1 trace=0
+21:47:42.722 saves: ISteamRemoteStorage 13320BE8 FileWrite hooked; thumbnail fix=1
+21:47:42.722 doors: door start hooked (door_fade 0.05 s, area_fade 0.25 s)
+21:47:42.722 doors: fade commands hooked/hooked - instant_doors on
+21:47:42.722 doors: fade-out patched, fade-in patched, 0.05 s, area changes 0.25 s (game 0.5 s); fast_doors=1
+21:47:44.437 load-trace: streaming burst 250 ms | dzip read 264x 0.6 MB 1 ms | loose read 2158x 8.4 MB 6 ms | other read 1x 0.0 MB 0 ms | open 34x 2 ms | unpack 150x 0.6->3.8 MB 2 ms | sleep 43x (0:21 1:22) 341 ms
+21:47:44.939 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 40408x 8.9 MB 45 ms | open 3x 0 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 30x (0:0 1:30) 472 ms
+21:47:57.845 window: game window 3840x2160, User.ini viewport 3840x2160
+21:47:57.891 load-trace: device 1279F900 Present hooked after 16703 ms
+21:47:57.891 load-trace: device found: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:47:58.056 load-trace: window 1 start (loading screen): render thread 0BDF3700 movie 0B725400 screen 00000000 shown=0 (42 threads)
+21:47:58.218 load-trace: window 1 +250 ms | dzip read 2033x 87.2 MB 21 ms | loose read 21x 1.4 MB 0 ms | open 3x 0 ms | unpack 1946x 87.2->118.8 MB 90 ms | sleep 296x (0:0 1:296) 483 ms | wait 2x (0 polls) 0 ms | present 8x 39 ms
+21:47:58.424 input: CreateDevice hook installed
+21:47:58.426 input: keyboard state filter installed
+21:47:58.426 input: keyboard cooperative level hook installed
+21:47:58.426 input: window procedure hooked (key messages ignored while DirectInput reads the keyboard)
+21:47:58.426 input: keyboard cooperative level 0x05 -> 0x06 (Windows keys and Print Screen work in game)
+21:47:58.428 startup: movie list built (1 entries), skip armed
+21:47:58.445 load-trace: window 1 end: loading screen (screen object 0 ms) 422 ms; process CPU 656 ms = 1.56 cores; timer resolution 0.500 ms
+21:47:58.445 load-trace:   tid=44868 (main) start=029262EE cpu=328 ms (78%) | dzip read 3211x 123.8 MB 30 ms | loose read 62x 4.6 MB 1 ms | open 9x 1 ms | unpack 2933x 123.8->171.9 MB 129 ms
+21:47:58.445 load-trace:   tid=39520 start=0066F607 cpu=0 ms (0%) | loose read 3x 0.4 MB 0 ms | sleep 260x (0:0 1:260) 412 ms
+21:47:58.445 load-trace:   tid=48652 start=0066F607 cpu=0 ms (0%) | sleep 260x (0:0 1:260) 412 ms
+21:47:58.445 load-trace:   tid=44916 start=77088D10 cpu=0 ms (0%) | open 1x 0 ms
+21:47:58.445 load-trace:   tid=29392 start=0066F607 cpu=312 ms (74%) | wait 426x (0 polls) 0 ms | present 13x 40 ms (max 31.3)
+21:47:58.445 load-trace:   tid=26556 start=6FC98C70 cpu=62 ms (15%) | no traced call
+21:47:58.445 load-trace: window 1 totals | dzip read 3211x 123.8 MB 30 ms | loose read 65x 5.0 MB 1 ms | open 10x 1 ms | unpack 2933x 123.8->171.9 MB 129 ms | sleep 520x (0:0 1:520) 824 ms | wait 426x (0 polls) 0 ms | present 13x 40 ms
+21:47:58.445 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:47:58.738 startup: stopping startup movie 1 of 1
+21:47:58.811 startup: 1 startup movie(s) stopped, main menu reached
+21:47:58.890 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 8x 31.7 MB 6 ms | open 3x 0 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 401x (0:0 1:401) 617 ms | wait 302x (0 polls) 735 ms | present 9x 115 ms
+21:48:03.140 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 4 ms | open 1x 0 ms | sleep 386x (0:0 1:386) 601 ms | wait 9x (0 polls) 2219 ms | present 1x 0 ms
+21:48:43.578 load-trace: window 2 start (loading screen): render thread 0BDF3700 movie 0B725400 screen 00000000 shown=0 (50 threads)
+21:48:43.765 load-trace: window 2 +250 ms | dzip read 174x 2.3 MB 1 ms | unpack 153x 2.3->8.6 MB 8 ms | sleep 473x (0:0 1:473) 728 ms | wait 19x (0 polls) 0 ms | present 7x 0 ms
+21:48:43.837 partition: switch '' -> 'Outdoor\global\village-city-forest\Binduga' (load)
+21:48:43.837 partition: at the switch - player unknown (0.00, 0.00, 0.00)
+21:48:43.837 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 0 layers, load 787 layers in 1 buckets
+21:48:43.838 partition:   load   act1_quest [+68 levels\l02-port\act1_quest.w2l] [+98 levels\l02-port\act1_quest.w2l]
+21:48:43.838 partition:   load   armwrestling [+68 levels\l02-port\armwrestling.w2l] [+98 levels\l02-port\armwrestling.w2l]
+21:48:43.838 partition:   load   city_lights [+50 ombatfistfightstatic.ws] [+68 levels\l02-port\city_lights.w2l] [+98 levels\l02-port\city_lights.w2l]
+21:48:43.838 partition:   load   collisions [+68 levels\l02-port\collisions.w2l] [+98 levels\l02-port\collisions.w2l]
+21:48:43.838 partition:   load   community_areas [+68 levels\l02-port\community_areas.w2l] [+98 levels\l02-port\community_areas.w2l]
+21:48:43.838 partition:   load   community_stickers [+68 levels\l02-port\community_stickers.w2l] [+98 levels\l02-port\community_stickers.w2l]
+21:48:43.838 partition:   load   community_streaming [+68 levels\l02-port\community_streaming.w2l] [+98 levels\l02-port\community_streaming.w2l]
+21:48:43.838 partition:   load   containers [+68 levels\l02-port\containers.w2l] [+98 levels\l02-port\containers.w2l]
+21:48:43.838 partition:   load   cutscene_waypoints [+68 levels\l02-port\cutscene_waypoints.w2l] [+98 levels\l02-port\cutscene_waypoints.w2l]
+21:48:43.838 partition:   load   denied_areas [+68 levels\l02-port\denied_areas.w2l] [+98 levels\l02-port\denied_areas.w2l]
+21:48:43.838 partition:   load   exploration_stickers [+68 levels\l02-port\exploration_stickers.w2l] [+98 levels\l02-port\exploration_stickers.w2l]
+21:48:43.838 partition:   load   foliage_system [+68 levels\l02-port\foliage_system.w2l] [+98 levels\l02-port\foliage_system.w2l]
+21:48:43.839 partition:   load   fow_triggers [+68 levels\l02-port\fow_triggers.w2l] [+98 levels\l02-port\fow_triggers.w2l]
+21:48:43.839 partition:   load   intervention_points [+68 levels\l02-port\intervention_points.w2l] [+98 levels\l02-port\intervention_points.w2l]
+21:48:43.839 partition:   load   Loader [+68 levels\l02-port\Loader.w2l] [+98 levels\l02-port\loader.w2l]
+21:48:43.839 partition:   load   lores terrain [+68 levels\l02-port\lores terrain.w2l] [+98 levels\l02-port\lores terrain.w2l]
+21:48:43.839 partition:   load   map_areas [+68 levels\l02-port\map_areas.w2l] [+98 levels\l02-port\map_areas.w2l]
+21:48:43.839 partition:   load   map_prop [+68 levels\l02-port\map_prop.w2l] [+98 levels\l02-port\map_prop.w2l]
+21:48:43.839 partition:   load   map_waypoints [+68 levels\l02-port\map_waypoints.w2l] [+98 levels\l02-port\map_waypoints.w2l]
+21:48:43.839 partition:   load   navigation surfaces [+50 ame\gameplay\lures.ws] [+68 levels\l02-port\navigation surfaces.w2l] [+98 levels\l02-port\navigation surfaces.w2l]
+21:48:43.839 partition:   load   npc_spawnsets [+68 levels\l02-port\npc_spawnsets.w2l] [+98 levels\l02-port\npc_spawnsets.w2l]
+21:48:43.839 partition:   load   occluders [+68 levels\l02-port\occluders.w2l] [+98 levels\l02-port\occluders.w2l]
+21:48:43.839 partition:   load   pablo_tempLayer [+68 levels\l02-port\pablo_tempLayer.w2l] [+98 levels\l02-port\pablo_templayer.w2l]
+21:48:43.839 partition:   load   paths [+68 levels\l02-port\paths.w2l] [+98 levels\l02-port\paths.w2l]
+21:48:43.839 partition:   load   places_mappins [+68 levels\l02-port\places_mappins.w2l] [+98 levels\l02-port\places_mappins.w2l]
+21:48:43.839 partition:   load   player_storage [+68 levels\l02-port\player_storage.w2l] [+98 levels\l02-port\player_storage.w2l]
+21:48:43.839 partition:   load   skybox [+68 levels\l02-port\skybox.w2l] [+98 levels\l02-port\skybox.w2l]
+21:48:43.839 partition:   load   streaming_stickers [+68 levels\l02-port\streaming_stickers.w2l] [+98 levels\l02-port\streaming_stickers.w2l]
+21:48:43.840 partition:   load   streaming_triggers [+68 levels\l02-port\streaming_triggers.w2l] [+98 levels\l02-port\streaming_triggers.w2l]
+21:48:43.840 partition:   load   temp [+68 levels\l02-port\temp.w2l] [+98 levels\l02-port\temp.w2l]
+21:48:43.840 partition:   load   traps [+68 levels\l02-port\traps.w2l] [+98 levels\l02-port\traps.w2l]
+21:48:43.840 partition:   load   waittime_bench [+68 levels\l02-port\waittime_bench.w2l] [+98 levels\l02-port\waittime_bench.w2l]
+21:48:43.840 partition:   load   WitcherStartingPoint [+68 levels\l02-port\WitcherStartingPoint.w2l] [+98 levels\l02-port\witcherstartingpoint.w2l]
+21:48:43.840 partition:   load   worldEnvironment [+68 levels\l02-port\worldEnvironment.w2l] [+98 levels\l02-port\worldenvironment.w2l]
+21:48:43.840 partition:   load   zagnica_blokady [+68 levels\l02-port\zagnica_blokady.w2l] [+98 levels\l02-port\zagnica_blokady.w2l] [+C0 loredo_residence\buildings\interior\lights_floor_2]
+21:48:43.840 partition:   load   distillery [+68 levels\l02-port\environments\distillery.w2l] [+98 levels\l02-port\environments\distillery.w2l]
+21:48:43.840 partition:   load   environment_cave_forest [+68 levels\l02-port\environments\environment_cave_forest.w2l] [+98 levels\l02-port\environments\environment_cave_forest.w2l]
+21:48:43.840 partition:   load   forest_shadow [+68 levels\l02-port\environments\forest_shadow.w2l] [+98 levels\l02-port\environments\forest_shadow.w2l]
+21:48:43.840 partition:   load   global_environments [+68 levels\l02-port\environments\global_environments.w2l] [+98 levels\l02-port\environments\global_environments.w2l]
+21:48:43.840 partition:   load   lights [+68 levels\l02-port\environments\lights.w2l] [+98 levels\l02-port\environments\lights.w2l] [+F8 levels\l02-port\fake_interiors\group.w2lg]
+21:48:43.840 partition:   load   environment_forest [+68 levels\l02-port\environments\environment_forest\environment_forest.w2l] [+98 levels\l02-port\environments\environment_forest\environment_forest.w2l] [+F8 levels\l02-port\environments\environment_landing\group.w2lg]
+21:48:43.840 partition:   load   light_shaft_morning [+68 levels\l02-port\environments\environment_forest\light_shaft\light_shaft_morning.w2l] [+98 levels\l02-port\environments\environment_forest\light_shaft\light_shaft_morning.w2l]
+21:48:43.840 partition:   load   light_shaft_noon [+68 levels\l02-port\environments\environment_forest\light_shaft\light_shaft_noon.w2l] [+98 levels\l02-port\environments\environment_forest\light_shaft\light_shaft_noon.w2l]
+21:48:43.841 partition:   load   environment_landing [+68 levels\l02-port\environments\environment_landing\environment_landing.w2l] [+98 levels\l02-port\environments\environment_landing\environment_landing.w2l] [+F8 levels\l02-port\environments\interior_city\group.w2lg]
+21:48:43.841 partition:   load   q105_tentacle_molo [+68 levels\l02-port\scenes\q105_tentadrake\tentacle\q105_tentacle_molo.w2l] [+98 levels\l02-port\scenes\q105_tentadrake\tentacle\q105_tentacle_molo.w2l]
+21:48:43.841 partition:   load   a1_npc_default_phases [+68 levels\l02-port\scenes\a1_npc_default_phases.w2l] [+98 levels\l02-port\scenes\a1_npc_default_phases.w2l]
+21:48:43.841 partition:   load   cedric_seherim_platform [+68 levels\l02-port\scenes\cedric_seherim_platform.w2l] [+98 levels\l02-port\scenes\cedric_seherim_platform.w2l]
+21:48:43.841 partition:   load   q101_q102_paths_to_hanging [+68 levels\l02-port\scenes\q101_q102_paths_to_hanging.w2l] [+98 levels\l02-port\scenes\q101_q102_paths_to_hanging.w2l]
+21:48:43.841 partition:   load   q103_eardropping [+68 levels\l02-port\scenes\q103_eardropping.w2l] [+98 levels\l02-port\scenes\q103_eardropping.w2l]
+21:48:43.841 partition:   load   q106_barge_guards [+68 levels\l02-port\scenes\q106_barge_guards.w2l] [+98 levels\l02-port\scenes\q106_barge_guards.w2l]
+21:48:43.841 partition:   load   q106_blockade_to_spider_crab [+68 levels\l02-port\scenes\q106_blockade_to_spider_crab.w2l] [+98 levels\l02-port\scenes\q106_blockade_to_spider_crab.w2l]
+21:48:43.841 partition:   load   q109_firecamp2 [+68 levels\l02-port\scenes\q109_firecamp2.w2l] [+98 levels\l02-port\scenes\q109_firecamp2.w2l]
+21:48:43.841 partition:   load   scoia_sroches_scene_forest [+68 levels\l02-port\scenes\scoia_sroches_scene_forest.w2l] [+98 levels\l02-port\scenes\scoia_sroches_scene_forest.w2l]
+21:48:43.841 partition:   load   sheala_tr_in_room [+68 levels\l02-port\scenes\sheala_tr_in_room.w2l] [+98 levels\l02-port\scenes\sheala_tr_in_room.w2l]
+21:48:43.841 partition:   load   sq109_guards_despawn [+68 levels\l02-port\scenes\sq109_guards_despawn.w2l] [+98 levels\l02-port\scenes\sq109_guards_despawn.w2l]
+21:48:43.841 partition:   load   sroches_scene_forest [+68 levels\l02-port\scenes\sroches_scene_forest.w2l] [+98 levels\l02-port\scenes\sroches_scene_forest.w2l]
+21:48:43.841 partition:   load   temp_teleportq110 [+68 levels\l02-port\scenes\temp_teleportq110.w2l] [+98 levels\l02-port\scenes\temp_teleportq110.w2l] [+F8 levels\l02-port\shadow_forest\group.w2lg]
+21:48:43.841 partition:   load   q101_mappins [+68 levels\l02-port\scenes\q101_landing\q101_mappins.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_mappins.w2l] [+F8 levels\l02-port\scenes\q102_gallow\group.w2lg]
+21:48:43.841 partition:   load   q101_bianka [+68 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_bianka.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_bianka.w2l]
+21:48:43.841 partition:   load   q101_roche_ship_captain [+68 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_roche_ship_captain.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_roche_ship_captain.w2l]
+21:48:43.841 partition:   load   q101_s1_beach [+68 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_beach.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_beach.w2l]
+21:48:43.841 partition:   load   q101_s1_rocheship [+68 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_rocheship.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_rocheship.w2l]
+21:48:43.841 partition:   load   q101_s1_rocheship_sailors [+68 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_rocheship_sailors.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_rocheship_sailors.w2l]
+21:48:43.841 partition:   load   q101_s1_trissstart [+68 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_trissstart.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s1_beach\q101_s1_trissstart.w2l] [+F8 levels\l02-port\scenes\q101_landing\q101_s2_iorweth\group.w2lg]
+21:48:43.841 partition:   load   q101_s2_iorweth [+68 levels\l02-port\scenes\q101_landing\q101_s2_iorweth\q101_s2_iorweth.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s2_iorweth\q101_s2_iorweth.w2l] [+F8 levels\l02-port\scenes\q101_landing\q101_s3_escape\group.w2lg]
+21:48:43.841 partition:   load   q101_s3_escape [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_arch1 [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_arch1.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_arch1.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_arch2 [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_arch2.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_arch2.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_arch3 [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_arch3.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_arch3.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_point1 [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point1.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point1.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_point2 [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point2.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point2.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_point2a [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point2a.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point2a.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_point3 [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point3.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point3.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_point3a [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point3a.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point3a.w2l]
+21:48:43.842 partition:   load   q101_s3_escape_point4 [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point4.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_escape_point4.w2l]
+21:48:43.842 partition:   load   q101_s3_gotohanging [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_gotohanging.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_gotohanging.w2l]
+21:48:43.842 partition:   load   q101_s3_gotoinn [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_gotoinn.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_gotoinn.w2l]
+21:48:43.842 partition:   load   q101_s3_guards_before [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_guards_before.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_guards_before.w2l]
+21:48:43.842 partition:   load   q101_s3_guards_during_dialogue [+68 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_guards_during_dialogue.w2l] [+98 levels\l02-port\scenes\q101_landing\q101_s3_escape\q101_s3_guards_during_dialogue.w2l]
+21:48:43.842 partition:   load   q102_gallow [+68 levels\l02-port\scenes\q102_gallow\q102_gallow.w2l] [+98 levels\l02-port\scenes\q102_gallow\q102_gallow.w2l] [+F8 levels\l02-port\scenes\q102_hanging\group.w2lg]
+21:48:43.842 partition:   (names cut at 80)
+21:48:43.844 interiors: before the switch - 1690 layers in the world, 0 loaded; 64 building interiors, 0 loaded
+21:48:43.855 savelist: before the switch private=1032 MB commit=1395 reserve=287 free=2412 largest_free=2044 MB, previews held=124
+21:48:43.857 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l]
+21:48:43.857 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l]
+21:48:43.857 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l]
+21:48:43.857 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l]
+21:48:43.857 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l]
+21:48:43.857 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l]
+21:48:43.857 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l]
+21:48:43.857 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l]
+21:48:43.857 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l]
+21:48:43.857 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l]
+21:48:43.857 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l]
+21:48:43.858 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l]
+21:48:43.859 partition:   preload house_fastfood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l]
+21:48:43.859 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l]
+21:48:43.859 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\lod\group.w2lg]
+21:48:43.859 partition:   preload bucket_of_blood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\group.w2lg]
+21:48:43.859 partition:   preload bucket_of_blood_massacre [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr]
+21:48:43.859 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l]
+21:48:43.859 partition:   preload windows [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l]
+21:48:43.859 partition:   preload interior [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l]
+21:48:43.859 partition:   preload lights [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l]
+21:48:43.859 partition:   preload fx_sound_shield [+68 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l]
+21:48:43.859 partition:   preload interior [+68 levels\l02-port\loredo_residence\buildings\interior\interior.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior.w2l]
+21:48:43.859 partition:   preload interior_basement [+68 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l]
+21:48:43.859 partition:   preload interior_floor3 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l]
+21:48:43.859 partition:   preload interior_floor_2 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l]
+21:48:43.859 partition:   preload shafts [+68 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+F8 levels\l02-port\loredo_residence\buildings\loredo_halberd\group.w2lg]
+21:48:43.860 partition:   preload decorations [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\group.w2lg]
+21:48:43.860 partition:   preload decoratios [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights\group.w2lg]
+21:48:43.860 partition:   preload lights [+68 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_basement\group.w2lg]
+21:48:43.860 partition:   preload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l]
+21:48:43.860 partition:   preload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\group.w2lg]
+21:48:43.860 partition:   preload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l]
+21:48:43.860 partition:   preload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l]
+21:48:43.860 partition:   preload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l]
+21:48:43.860 partition:   preload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\group.w2lg]
+21:48:43.860 partition:   preload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l]
+21:48:43.860 partition:   preload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l]
+21:48:43.860 partition:   preload basement [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l]
+21:48:43.860 partition:   preload interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l]
+21:48:43.860 partition:   preload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l]
+21:48:43.860 partition:   preload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l]
+21:48:43.860 partition:   preload windows [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l]
+21:48:43.861 partition:   preload shealas_specific_interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l]
+21:48:43.861 partition:   preload lights [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l]
+21:48:43.861 partition:   preload lights [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\03_clerk_marketplace\lod\group.w2lg]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l]
+21:48:43.861 partition:   preload lights [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\04_guards_marketplace\lod\group.w2lg]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+F8 levels\l02-port\marketplace\buildings\gallows_after_q102\group.w2lg]
+21:48:43.861 partition:   preload decorations [+68 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+F8 levels\l02-port\pier\buildings\02_prison_ship_pier\q110_scoia_bodies\group.w2lg]
+21:48:43.861 partition:   preload decorations [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l]
+21:48:43.861 partition:   preload windows [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l]
+21:48:43.861 partition:   preload sq107_troll_head [+68 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l]
+21:48:43.861 partition:   preload anezka_bird [+68 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l]
+21:48:43.861 partition:   preload interior [+68 levels\l02-port\village\buildings\07_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\07_village\interior\interior.w2l]
+21:48:43.892 load-trace: window 2 +375 ms: screen object 0BF20558 shown=1
+21:48:44.014 load-trace: window 2 +500 ms | dzip read 844x 18.9 MB 5 ms | loose read 555x 9.6 MB 3 ms | open 15x 1 ms | unpack 632x 18.8->28.7 MB 24 ms | sleep 402x (0:0 1:402) 619 ms | wait 703x (0 polls) 397 ms | present 6x 0 ms
+21:48:44.264 load-trace: window 2 +750 ms | dzip read 1361x 37.4 MB 10 ms | loose read 470x 32.3 MB 7 ms | open 52x 4 ms | unpack 1097x 37.4->57.3 MB 55 ms | sleep 319x (0:0 1:319) 499 ms | wait 636x (0 polls) 0 ms | present 8x 0 ms
+21:48:44.513 load-trace: window 2 +1000 ms | dzip read 1573x 40.6 MB 10 ms | loose read 657x 49.0 MB 9 ms | open 71x 5 ms | unpack 1153x 40.6->53.8 MB 56 ms | sleep 318x (0:0 1:318) 497 ms | wait 1018x (0 polls) 0 ms | present 7x 0 ms
+21:48:44.764 load-trace: window 2 +1250 ms | dzip read 1263x 46.2 MB 11 ms | loose read 453x 33.6 MB 6 ms | open 47x 4 ms | unpack 1098x 46.2->62.7 MB 64 ms | sleep 320x (0:0 1:320) 502 ms | wait 484x (0 polls) 0 ms | present 8x 0 ms
+21:48:45.017 load-trace: window 2 +1500 ms | dzip read 1487x 45.5 MB 11 ms | loose read 577x 38.6 MB 8 ms | open 97x 6 ms | unpack 1246x 45.5->69.9 MB 67 ms | sleep 330x (0:0 1:330) 507 ms | wait 692x (0 polls) 0 ms | present 7x 0 ms
+21:48:45.265 load-trace: window 2 +1750 ms | dzip read 1550x 46.9 MB 11 ms | loose read 900x 59.3 MB 13 ms | open 161x 9 ms | unpack 1200x 46.8->62.6 MB 54 ms | sleep 322x (0:0 1:322) 496 ms | wait 1056x (0 polls) 1 ms | present 8x 0 ms
+21:48:45.513 load-trace: window 2 +2000 ms | dzip read 1593x 53.2 MB 13 ms | loose read 533x 37.7 MB 7 ms | open 60x 4 ms | unpack 1331x 53.2->73.2 MB 58 ms | sleep 316x (0:0 1:316) 496 ms | wait 668x (0 polls) 0 ms | present 7x 0 ms
+21:48:45.764 load-trace: window 2 +2250 ms | dzip read 1969x 21.2 MB 7 ms | loose read 12x 0.4 MB 0 ms | open 4x 0 ms | unpack 1241x 21.3->38.0 MB 25 ms | sleep 320x (0:0 1:320) 503 ms | wait 1442x (0 polls) 1 ms | present 8x 0 ms
+21:48:46.013 load-trace: window 2 +2500 ms | dzip read 763x 18.2 MB 10 ms | loose read 399x 25.9 MB 10 ms | open 47x 32 ms | unpack 534x 18.2->25.1 MB 25 ms | sleep 323x (0:0 1:323) 497 ms | wait 112x (0 polls) 0 ms | present 7x 0 ms
+21:48:46.265 load-trace: window 2 +2750 ms | dzip read 1025x 27.8 MB 16 ms | loose read 617x 40.4 MB 17 ms | open 69x 64 ms | unpack 733x 27.8->35.9 MB 39 ms | sleep 326x (0:0 1:326) 504 ms | wait 34x (0 polls) 0 ms | present 8x 0 ms
+21:48:46.514 load-trace: window 2 +3000 ms | dzip read 791x 18.0 MB 17 ms | loose read 398x 27.5 MB 11 ms | open 47x 87 ms | unpack 555x 18.0->25.6 MB 28 ms | sleep 321x (0:0 1:321) 496 ms | wait 42x (0 polls) 0 ms | present 7x 0 ms
+21:48:46.675 partition: sync job ran 2837 ms (GC  23 ms)
+21:48:46.675 partition: preload kept 0 of 0 layers, unloaded 0; loaded 850 (64 interiors added), skipped 1 (fake rooms, low-poly)
+21:48:46.675 interiors: after the switch - 1690 layers in the world, 849 loaded; 64 building interiors, 64 loaded
+21:48:46.690 savelist: after the switch private=1260 MB commit=1632 reserve=270 free=2192 largest_free=2044 MB, previews held=124
+21:48:46.690 partition: switch returned 1 after 2852 ms
+21:48:46.764 load-trace: window 2 +3250 ms | dzip read 517x 14.4 MB 12 ms | loose read 223x 14.9 MB 10 ms | open 25x 47 ms | unpack 394x 14.4->20.3 MB 21 ms | sleep 320x (0:0 1:320) 499 ms | wait 8469x (0 polls) 3 ms | present 8x 0 ms
+21:48:47.017 load-trace: window 2 +3500 ms | dzip read 410x 12.2 MB 3 ms | loose read 158x 10.2 MB 2 ms | open 17x 1 ms | unpack 329x 12.2->18.1 MB 18 ms | sleep 300x (0:0 1:300) 462 ms | wait 18368x (0 polls) 7 ms | present 7x 0 ms
+21:48:47.334 load-trace: window 2 end: loading screen (screen object 3359 ms) 3734 ms; process CPU 7375 ms = 1.98 cores; timer resolution 0.500 ms
+21:48:47.334 load-trace:   tid=44868 (main) start=029262EE cpu=3328 ms (89%) | dzip read 15175x 396.7 MB 137 ms | loose read 5405x 370.0 MB 101 ms | open 699x 265 ms | unpack 11561x 396.6->570.8 MB 533 ms | sleep 4x (0:0 1:4) 5 ms | wait 68x (0 polls) 1 ms
+21:48:47.334 load-trace:   tid=39520 start=0066F607 cpu=219 ms (6%) | dzip read 931x 33.6 MB 9 ms | loose read 370x 24.8 MB 5 ms | open 37x 4 ms | unpack 819x 33.6->48.1 MB 48 ms | sleep 2281x (0:0 1:2281) 3539 ms
+21:48:47.334 load-trace:   tid=48652 start=0066F607 cpu=47 ms (1%) | dzip read 3x 0.0 MB 0 ms | unpack 2x 0.0->0.1 MB 0 ms | sleep 2401x (0:0 1:2401) 3725 ms
+21:48:47.334 load-trace:   tid=44916 start=77088D10 cpu=16 ms (0%) | open 3x 0 ms
+21:48:47.334 load-trace:   tid=29392 start=0066F607 cpu=3719 ms (100%) | loose read 431x 1.7 MB 1 ms | open 1x 0 ms | wait 122617x (0 polls) 47 ms | present 110x 1 ms (max 31.3)
+21:48:47.334 load-trace:   tid=32432 start=00000000 cpu=-1 ms (0%) | wait 15x (0 polls) 397 ms
+21:48:47.334 load-trace:   tid=49612 start=00000000 cpu=-1 ms (0%) | sleep 233x (0:0 1:233) 358 ms | wait 1x (0 polls) 0 ms
+21:48:47.334 load-trace:   tid=26556 start=6FC98C70 cpu=94 ms (3%) | no traced call
+21:48:47.334 load-trace:   tid=30624 start=55FB0460 cpu=94 ms (3%) | no traced call
+21:48:47.334 load-trace: window 2 totals | dzip read 16109x 430.3 MB 146 ms | loose read 6206x 396.5 MB 107 ms | open 740x 269 ms | unpack 12382x 430.3->619.0 MB 581 ms | sleep 4919x (0:0 1:4919) 7627 ms | wait 122701x (0 polls) 445 ms | present 110x 1 ms
+21:48:47.335 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:48:47.749 load-trace: streaming burst 250 ms | dzip read 188x 9.7 MB 2 ms | loose read 80x 200.5 MB 116 ms | open 74x 5 ms | unpack 182x 9.7->11.4 MB 11 ms | sleep 188x (0:0 1:188) 290 ms
+21:48:47.997 load-trace: streaming burst 250 ms | dzip read 116x 6.5 MB 4 ms | loose read 84x 217.8 MB 124 ms | open 71x 5 ms | unpack 110x 6.5->6.9 MB 6 ms | sleep 188x (0:0 1:188) 289 ms | wait 2050x (0 polls) 685 ms
+21:48:48.251 load-trace: streaming burst 250 ms | dzip read 213x 9.4 MB 2 ms | loose read 54x 13.5 MB 6 ms | open 6x 1 ms | unpack 200x 9.4->12.3 MB 14 ms | sleep 319x (0:0 1:319) 496 ms | wait 4101x (0 polls) 240 ms | present 2x 0 ms
+21:48:48.288 distance stats: mesh=48062 shadow=10326 baseline_reject=17127 admitted=7151 (3.00x/3.00x)
+21:48:50.000 load-trace: streaming burst 250 ms | dzip read 68x 3.3 MB 1 ms | loose read 13x 50.0 MB 26 ms | open 9x 1 ms | unpack 66x 3.3->4.1 MB 4 ms | sleep 298x (0:0 1:298) 459 ms | wait 31188x (0 polls) 152 ms | present 16x 5 ms
+21:48:50.251 load-trace: streaming burst 250 ms | dzip read 52x 2.8 MB 1 ms | loose read 12x 36.1 MB 18 ms | open 9x 1 ms | unpack 50x 2.8->3.1 MB 2 ms | sleep 311x (0:0 1:311) 476 ms | wait 29807x (0 polls) 143 ms | present 16x 0 ms
+21:48:50.499 load-trace: streaming burst 250 ms | dzip read 34x 1.8 MB 0 ms | loose read 6x 20.1 MB 10 ms | open 4x 1 ms | unpack 33x 1.8->2.1 MB 2 ms | sleep 308x (0:0 1:308) 475 ms | wait 37393x (0 polls) 149 ms | present 20x 48 ms
+21:48:50.752 load-trace: streaming burst 250 ms | dzip read 68x 2.9 MB 1 ms | loose read 2x 10.0 MB 5 ms | open 1x 0 ms | unpack 66x 2.9->4.1 MB 4 ms | sleep 314x (0:0 1:314) 485 ms | wait 33137x (0 polls) 44 ms | present 18x 143 ms
+21:48:52.251 load-trace: streaming burst 250 ms | dzip read 110x 5.0 MB 1 ms | loose read 54x 11.4 MB 5 ms | open 9x 1 ms | unpack 107x 5.0->6.6 MB 6 ms | sleep 301x (0:0 1:301) 464 ms | wait 33149x (0 polls) 133 ms | present 18x 92 ms
+21:48:52.748 load-trace: streaming burst 250 ms | loose read 2x 5.0 MB 3 ms | open 1x 0 ms | sleep 320x (0:0 1:320) 491 ms | wait 32867x (0 polls) 90 ms | present 18x 125 ms
+21:48:53.249 load-trace: streaming burst 250 ms | dzip read 574x 23.0 MB 6 ms | loose read 182x 37.4 MB 15 ms | open 26x 3 ms | unpack 540x 23.0->33.1 MB 37 ms | sleep 178x (0:0 1:178) 275 ms | wait 32660x (0 polls) 48 ms | present 18x 125 ms
+21:48:53.341 distance stats: mesh=2479788 shadow=547936 baseline_reject=710026 admitted=291045 (3.00x/3.00x)
+21:48:53.748 load-trace: streaming burst 250 ms | dzip read 68x 3.5 MB 1 ms | loose read 7x 26.0 MB 12 ms | open 5x 1 ms | unpack 66x 3.5->4.1 MB 3 ms | sleep 305x (0:0 1:305) 471 ms | wait 33760x (0 polls) 138 ms | present 18x 33 ms
+21:48:57.499 load-trace: streaming burst 250 ms | dzip read 34x 1.7 MB 0 ms | loose read 4x 12.1 MB 6 ms | open 2x 0 ms | unpack 33x 1.7->2.1 MB 2 ms | sleep 307x (0:0 1:307) 480 ms | wait 31723x (0 polls) 24 ms | present 18x 153 ms
+21:48:58.394 distance stats: mesh=1521062 shadow=387475 baseline_reject=306904 admitted=144463 (3.00x/3.00x)
+21:49:02.496 partition: door task starts - player (135.73, 181.40, 4.13), door (134.87, 180.74, 4.19)
+21:49:02.551 partition: switch 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\village-city-forest\03_elves_village' (door)
+21:49:02.551 partition: at the switch - player (135.70, 181.42, 4.15)
+21:49:02.552 partition: sync job to 'Outdoor\global\village-city-forest\03_elves_village': unload 108 layers, load 1 layers in 1 buckets
+21:49:02.553 partition:   unload binduga_animals [+68 levels\l02-port\animals\binduga_animals\binduga_animals.w2l] [+98 levels\l02-port\animals\binduga_animals\binduga_animals.w2l] [+F8 levels\l02-port\animals\binduga_forest_animals\group.w2lg]
+21:49:02.553 partition:   unload binduga_forest_animals [+68 levels\l02-port\animals\binduga_forest_animals\binduga_forest_animals.w2l] [+98 levels\l02-port\animals\binduga_forest_animals\binduga_forest_animals.w2l] [+F8 levels\l02-port\animals\floatsam_03commoners_house\group.w2lg]
+21:49:02.553 partition:   unload explorations [+68 levels\l02-port\boss_arena\explorations\explorations.w2l] [+98 levels\l02-port\boss_arena\explorations\explorations.w2l] [+F8 levels\l02-port\boss_arena\lair\group.w2lg]
+21:49:02.553 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l]
+21:49:02.553 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l]
+21:49:02.553 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l]
+21:49:02.553 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l]
+21:49:02.553 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l]
+21:49:02.553 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l]
+21:49:02.553 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l]
+21:49:02.554 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l]
+21:49:02.554 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l]
+21:49:02.554 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l]
+21:49:02.554 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l]
+21:49:02.554 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l]
+21:49:02.554 partition:   unload house_fastfood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l]
+21:49:02.554 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l]
+21:49:02.554 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\lod\group.w2lg]
+21:49:02.554 partition:   unload bucket_of_blood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\group.w2lg]
+21:49:02.554 partition:   unload bucket_of_blood_massacre [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr]
+21:49:02.554 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l]
+21:49:02.554 partition:   unload windows [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l]
+21:49:02.554 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l]
+21:49:02.554 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l]
+21:49:02.554 partition:   unload flying_insect [+68 levels\l02-port\fern_field\fx\flying_insect.w2l] [+98 levels\l02-port\fern_field\fx\flying_insect.w2l]
+21:49:02.555 partition:   unload fog [+68 levels\l02-port\fern_field\fx\fog.w2l] [+98 levels\l02-port\fern_field\fx\fog.w2l]
+21:49:02.555 partition:   unload leaf [+68 levels\l02-port\fern_field\fx\leaf.w2l] [+98 levels\l02-port\fern_field\fx\leaf.w2l]
+21:49:02.555 partition:   unload light_shaft [+68 levels\l02-port\fern_field\fx\light_shaft.w2l] [+98 levels\l02-port\fern_field\fx\light_shaft.w2l]
+21:49:02.556 partition:   unload ipoints [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\ipoints.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\ipoints.w2l]
+21:49:02.556 partition:   unload itriggers [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\itriggers.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\itriggers.w2l]
+21:49:02.556 partition:   unload vcf_fspots [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\vcf_fspots.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\vcf_fspots.w2l] [+F8 levels\l02-port\global_bushes\group.w2lg]
+21:49:02.556 partition:   unload bushes [+68 levels\l02-port\global_bushes\background\madhouse_background\bushes.w2l] [+98 levels\l02-port\global_bushes\background\madhouse_background\bushes.w2l] [+F8 levels\l02-port\global_bushes\background\troll_bridge_background\group.w2lg]
+21:49:02.556 partition:   unload bushes [+68 levels\l02-port\global_bushes\background\troll_bridge_background\bushes.w2l] [+98 levels\l02-port\global_bushes\background\troll_bridge_background\bushes.w2l]
+21:49:02.556 partition:   unload bushes [+68 levels\l02-port\global_bushes\cemetery\bushes.w2l] [+98 levels\l02-port\global_bushes\cemetery\bushes.w2l] [+F8 levels\l02-port\global_bushes\craftsmen_district\group.w2lg]
+21:49:02.556 partition:   unload bushes [+68 levels\l02-port\global_bushes\cemetery\graveyard_hill\bushes.w2l] [+98 levels\l02-port\global_bushes\cemetery\graveyard_hill\bushes.w2l]
+21:49:02.556 partition:   unload bushes [+68 levels\l02-port\global_bushes\shrine\bushes.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes.w2l]
+21:49:02.556 partition:   unload bushes_dense [+68 levels\l02-port\global_bushes\shrine\bushes_dense.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes_dense.w2l]
+21:49:02.556 partition:   unload bushes_tall [+68 levels\l02-port\global_bushes\shrine\bushes_tall.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes_tall.w2l] [+F8 levels\l02-port\global_bushes\spider_arena\group.w2lg]
+21:49:02.556 partition:   unload bushes [+68 levels\l02-port\global_bushes\troll_bridge\bushes.w2l] [+98 levels\l02-port\global_bushes\troll_bridge\bushes.w2l] [+F8 levels\l02-port\global_bushes\village\group.w2lg]
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\boss_arena\rocks.w2l] [+98 levels\l02-port\global_rocks\boss_arena\rocks.w2l] [+F8 levels\l02-port\global_rocks\cave_loredo\group.w2lg]
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\boss_arena\flotsam_visible\rocks.w2l] [+98 levels\l02-port\global_rocks\boss_arena\flotsam_visible\rocks.w2l]
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\cemetery\rocks.w2l] [+98 levels\l02-port\global_rocks\cemetery\rocks.w2l] [+F8 levels\l02-port\global_rocks\craftsmen_district\group.w2lg]
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\gorge\rocks.w2l] [+98 levels\l02-port\global_rocks\gorge\rocks.w2l] [+F8 levels\l02-port\global_rocks\island_forest\group.w2lg]
+21:49:02.557 partition:   unload explorations [+68 levels\l02-port\global_rocks\landing_site\explorations.w2l] [+98 levels\l02-port\global_rocks\landing_site\explorations.w2l]
+21:49:02.557 partition:   unload parawan [+68 levels\l02-port\global_rocks\landing_site\parawan.w2l] [+98 levels\l02-port\global_rocks\landing_site\parawan.w2l]
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\landing_site\rocks.w2l] [+98 levels\l02-port\global_rocks\landing_site\rocks.w2l]
+21:49:02.557 partition:   unload west_coast [+68 levels\l02-port\global_rocks\landing_site\west_coast.w2l] [+98 levels\l02-port\global_rocks\landing_site\west_coast.w2l] [+F8 levels\l02-port\global_rocks\madhouse\group.w2lg]
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\marsh\rocks.w2l] [+98 levels\l02-port\global_rocks\marsh\rocks.w2l] [+F8 levels\l02-port\global_rocks\merchant_road\group.w2lg]
+21:49:02.557 load-trace: window 3 start (streaming door): task 0E83EDF0 vtable 00EF0410, ticking for 15 ms (50 threads)
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\merchant_road\rocks.w2l] [+98 levels\l02-port\global_rocks\merchant_road\rocks.w2l] [+F8 levels\l02-port\global_rocks\pier\group.w2lg]
+21:49:02.557 partition:   unload rocks [+68 levels\l02-port\global_rocks\pier\buildings\06_custom_house_pier\rocks.w2l] [+98 levels\l02-port\global_rocks\pier\buildings\06_custom_house_pier\rocks.w2l] [+F8 levels\l02-port\global_rocks\shelf\group.w2lg]
+21:49:02.557 partition:   unload full_collision [+68 levels\l02-port\global_trees\collisions_forest\full_collision.w2l] [+98 levels\l02-port\global_trees\collisions_forest\full_collision.w2l] [+F8 levels\l02-port\global_trees\collisions_landing\group.w2lg]
+21:49:02.557 partition:   unload fx_sound_shield [+68 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l]
+21:49:02.558 partition:   unload interior [+68 levels\l02-port\loredo_residence\buildings\interior\interior.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior.w2l]
+21:49:02.558 partition:   unload interior_basement [+68 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l]
+21:49:02.558 partition:   unload interior_floor3 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l]
+21:49:02.558 partition:   unload interior_floor_2 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l]
+21:49:02.558 partition:   unload shafts [+68 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+F8 levels\l02-port\loredo_residence\buildings\loredo_halberd\group.w2lg]
+21:49:02.558 partition:   unload decorations [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\group.w2lg]
+21:49:02.558 partition:   unload decoratios [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights\group.w2lg]
+21:49:02.558 partition:   unload lights [+68 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_basement\group.w2lg]
+21:49:02.558 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l]
+21:49:02.558 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\group.w2lg]
+21:49:02.558 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l]
+21:49:02.558 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l]
+21:49:02.558 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l]
+21:49:02.558 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\group.w2lg]
+21:49:02.559 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l]
+21:49:02.559 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l]
+21:49:02.559 partition:   unload basement [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l]
+21:49:02.559 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l]
+21:49:02.559 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l]
+21:49:02.559 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l]
+21:49:02.559 partition:   unload windows [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l]
+21:49:02.559 partition:   unload shealas_specific_interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l]
+21:49:02.559 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l]
+21:49:02.559 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l]
+21:49:02.559 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l]
+21:49:02.559 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\03_clerk_marketplace\lod\group.w2lg]
+21:49:02.559 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l]
+21:49:02.560 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\04_guards_marketplace\lod\group.w2lg]
+21:49:02.560 partition:   (names cut at 80)
+21:49:02.560 interiors: before the switch - 1690 layers in the world, 849 loaded; 64 building interiors, 64 loaded
+21:49:02.577 savelist: before the switch private=1519 MB commit=1892 reserve=224 free=1978 largest_free=1890 MB, previews held=124
+21:49:02.596 partition: sync job ran 43 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+21:49:02.596 partition: keep_outdoors kept 108 of 108 layers, unloaded 0; loaded 1 (0 interiors added), skipped 0 (fake rooms, low-poly)
+21:49:02.597 interiors: after the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:02.613 savelist: after the switch private=1519 MB commit=1895 reserve=224 free=1976 largest_free=1890 MB, previews held=124
+21:49:02.613 partition: switch returned 1 after 62 ms
+21:49:02.620 doors: interior ready after 79 ms - picture back now (state 2)
+21:49:02.628 partition: door task ends - player (135.71, 181.42, 4.15), door (134.87, 180.74, 4.19)
+21:49:02.690 load-trace: window 3 end: streaming door (7 ticks, 0 overlapping) 140 ms; process CPU 109 ms = 0.78 cores; timer resolution 0.500 ms
+21:49:02.690 load-trace:   tid=44868 (main) start=029262EE cpu=141 ms (100%) | dzip read 63x 1.4 MB 0 ms | unpack 59x 1.4->3.6 MB 3 ms | wait 6x (0 polls) 16 ms
+21:49:02.690 load-trace:   tid=39520 start=0066F607 cpu=0 ms (0%) | sleep 86x (0:0 1:86) 133 ms
+21:49:02.690 load-trace:   tid=48652 start=0066F607 cpu=0 ms (0%) | sleep 87x (0:0 1:87) 134 ms
+21:49:02.690 load-trace:   tid=29392 start=0066F607 cpu=16 ms (11%) | loose read 51x 0.2 MB 0 ms | wait 19547x (0 polls) 59 ms | present 7x 27 ms (max 31.3)
+21:49:02.690 load-trace:   tid=26556 start=6FC98C70 cpu=62 ms (45%) | no traced call
+21:49:02.690 load-trace: window 3 totals | dzip read 63x 1.4 MB 0 ms | loose read 51x 0.2 MB 0 ms | unpack 59x 1.4->3.6 MB 3 ms | sleep 173x (0:0 1:173) 268 ms | wait 19553x (0 polls) 75 ms | present 7x 27 ms
+21:49:02.690 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:49:03.447 distance stats: mesh=1336197 shadow=403925 baseline_reject=284289 admitted=154741 (3.00x/3.00x)
+21:49:07.875 load-trace: streaming burst 250 ms | loose read 3x 6.0 MB 3 ms | open 3x 0 ms | sleep 323x (0:0 1:323) 498 ms | wait 34305x (0 polls) 109 ms | present 19x 108 ms
+21:49:08.123 load-trace: streaming burst 250 ms | dzip read 68x 3.2 MB 1 ms | loose read 4x 14.0 MB 7 ms | open 3x 0 ms | unpack 66x 3.2->4.1 MB 4 ms | sleep 309x (0:0 1:309) 474 ms | wait 30424x (0 polls) 145 ms | present 17x 32 ms
+21:49:08.499 distance stats: mesh=1255027 shadow=314553 baseline_reject=245874 admitted=111834 (3.00x/3.00x)
+21:49:11.054 partition: door task starts - player (134.11, 181.24, 4.24), door (134.87, 180.74, 4.19)
+21:49:11.114 load-trace: window 4 start (streaming door): task 57F81398 vtable 00EF0410, ticking for 0 ms (50 threads)
+21:49:11.118 partition: switch 'Outdoor\global\village-city-forest\03_elves_village' -> 'Outdoor\global\village-city-forest\Binduga' (door)
+21:49:11.118 partition: at the switch - player (134.15, 181.27, 4.23)
+21:49:11.119 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 64 layers, load 1 layers in 1 buckets
+21:49:11.119 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l]
+21:49:11.119 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l]
+21:49:11.119 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l]
+21:49:11.119 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l]
+21:49:11.119 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l]
+21:49:11.119 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l]
+21:49:11.120 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l]
+21:49:11.120 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l]
+21:49:11.120 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l]
+21:49:11.120 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l]
+21:49:11.120 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l]
+21:49:11.120 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l]
+21:49:11.120 partition:   unload house_fastfood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l]
+21:49:11.120 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l]
+21:49:11.120 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\lod\group.w2lg]
+21:49:11.120 partition:   unload bucket_of_blood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\group.w2lg]
+21:49:11.120 partition:   unload bucket_of_blood_massacre [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr]
+21:49:11.120 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l]
+21:49:11.120 partition:   unload windows [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l]
+21:49:11.120 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l]
+21:49:11.120 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l]
+21:49:11.121 partition:   unload lights_port_01 [+68 levels\l02-port\environments\lights_exterior_port_01\lights_port_01.w2l] [+98 levels\l02-port\environments\lights_exterior_port_01\lights_port_01.w2l] [+F8 levels\l02-port\environments\loredo_house_environment\group.w2lg]
+21:49:11.121 partition:   unload fx_sound_shield [+68 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l]
+21:49:11.121 partition:   unload interior [+68 levels\l02-port\loredo_residence\buildings\interior\interior.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior.w2l]
+21:49:11.121 partition:   unload interior_basement [+68 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l]
+21:49:11.121 partition:   unload interior_floor3 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l]
+21:49:11.121 partition:   unload interior_floor_2 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l]
+21:49:11.121 partition:   unload shafts [+68 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+F8 levels\l02-port\loredo_residence\buildings\loredo_halberd\group.w2lg]
+21:49:11.121 partition:   unload decorations [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\group.w2lg]
+21:49:11.121 partition:   unload decoratios [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights\group.w2lg]
+21:49:11.121 partition:   unload lights [+68 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_basement\group.w2lg]
+21:49:11.121 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l]
+21:49:11.121 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\group.w2lg]
+21:49:11.121 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l]
+21:49:11.122 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l]
+21:49:11.122 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l]
+21:49:11.122 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\group.w2lg]
+21:49:11.122 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l]
+21:49:11.122 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l]
+21:49:11.122 partition:   unload basement [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l]
+21:49:11.122 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l]
+21:49:11.122 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l]
+21:49:11.122 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l]
+21:49:11.122 partition:   unload windows [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l]
+21:49:11.122 partition:   unload shealas_specific_interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l]
+21:49:11.122 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l]
+21:49:11.122 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l]
+21:49:11.123 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\03_clerk_marketplace\lod\group.w2lg]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l]
+21:49:11.123 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\04_guards_marketplace\lod\group.w2lg]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+F8 levels\l02-port\marketplace\buildings\gallows_after_q102\group.w2lg]
+21:49:11.123 partition:   unload decorations [+68 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+F8 levels\l02-port\pier\buildings\02_prison_ship_pier\q110_scoia_bodies\group.w2lg]
+21:49:11.123 partition:   unload decorations [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l]
+21:49:11.123 partition:   unload windows [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l]
+21:49:11.123 partition:   unload sq107_troll_head [+68 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l]
+21:49:11.123 partition:   unload anezka_bird [+68 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l]
+21:49:11.123 partition:   unload interior [+68 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l]
+21:49:11.124 partition:   unload interior [+68 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l]
+21:49:11.124 partition:   unload interior [+68 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l]
+21:49:11.124 partition:   load   fake [+68 levels\l02-port\fake_interiors\binduga\fake.w2l] [+98 levels\l02-port\fake_interiors\binduga\fake.w2l] [+F8 levels\l02-port\fake_interiors\flotsam\group.w2lg]
+21:49:11.125 interiors: before the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:11.140 savelist: before the switch private=1521 MB commit=1879 reserve=222 free=1993 largest_free=1900 MB, previews held=124
+21:49:11.153 partition: sync job ran 33 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+21:49:11.153 partition: keep_outdoors kept 64 of 64 layers, unloaded 0; loaded 0 (0 interiors added), skipped 1 (fake rooms, low-poly)
+21:49:11.154 interiors: after the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:11.169 savelist: after the switch private=1521 MB commit=1879 reserve=222 free=1993 largest_free=1900 MB, previews held=124
+21:49:11.169 partition: switch returned 1 after 50 ms
+21:49:11.176 doors: interior ready after 62 ms - picture back now (state 2)
+21:49:11.186 partition: door task ends - player (134.14, 181.27, 4.23), door (134.87, 180.74, 4.19)
+21:49:11.247 load-trace: window 4 end: streaming door (7 ticks, 0 overlapping) 141 ms; process CPU 125 ms = 0.89 cores; timer resolution 0.500 ms
+21:49:11.247 load-trace:   tid=44868 (main) start=029262EE cpu=94 ms (66%) | dzip read 6x 0.0 MB 0 ms | loose read 8x 0.2 MB 0 ms | open 1x 0 ms | unpack 3x 0.0->0.0 MB 0 ms | wait 6x (0 polls) 42 ms
+21:49:11.247 load-trace:   tid=39520 start=0066F607 cpu=0 ms (0%) | sleep 87x (0:0 1:87) 132 ms
+21:49:11.247 load-trace:   tid=48652 start=0066F607 cpu=0 ms (0%) | sleep 86x (0:0 1:86) 131 ms
+21:49:11.247 load-trace:   tid=29392 start=0066F607 cpu=78 ms (55%) | loose read 51x 0.2 MB 0 ms | wait 17627x (0 polls) 40 ms | present 6x 0 ms (max 31.3)
+21:49:11.247 load-trace: window 4 totals | dzip read 6x 0.0 MB 0 ms | loose read 59x 0.4 MB 0 ms | open 1x 0 ms | unpack 3x 0.0->0.0 MB 0 ms | sleep 173x (0:0 1:173) 263 ms | wait 17633x (0 polls) 82 ms | present 6x 0 ms
+21:49:11.247 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:49:13.552 distance stats: mesh=2594652 shadow=625673 baseline_reject=857046 admitted=340420 (3.00x/3.00x)
+21:49:17.075 doors: 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\village-city-forest\03_elves_village' is loaded - no fade
+21:49:17.089 partition: door task starts - player (135.75, 181.43, 4.12), door (134.87, 180.74, 4.19)
+21:49:17.095 partition: switch 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\village-city-forest\03_elves_village' (door)
+21:49:17.095 partition: at the switch - player (135.70, 181.43, 4.14)
+21:49:17.095 partition: sync job to 'Outdoor\global\village-city-forest\03_elves_village': unload 108 layers, load 0 layers in 0 buckets
+21:49:17.096 partition:   unload binduga_animals [+68 levels\l02-port\animals\binduga_animals\binduga_animals.w2l] [+98 levels\l02-port\animals\binduga_animals\binduga_animals.w2l] [+F8 levels\l02-port\animals\binduga_forest_animals\group.w2lg]
+21:49:17.096 partition:   unload binduga_forest_animals [+68 levels\l02-port\animals\binduga_forest_animals\binduga_forest_animals.w2l] [+98 levels\l02-port\animals\binduga_forest_animals\binduga_forest_animals.w2l] [+F8 levels\l02-port\animals\floatsam_03commoners_house\group.w2lg]
+21:49:17.096 partition:   unload explorations [+68 levels\l02-port\boss_arena\explorations\explorations.w2l] [+98 levels\l02-port\boss_arena\explorations\explorations.w2l] [+F8 levels\l02-port\boss_arena\lair\group.w2lg]
+21:49:17.096 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l]
+21:49:17.096 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l]
+21:49:17.096 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l]
+21:49:17.096 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l]
+21:49:17.096 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l]
+21:49:17.096 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l]
+21:49:17.096 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l]
+21:49:17.096 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l]
+21:49:17.096 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l]
+21:49:17.096 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l]
+21:49:17.096 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l]
+21:49:17.097 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l]
+21:49:17.097 partition:   unload house_fastfood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l]
+21:49:17.097 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l]
+21:49:17.097 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\lod\group.w2lg]
+21:49:17.097 partition:   unload bucket_of_blood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\group.w2lg]
+21:49:17.097 partition:   unload bucket_of_blood_massacre [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr]
+21:49:17.097 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l]
+21:49:17.097 partition:   unload windows [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l]
+21:49:17.097 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l]
+21:49:17.097 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l]
+21:49:17.097 partition:   unload flying_insect [+68 levels\l02-port\fern_field\fx\flying_insect.w2l] [+98 levels\l02-port\fern_field\fx\flying_insect.w2l]
+21:49:17.097 partition:   unload fog [+68 levels\l02-port\fern_field\fx\fog.w2l] [+98 levels\l02-port\fern_field\fx\fog.w2l]
+21:49:17.097 partition:   unload leaf [+68 levels\l02-port\fern_field\fx\leaf.w2l] [+98 levels\l02-port\fern_field\fx\leaf.w2l]
+21:49:17.097 partition:   unload light_shaft [+68 levels\l02-port\fern_field\fx\light_shaft.w2l] [+98 levels\l02-port\fern_field\fx\light_shaft.w2l]
+21:49:17.097 partition:   unload ipoints [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\ipoints.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\ipoints.w2l]
+21:49:17.098 partition:   unload itriggers [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\itriggers.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\itriggers.w2l]
+21:49:17.098 partition:   unload vcf_fspots [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\vcf_fspots.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\vcf_fspots.w2l] [+F8 levels\l02-port\global_bushes\group.w2lg]
+21:49:17.098 partition:   unload bushes [+68 levels\l02-port\global_bushes\background\madhouse_background\bushes.w2l] [+98 levels\l02-port\global_bushes\background\madhouse_background\bushes.w2l] [+F8 levels\l02-port\global_bushes\background\troll_bridge_background\group.w2lg]
+21:49:17.098 partition:   unload bushes [+68 levels\l02-port\global_bushes\background\troll_bridge_background\bushes.w2l] [+98 levels\l02-port\global_bushes\background\troll_bridge_background\bushes.w2l]
+21:49:17.098 partition:   unload bushes [+68 levels\l02-port\global_bushes\cemetery\bushes.w2l] [+98 levels\l02-port\global_bushes\cemetery\bushes.w2l] [+F8 levels\l02-port\global_bushes\craftsmen_district\group.w2lg]
+21:49:17.098 partition:   unload bushes [+68 levels\l02-port\global_bushes\cemetery\graveyard_hill\bushes.w2l] [+98 levels\l02-port\global_bushes\cemetery\graveyard_hill\bushes.w2l]
+21:49:17.098 partition:   unload bushes [+68 levels\l02-port\global_bushes\shrine\bushes.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes.w2l]
+21:49:17.098 partition:   unload bushes_dense [+68 levels\l02-port\global_bushes\shrine\bushes_dense.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes_dense.w2l]
+21:49:17.098 partition:   unload bushes_tall [+68 levels\l02-port\global_bushes\shrine\bushes_tall.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes_tall.w2l] [+F8 levels\l02-port\global_bushes\spider_arena\group.w2lg]
+21:49:17.098 partition:   unload bushes [+68 levels\l02-port\global_bushes\troll_bridge\bushes.w2l] [+98 levels\l02-port\global_bushes\troll_bridge\bushes.w2l] [+F8 levels\l02-port\global_bushes\village\group.w2lg]
+21:49:17.098 partition:   unload rocks [+68 levels\l02-port\global_rocks\boss_arena\rocks.w2l] [+98 levels\l02-port\global_rocks\boss_arena\rocks.w2l] [+F8 levels\l02-port\global_rocks\cave_loredo\group.w2lg]
+21:49:17.098 partition:   unload rocks [+68 levels\l02-port\global_rocks\boss_arena\flotsam_visible\rocks.w2l] [+98 levels\l02-port\global_rocks\boss_arena\flotsam_visible\rocks.w2l]
+21:49:17.098 partition:   unload rocks [+68 levels\l02-port\global_rocks\cemetery\rocks.w2l] [+98 levels\l02-port\global_rocks\cemetery\rocks.w2l] [+F8 levels\l02-port\global_rocks\craftsmen_district\group.w2lg]
+21:49:17.098 partition:   unload rocks [+68 levels\l02-port\global_rocks\gorge\rocks.w2l] [+98 levels\l02-port\global_rocks\gorge\rocks.w2l] [+F8 levels\l02-port\global_rocks\island_forest\group.w2lg]
+21:49:17.098 partition:   unload explorations [+68 levels\l02-port\global_rocks\landing_site\explorations.w2l] [+98 levels\l02-port\global_rocks\landing_site\explorations.w2l]
+21:49:17.098 partition:   unload parawan [+68 levels\l02-port\global_rocks\landing_site\parawan.w2l] [+98 levels\l02-port\global_rocks\landing_site\parawan.w2l]
+21:49:17.099 partition:   unload rocks [+68 levels\l02-port\global_rocks\landing_site\rocks.w2l] [+98 levels\l02-port\global_rocks\landing_site\rocks.w2l]
+21:49:17.099 partition:   unload west_coast [+68 levels\l02-port\global_rocks\landing_site\west_coast.w2l] [+98 levels\l02-port\global_rocks\landing_site\west_coast.w2l] [+F8 levels\l02-port\global_rocks\madhouse\group.w2lg]
+21:49:17.099 partition:   unload rocks [+68 levels\l02-port\global_rocks\marsh\rocks.w2l] [+98 levels\l02-port\global_rocks\marsh\rocks.w2l] [+F8 levels\l02-port\global_rocks\merchant_road\group.w2lg]
+21:49:17.099 partition:   unload rocks [+68 levels\l02-port\global_rocks\merchant_road\rocks.w2l] [+98 levels\l02-port\global_rocks\merchant_road\rocks.w2l] [+F8 levels\l02-port\global_rocks\pier\group.w2lg]
+21:49:17.099 partition:   unload rocks [+68 levels\l02-port\global_rocks\pier\buildings\06_custom_house_pier\rocks.w2l] [+98 levels\l02-port\global_rocks\pier\buildings\06_custom_house_pier\rocks.w2l] [+F8 levels\l02-port\global_rocks\shelf\group.w2lg]
+21:49:17.099 partition:   unload full_collision [+68 levels\l02-port\global_trees\collisions_forest\full_collision.w2l] [+98 levels\l02-port\global_trees\collisions_forest\full_collision.w2l] [+F8 levels\l02-port\global_trees\collisions_landing\group.w2lg]
+21:49:17.099 partition:   unload fx_sound_shield [+68 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l]
+21:49:17.099 partition:   unload interior [+68 levels\l02-port\loredo_residence\buildings\interior\interior.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior.w2l]
+21:49:17.099 partition:   unload interior_basement [+68 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l]
+21:49:17.099 partition:   unload interior_floor3 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l]
+21:49:17.099 partition:   unload interior_floor_2 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l]
+21:49:17.099 partition:   unload shafts [+68 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+F8 levels\l02-port\loredo_residence\buildings\loredo_halberd\group.w2lg]
+21:49:17.099 partition:   unload decorations [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\group.w2lg]
+21:49:17.100 partition:   unload decoratios [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights\group.w2lg]
+21:49:17.100 partition:   unload lights [+68 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_basement\group.w2lg]
+21:49:17.100 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l]
+21:49:17.100 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\group.w2lg]
+21:49:17.100 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l]
+21:49:17.100 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l]
+21:49:17.100 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l]
+21:49:17.100 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\group.w2lg]
+21:49:17.100 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l]
+21:49:17.100 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l]
+21:49:17.100 partition:   unload basement [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l]
+21:49:17.100 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l]
+21:49:17.101 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l]
+21:49:17.101 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l]
+21:49:17.101 partition:   unload windows [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l]
+21:49:17.101 partition:   unload shealas_specific_interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l]
+21:49:17.101 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l]
+21:49:17.101 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l]
+21:49:17.101 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l]
+21:49:17.101 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\03_clerk_marketplace\lod\group.w2lg]
+21:49:17.101 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l]
+21:49:17.101 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\04_guards_marketplace\lod\group.w2lg]
+21:49:17.101 partition:   (names cut at 80)
+21:49:17.103 interiors: before the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:17.122 savelist: before the switch private=1493 MB commit=1852 reserve=220 free=2022 largest_free=1900 MB, previews held=124
+21:49:17.122 partition: sync job ran 26 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+21:49:17.122 partition: keep_outdoors kept 108 of 108 layers, unloaded 0; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+21:49:17.123 interiors: after the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:17.143 savelist: after the switch private=1492 MB commit=1852 reserve=220 free=2022 largest_free=1900 MB, previews held=124
+21:49:17.143 partition: switch returned 1 after 48 ms
+21:49:17.151 doors: interior ready after 63 ms - picture back now (state 2)
+21:49:17.156 load-trace: window 5 start (streaming door): task 57F813F8 vtable 00EF0410, ticking for 16 ms (50 threads)
+21:49:17.159 partition: door task ends - player (135.71, 181.43, 4.14), door (134.87, 180.74, 4.19)
+21:49:17.223 load-trace: window 5 end: streaming door (4 ticks, 0 overlapping) 78 ms; process CPU 16 ms = 0.20 cores; timer resolution 0.500 ms
+21:49:17.223 load-trace:   tid=44868 (main) start=029262EE cpu=78 ms (100%) | wait 3x (0 polls) 0 ms
+21:49:17.223 load-trace:   tid=39520 start=0066F607 cpu=0 ms (0%) | sleep 45x (0:0 1:45) 70 ms
+21:49:17.223 load-trace:   tid=48652 start=0066F607 cpu=0 ms (0%) | sleep 45x (0:0 1:45) 70 ms
+21:49:17.223 load-trace:   tid=29392 start=0066F607 cpu=62 ms (80%) | loose read 51x 0.2 MB 0 ms | wait 8189x (0 polls) 36 ms | present 4x 0 ms (max 31.3)
+21:49:17.223 load-trace:   tid=26556 start=6FC98C70 cpu=62 ms (80%) | no traced call
+21:49:17.224 load-trace: window 5 totals | loose read 51x 0.2 MB 0 ms | sleep 90x (0:0 1:90) 139 ms | wait 8192x (0 polls) 36 ms | present 4x 0 ms
+21:49:17.224 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:49:18.605 distance stats: mesh=877213 shadow=421383 baseline_reject=320966 admitted=160567 (3.00x/3.00x)
+21:49:23.547 doors: 'Outdoor\global\village-city-forest\03_elves_village' -> 'Outdoor\global\village-city-forest\Binduga' is loaded - no fade
+21:49:23.561 partition: door task starts - player (134.08, 181.30, 4.24), door (134.87, 180.74, 4.19)
+21:49:23.566 partition: switch 'Outdoor\global\village-city-forest\03_elves_village' -> 'Outdoor\global\village-city-forest\Binduga' (door)
+21:49:23.566 partition: at the switch - player (134.13, 181.32, 4.22)
+21:49:23.567 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 64 layers, load 1 layers in 1 buckets
+21:49:23.567 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l]
+21:49:23.567 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l]
+21:49:23.567 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l]
+21:49:23.567 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l]
+21:49:23.567 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l]
+21:49:23.567 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l]
+21:49:23.567 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l]
+21:49:23.567 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l]
+21:49:23.567 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l]
+21:49:23.568 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l]
+21:49:23.568 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l]
+21:49:23.568 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l]
+21:49:23.568 partition:   unload house_fastfood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l]
+21:49:23.568 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l]
+21:49:23.568 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\lod\group.w2lg]
+21:49:23.568 partition:   unload bucket_of_blood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\group.w2lg]
+21:49:23.568 partition:   unload bucket_of_blood_massacre [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr]
+21:49:23.569 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l]
+21:49:23.569 partition:   unload windows [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l]
+21:49:23.569 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l]
+21:49:23.569 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l]
+21:49:23.569 partition:   unload lights_port_01 [+68 levels\l02-port\environments\lights_exterior_port_01\lights_port_01.w2l] [+98 levels\l02-port\environments\lights_exterior_port_01\lights_port_01.w2l] [+F8 levels\l02-port\environments\loredo_house_environment\group.w2lg]
+21:49:23.569 partition:   unload fx_sound_shield [+68 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l]
+21:49:23.569 partition:   unload interior [+68 levels\l02-port\loredo_residence\buildings\interior\interior.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior.w2l]
+21:49:23.569 partition:   unload interior_basement [+68 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l]
+21:49:23.569 partition:   unload interior_floor3 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l]
+21:49:23.569 partition:   unload interior_floor_2 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l]
+21:49:23.569 partition:   unload shafts [+68 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+F8 levels\l02-port\loredo_residence\buildings\loredo_halberd\group.w2lg]
+21:49:23.569 partition:   unload decorations [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\group.w2lg]
+21:49:23.569 partition:   unload decoratios [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights\group.w2lg]
+21:49:23.569 partition:   unload lights [+68 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_basement\group.w2lg]
+21:49:23.570 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l]
+21:49:23.570 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\group.w2lg]
+21:49:23.570 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l]
+21:49:23.570 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l]
+21:49:23.570 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l]
+21:49:23.570 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\group.w2lg]
+21:49:23.570 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l]
+21:49:23.570 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l]
+21:49:23.570 partition:   unload basement [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l]
+21:49:23.570 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l]
+21:49:23.570 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l]
+21:49:23.570 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l]
+21:49:23.570 partition:   unload windows [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l]
+21:49:23.571 partition:   unload shealas_specific_interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l]
+21:49:23.571 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l]
+21:49:23.571 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l]
+21:49:23.571 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l]
+21:49:23.571 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\03_clerk_marketplace\lod\group.w2lg]
+21:49:23.571 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l]
+21:49:23.571 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\04_guards_marketplace\lod\group.w2lg]
+21:49:23.571 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+F8 levels\l02-port\marketplace\buildings\gallows_after_q102\group.w2lg]
+21:49:23.571 partition:   unload decorations [+68 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+F8 levels\l02-port\pier\buildings\02_prison_ship_pier\q110_scoia_bodies\group.w2lg]
+21:49:23.571 partition:   unload decorations [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l]
+21:49:23.571 partition:   unload interior [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l]
+21:49:23.571 partition:   unload windows [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l]
+21:49:23.571 partition:   unload interior [+68 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l]
+21:49:23.571 partition:   unload interior [+68 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l]
+21:49:23.571 partition:   unload sq107_troll_head [+68 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l]
+21:49:23.572 partition:   unload anezka_bird [+68 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l]
+21:49:23.572 partition:   unload interior [+68 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l]
+21:49:23.572 partition:   unload interior [+68 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l]
+21:49:23.572 partition:   unload interior [+68 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l]
+21:49:23.572 partition:   unload interior [+68 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l]
+21:49:23.572 partition:   load   fake [+68 levels\l02-port\fake_interiors\binduga\fake.w2l] [+98 levels\l02-port\fake_interiors\binduga\fake.w2l] [+F8 levels\l02-port\fake_interiors\flotsam\group.w2lg]
+21:49:23.573 interiors: before the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:23.593 savelist: before the switch private=1493 MB commit=1852 reserve=220 free=2022 largest_free=1900 MB, previews held=124
+21:49:23.605 partition: sync job ran 37 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+21:49:23.605 partition: keep_outdoors kept 64 of 64 layers, unloaded 0; loaded 0 (0 interiors added), skipped 1 (fake rooms, low-poly)
+21:49:23.606 interiors: after the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:23.625 savelist: after the switch private=1492 MB commit=1852 reserve=220 free=2022 largest_free=1900 MB, previews held=124
+21:49:23.625 partition: switch returned 1 after 59 ms
+21:49:23.625 load-trace: window 6 start (streaming door): task 57F83630 vtable 00EF0410, ticking for 0 ms (50 threads)
+21:49:23.633 doors: interior ready after 62 ms - picture back now (state 2)
+21:49:23.643 partition: door task ends - player (134.13, 181.31, 4.22), door (134.87, 180.74, 4.19)
+21:49:23.658 distance stats: mesh=1493652 shadow=476584 baseline_reject=529123 admitted=229145 (3.00x/3.00x)
+21:49:23.705 load-trace: window 6 end: streaming door (4 ticks, 0 overlapping) 78 ms; process CPU 16 ms = 0.20 cores; timer resolution 0.500 ms
+21:49:23.705 load-trace:   tid=44868 (main) start=029262EE cpu=47 ms (60%) | wait 3x (0 polls) 1 ms
+21:49:23.705 load-trace:   tid=39520 start=0066F607 cpu=0 ms (0%) | sleep 53x (0:0 1:53) 84 ms
+21:49:23.705 load-trace:   tid=48652 start=0066F607 cpu=0 ms (0%) | sleep 52x (0:0 1:52) 81 ms
+21:49:23.705 load-trace:   tid=29392 start=0066F607 cpu=62 ms (80%) | loose read 51x 0.2 MB 0 ms | wait 12418x (0 polls) 27 ms | present 3x 0 ms (max 31.3)
+21:49:23.705 load-trace:   tid=26556 start=6FC98C70 cpu=62 ms (80%) | no traced call
+21:49:23.705 load-trace: window 6 totals | loose read 51x 0.2 MB 0 ms | sleep 105x (0:0 1:105) 165 ms | wait 12421x (0 polls) 29 ms | present 3x 0 ms
+21:49:23.705 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:49:27.892 load-trace: streaming burst 250 ms | dzip read 160x 6.7 MB 2 ms | loose read 43x 9.4 MB 4 ms | open 7x 1 ms | unpack 153x 6.7->9.4 MB 10 ms | sleep 288x (0:0 1:288) 444 ms | wait 32986x (0 polls) 78 ms | present 18x 106 ms
+21:49:28.710 distance stats: mesh=1973921 shadow=603443 baseline_reject=788051 admitted=325491 (3.00x/3.00x)
+21:49:29.138 load-trace: streaming burst 250 ms | dzip read 92x 3.3 MB 1 ms | loose read 25x 15.3 MB 7 ms | open 5x 1 ms | unpack 79x 3.3->4.5 MB 4 ms | sleep 301x (0:0 1:301) 463 ms | wait 35162x (0 polls) 100 ms | present 18x 56 ms
+21:49:29.639 load-trace: streaming burst 250 ms | dzip read 30x 1.3 MB 0 ms | loose read 2x 4.0 MB 2 ms | open 2x 0 ms | unpack 29x 1.3->1.8 MB 1 ms | sleep 315x (0:0 1:315) 480 ms | wait 35556x (0 polls) 101 ms | present 18x 73 ms
+21:49:29.891 load-trace: streaming burst 250 ms | loose read 5x 10.0 MB 5 ms | open 5x 1 ms | sleep 315x (0:0 1:315) 490 ms | wait 35500x (0 polls) 101 ms | present 18x 76 ms
+21:49:30.389 load-trace: streaming burst 250 ms | dzip read 112x 4.8 MB 1 ms | loose read 25x 18.3 MB 8 ms | open 6x 1 ms | unpack 106x 4.8->6.5 MB 7 ms | sleep 295x (0:0 1:295) 448 ms | wait 35811x (0 polls) 96 ms | present 18x 56 ms
+21:49:32.639 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 2x 0 ms | sleep 316x (0:0 1:316) 486 ms | wait 38232x (0 polls) 75 ms | present 18x 71 ms
+21:49:32.891 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | sleep 321x (0:0 1:321) 496 ms | wait 37994x (0 polls) 77 ms | present 18x 62 ms
+21:49:33.387 load-trace: streaming burst 250 ms | loose read 2x 8.0 MB 4 ms | open 2x 0 ms | sleep 309x (0:0 1:309) 477 ms | wait 38145x (0 polls) 98 ms | present 18x 50 ms
+21:49:33.766 distance stats: mesh=1695109 shadow=640924 baseline_reject=685153 admitted=341188 (3.00x/3.00x)
+21:49:33.889 load-trace: streaming burst 250 ms | dzip read 303x 12.8 MB 3 ms | loose read 108x 28.7 MB 12 ms | open 17x 2 ms | unpack 286x 12.8->17.6 MB 18 ms | sleep 275x (0:0 1:275) 420 ms | wait 38982x (0 polls) 87 ms | present 18x 31 ms
+21:49:37.143 load-trace: streaming burst 250 ms | loose read 2x 4.0 MB 2 ms | open 2x 0 ms | sleep 321x (0:0 1:321) 494 ms | wait 39265x (0 polls) 20 ms | present 18x 102 ms
+21:49:38.820 distance stats: mesh=1866454 shadow=639740 baseline_reject=449329 admitted=255446 (3.00x/3.00x)
+21:49:41.200 script patches: CreateFileW slot never held the kernel32 export - off
+21:49:43.874 distance stats: mesh=3330319 shadow=618352 baseline_reject=586394 admitted=232744 (3.00x/3.00x)
+21:49:48.929 distance stats: mesh=3145361 shadow=574580 baseline_reject=481860 admitted=211873 (3.00x/3.00x)
+21:49:49.033 partition: door task starts - player (173.36, 214.82, 3.13), door (172.34, 214.27, 3.37)
+21:49:49.093 load-trace: window 7 start (streaming door): task 57B10B70 vtable 00EF0410, ticking for 0 ms (49 threads)
+21:49:49.100 partition: switch 'Outdoor\global\village-city-forest\Binduga' -> 'Outdoor\global\village-city-forest\01_chorab_village' (door)
+21:49:49.100 partition: at the switch - player (173.29, 214.82, 3.20)
+21:49:49.101 partition: sync job to 'Outdoor\global\village-city-forest\01_chorab_village': unload 109 layers, load 0 layers in 0 buckets
+21:49:49.101 partition:   unload binduga_animals [+68 levels\l02-port\animals\binduga_animals\binduga_animals.w2l] [+98 levels\l02-port\animals\binduga_animals\binduga_animals.w2l] [+F8 levels\l02-port\animals\binduga_forest_animals\group.w2lg]
+21:49:49.101 partition:   unload binduga_forest_animals [+68 levels\l02-port\animals\binduga_forest_animals\binduga_forest_animals.w2l] [+98 levels\l02-port\animals\binduga_forest_animals\binduga_forest_animals.w2l] [+F8 levels\l02-port\animals\floatsam_03commoners_house\group.w2lg]
+21:49:49.101 partition:   unload explorations [+68 levels\l02-port\boss_arena\explorations\explorations.w2l] [+98 levels\l02-port\boss_arena\explorations\explorations.w2l] [+F8 levels\l02-port\boss_arena\lair\group.w2lg]
+21:49:49.101 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l]
+21:49:49.101 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l]
+21:49:49.101 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l]
+21:49:49.101 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l]
+21:49:49.101 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l]
+21:49:49.101 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l]
+21:49:49.101 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l]
+21:49:49.101 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l]
+21:49:49.102 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l]
+21:49:49.102 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l]
+21:49:49.102 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l]
+21:49:49.102 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l]
+21:49:49.102 partition:   unload house_fastfood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l]
+21:49:49.102 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l]
+21:49:49.102 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\lod\group.w2lg]
+21:49:49.102 partition:   unload bucket_of_blood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\group.w2lg]
+21:49:49.102 partition:   unload bucket_of_blood_massacre [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr]
+21:49:49.102 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l]
+21:49:49.102 partition:   unload windows [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l]
+21:49:49.102 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l]
+21:49:49.102 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l]
+21:49:49.102 partition:   unload flying_insect [+68 levels\l02-port\fern_field\fx\flying_insect.w2l] [+98 levels\l02-port\fern_field\fx\flying_insect.w2l]
+21:49:49.102 partition:   unload fog [+68 levels\l02-port\fern_field\fx\fog.w2l] [+98 levels\l02-port\fern_field\fx\fog.w2l]
+21:49:49.103 partition:   unload leaf [+68 levels\l02-port\fern_field\fx\leaf.w2l] [+98 levels\l02-port\fern_field\fx\leaf.w2l]
+21:49:49.103 partition:   unload light_shaft [+68 levels\l02-port\fern_field\fx\light_shaft.w2l] [+98 levels\l02-port\fern_field\fx\light_shaft.w2l]
+21:49:49.103 partition:   unload ipoints [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\ipoints.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\ipoints.w2l]
+21:49:49.103 partition:   unload itriggers [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\itriggers.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\itriggers.w2l]
+21:49:49.103 partition:   unload vcf_fspots [+68 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\vcf_fspots.w2l] [+98 levels\l02-port\finisher_spots\outdoor\global\village-city-forest\vcf_fspots.w2l] [+F8 levels\l02-port\global_bushes\group.w2lg]
+21:49:49.103 partition:   unload bushes [+68 levels\l02-port\global_bushes\background\madhouse_background\bushes.w2l] [+98 levels\l02-port\global_bushes\background\madhouse_background\bushes.w2l] [+F8 levels\l02-port\global_bushes\background\troll_bridge_background\group.w2lg]
+21:49:49.103 partition:   unload bushes [+68 levels\l02-port\global_bushes\background\troll_bridge_background\bushes.w2l] [+98 levels\l02-port\global_bushes\background\troll_bridge_background\bushes.w2l]
+21:49:49.103 partition:   unload bushes [+68 levels\l02-port\global_bushes\cemetery\bushes.w2l] [+98 levels\l02-port\global_bushes\cemetery\bushes.w2l] [+F8 levels\l02-port\global_bushes\craftsmen_district\group.w2lg]
+21:49:49.103 partition:   unload bushes [+68 levels\l02-port\global_bushes\cemetery\graveyard_hill\bushes.w2l] [+98 levels\l02-port\global_bushes\cemetery\graveyard_hill\bushes.w2l]
+21:49:49.103 partition:   unload bushes [+68 levels\l02-port\global_bushes\shrine\bushes.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes.w2l]
+21:49:49.103 partition:   unload bushes_dense [+68 levels\l02-port\global_bushes\shrine\bushes_dense.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes_dense.w2l]
+21:49:49.103 partition:   unload bushes_tall [+68 levels\l02-port\global_bushes\shrine\bushes_tall.w2l] [+98 levels\l02-port\global_bushes\shrine\bushes_tall.w2l] [+F8 levels\l02-port\global_bushes\spider_arena\group.w2lg]
+21:49:49.103 partition:   unload bushes [+68 levels\l02-port\global_bushes\troll_bridge\bushes.w2l] [+98 levels\l02-port\global_bushes\troll_bridge\bushes.w2l] [+F8 levels\l02-port\global_bushes\village\group.w2lg]
+21:49:49.103 partition:   unload rocks [+68 levels\l02-port\global_rocks\boss_arena\rocks.w2l] [+98 levels\l02-port\global_rocks\boss_arena\rocks.w2l] [+F8 levels\l02-port\global_rocks\cave_loredo\group.w2lg]
+21:49:49.103 partition:   unload rocks [+68 levels\l02-port\global_rocks\boss_arena\flotsam_visible\rocks.w2l] [+98 levels\l02-port\global_rocks\boss_arena\flotsam_visible\rocks.w2l]
+21:49:49.103 partition:   unload rocks [+68 levels\l02-port\global_rocks\cemetery\rocks.w2l] [+98 levels\l02-port\global_rocks\cemetery\rocks.w2l] [+F8 levels\l02-port\global_rocks\craftsmen_district\group.w2lg]
+21:49:49.104 partition:   unload rocks [+68 levels\l02-port\global_rocks\gorge\rocks.w2l] [+98 levels\l02-port\global_rocks\gorge\rocks.w2l] [+F8 levels\l02-port\global_rocks\island_forest\group.w2lg]
+21:49:49.104 partition:   unload explorations [+68 levels\l02-port\global_rocks\landing_site\explorations.w2l] [+98 levels\l02-port\global_rocks\landing_site\explorations.w2l]
+21:49:49.104 partition:   unload parawan [+68 levels\l02-port\global_rocks\landing_site\parawan.w2l] [+98 levels\l02-port\global_rocks\landing_site\parawan.w2l]
+21:49:49.104 partition:   unload rocks [+68 levels\l02-port\global_rocks\landing_site\rocks.w2l] [+98 levels\l02-port\global_rocks\landing_site\rocks.w2l]
+21:49:49.104 partition:   unload west_coast [+68 levels\l02-port\global_rocks\landing_site\west_coast.w2l] [+98 levels\l02-port\global_rocks\landing_site\west_coast.w2l] [+F8 levels\l02-port\global_rocks\madhouse\group.w2lg]
+21:49:49.104 partition:   unload rocks [+68 levels\l02-port\global_rocks\marsh\rocks.w2l] [+98 levels\l02-port\global_rocks\marsh\rocks.w2l] [+F8 levels\l02-port\global_rocks\merchant_road\group.w2lg]
+21:49:49.104 partition:   unload rocks [+68 levels\l02-port\global_rocks\merchant_road\rocks.w2l] [+98 levels\l02-port\global_rocks\merchant_road\rocks.w2l] [+F8 levels\l02-port\global_rocks\pier\group.w2lg]
+21:49:49.104 partition:   unload rocks [+68 levels\l02-port\global_rocks\pier\buildings\06_custom_house_pier\rocks.w2l] [+98 levels\l02-port\global_rocks\pier\buildings\06_custom_house_pier\rocks.w2l] [+F8 levels\l02-port\global_rocks\shelf\group.w2lg]
+21:49:49.104 partition:   unload full_collision [+68 levels\l02-port\global_trees\collisions_forest\full_collision.w2l] [+98 levels\l02-port\global_trees\collisions_forest\full_collision.w2l] [+F8 levels\l02-port\global_trees\collisions_landing\group.w2lg]
+21:49:49.104 partition:   unload fx_sound_shield [+68 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l]
+21:49:49.104 partition:   unload interior [+68 levels\l02-port\loredo_residence\buildings\interior\interior.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior.w2l]
+21:49:49.104 partition:   unload interior_basement [+68 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l]
+21:49:49.104 partition:   unload interior_floor3 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l]
+21:49:49.104 partition:   unload interior_floor_2 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l]
+21:49:49.105 partition:   unload shafts [+68 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+F8 levels\l02-port\loredo_residence\buildings\loredo_halberd\group.w2lg]
+21:49:49.105 partition:   unload decorations [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\group.w2lg]
+21:49:49.105 partition:   unload decoratios [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights\group.w2lg]
+21:49:49.105 partition:   unload lights [+68 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_basement\group.w2lg]
+21:49:49.105 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l]
+21:49:49.105 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\group.w2lg]
+21:49:49.105 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l]
+21:49:49.105 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l]
+21:49:49.105 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l]
+21:49:49.105 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\group.w2lg]
+21:49:49.105 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l]
+21:49:49.105 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l]
+21:49:49.105 partition:   unload basement [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l]
+21:49:49.105 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l]
+21:49:49.106 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l]
+21:49:49.106 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l]
+21:49:49.106 partition:   unload windows [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l]
+21:49:49.106 partition:   unload shealas_specific_interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l]
+21:49:49.106 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l]
+21:49:49.106 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l]
+21:49:49.106 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l]
+21:49:49.106 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\03_clerk_marketplace\lod\group.w2lg]
+21:49:49.106 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l]
+21:49:49.106 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\04_guards_marketplace\lod\group.w2lg]
+21:49:49.106 partition:   (names cut at 80)
+21:49:49.107 interiors: before the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:49.124 savelist: before the switch private=1532 MB commit=1906 reserve=216 free=1972 largest_free=1900 MB, previews held=124
+21:49:49.125 partition: sync job ran 24 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+21:49:49.125 partition: keep_outdoors kept 109 of 109 layers, unloaded 0; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+21:49:49.126 interiors: after the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:49.141 savelist: after the switch private=1532 MB commit=1906 reserve=216 free=1972 largest_free=1900 MB, previews held=124
+21:49:49.141 partition: switch returned 1 after 41 ms
+21:49:49.151 doors: interior ready after 47 ms - picture back now (state 2)
+21:49:49.163 partition: door task ends - player (173.30, 214.82, 3.20), door (172.34, 214.27, 3.37)
+21:49:49.224 load-trace: window 7 end: streaming door (7 ticks, 0 overlapping) 125 ms; process CPU 125 ms = 1.00 cores; timer resolution 0.500 ms
+21:49:49.224 load-trace:   tid=44868 (main) start=029262EE cpu=125 ms (100%) | wait 6x (0 polls) 29 ms
+21:49:49.224 load-trace:   tid=39520 start=0066F607 cpu=0 ms (0%) | sleep 84x (0:0 1:84) 128 ms
+21:49:49.224 load-trace:   tid=48652 start=0066F607 cpu=0 ms (0%) | sleep 84x (0:0 1:84) 128 ms
+21:49:49.224 load-trace:   tid=29392 start=0066F607 cpu=94 ms (75%) | loose read 51x 0.2 MB 0 ms | wait 14555x (0 polls) 38 ms | present 6x 0 ms (max 31.3)
+21:49:49.224 load-trace:   tid=26556 start=6FC98C70 cpu=78 ms (62%) | no traced call
+21:49:49.224 load-trace: window 7 totals | loose read 51x 0.2 MB 0 ms | sleep 168x (0:0 1:168) 256 ms | wait 14561x (0 polls) 67 ms | present 6x 0 ms
+21:49:49.224 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:49:53.982 distance stats: mesh=3501639 shadow=539758 baseline_reject=575349 admitted=197261 (3.00x/3.00x)
+21:49:56.493 doors: 'Outdoor\global\village-city-forest\01_chorab_village' -> 'Outdoor\global\village-city-forest\Binduga' is loaded - no fade
+21:49:56.507 partition: door task starts - player (171.92, 214.91, 3.38), door (172.34, 214.27, 3.37)
+21:49:56.514 partition: switch 'Outdoor\global\village-city-forest\01_chorab_village' -> 'Outdoor\global\village-city-forest\Binduga' (door)
+21:49:56.514 partition: at the switch - player (171.89, 214.93, 3.37)
+21:49:56.515 partition: sync job to 'Outdoor\global\village-city-forest\Binduga': unload 64 layers, load 1 layers in 1 buckets
+21:49:56.515 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\interior.w2l]
+21:49:56.515 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\01_teves_craftsmen\interior\lights.w2l]
+21:49:56.515 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\interior.w2l]
+21:49:56.515 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\02_malena_craftsmen\interior\lights.w2l]
+21:49:56.515 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\interior.w2l]
+21:49:56.515 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\03_commoners_craftsmen\interior\lights.w2l]
+21:49:56.515 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\interior.w2l]
+21:49:56.515 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\04_einar_gausel_craftsmen\interior\lights.w2l]
+21:49:56.515 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\interior.w2l]
+21:49:56.515 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\06_inhuman_craftsmen\interior\lights.w2l]
+21:49:56.516 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\interior.w2l]
+21:49:56.516 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\07_inhuman_craftsmen\interior\lights.w2l]
+21:49:56.516 partition:   unload house_fastfood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\house_fastfood.w2l]
+21:49:56.516 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\interior.w2l]
+21:49:56.516 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\lod\group.w2lg]
+21:49:56.516 partition:   unload bucket_of_blood [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood\bucket_of_blood.w2l] [+F8 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\group.w2lg]
+21:49:56.516 partition:   unload bucket_of_blood_massacre [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\bucket_of_blood_massacre\bucket_of_blood_massacr]
+21:49:56.516 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\lights.w2l]
+21:49:56.516 partition:   unload windows [+68 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l] [+98 levels\l02-port\craftsmen_district\buildings\08_bar_craftsmen\interior\lights_windows\windows.w2l]
+21:49:56.516 partition:   unload interior [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\interior.w2l]
+21:49:56.516 partition:   unload lights [+68 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l] [+98 levels\l02-port\craftsmen_district\buildings\09_commoners_craftsmen\interior\lights.w2l]
+21:49:56.516 partition:   unload lights_port_01 [+68 levels\l02-port\environments\lights_exterior_port_01\lights_port_01.w2l] [+98 levels\l02-port\environments\lights_exterior_port_01\lights_port_01.w2l] [+F8 levels\l02-port\environments\loredo_house_environment\group.w2lg]
+21:49:56.516 partition:   unload fx_sound_shield [+68 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\fx_sound_shield.w2l]
+21:49:56.516 partition:   unload interior [+68 levels\l02-port\loredo_residence\buildings\interior\interior.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior.w2l]
+21:49:56.516 partition:   unload interior_basement [+68 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_basement.w2l]
+21:49:56.517 partition:   unload interior_floor3 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor3.w2l]
+21:49:56.517 partition:   unload interior_floor_2 [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2.w2l]
+21:49:56.517 partition:   unload shafts [+68 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\shafts.w2l] [+F8 levels\l02-port\loredo_residence\buildings\loredo_halberd\group.w2lg]
+21:49:56.517 partition:   unload decorations [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_2\decorations.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\group.w2lg]
+21:49:56.517 partition:   unload decoratios [+68 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\interior_floor_3\decoratios.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights\group.w2lg]
+21:49:56.517 partition:   unload lights [+68 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights\lights.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_basement\group.w2lg]
+21:49:56.517 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_decorations.w2l]
+21:49:56.517 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_basement\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\group.w2lg]
+21:49:56.517 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_decorations.w2l]
+21:49:56.517 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_1\lights_windows.w2l]
+21:49:56.517 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_decorations.w2l]
+21:49:56.518 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_2\lights_windows.w2l] [+F8 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\group.w2lg]
+21:49:56.518 partition:   unload lights_decorations [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_decorations.w2l]
+21:49:56.518 partition:   unload lights_windows [+68 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l] [+98 levels\l02-port\loredo_residence\buildings\interior\lights_floor_3\lights_windows.w2l]
+21:49:56.518 partition:   unload basement [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\basement.w2l]
+21:49:56.518 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\interior.w2l]
+21:49:56.518 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights.w2l]
+21:49:56.518 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\lights.w2l]
+21:49:56.518 partition:   unload windows [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\lights_windows\windows.w2l]
+21:49:56.518 partition:   unload shealas_specific_interior [+68 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l] [+98 levels\l02-port\marketplace\buildings\01_inn_marketplace\interior\shealas_quarter\shealas_specific_interior.w2l]
+21:49:56.518 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\interior.w2l]
+21:49:56.518 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\02_barracks_marketplace\interior\lights.w2l]
+21:49:56.519 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\interior.w2l]
+21:49:56.519 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\03_clerk_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\03_clerk_marketplace\lod\group.w2lg]
+21:49:56.519 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\interior.w2l]
+21:49:56.519 partition:   unload lights [+68 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+98 levels\l02-port\marketplace\buildings\04_guards_marketplace\interior\lights.w2l] [+F8 levels\l02-port\marketplace\buildings\04_guards_marketplace\lod\group.w2lg]
+21:49:56.519 partition:   unload interior [+68 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+98 levels\l02-port\marketplace\buildings\05_marketplace\interior\interior.w2l] [+F8 levels\l02-port\marketplace\buildings\gallows_after_q102\group.w2lg]
+21:49:56.519 partition:   unload decorations [+68 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\02_prison_ship_pier\interior\decorations.w2l] [+F8 levels\l02-port\pier\buildings\02_prison_ship_pier\q110_scoia_bodies\group.w2lg]
+21:49:56.519 partition:   unload decorations [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\decorations.w2l]
+21:49:56.519 partition:   unload interior [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\interior.w2l]
+21:49:56.519 partition:   unload windows [+68 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l] [+98 levels\l02-port\pier\buildings\06_custom_house_pier\interior\lights_windows\windows.w2l]
+21:49:56.519 partition:   unload interior [+68 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\01_chorab_village\interior\interior.w2l]
+21:49:56.519 partition:   unload interior [+68 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\interior.w2l]
+21:49:56.519 partition:   unload sq107_troll_head [+68 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l] [+98 levels\l02-port\village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l]
+21:49:56.520 partition:   unload anezka_bird [+68 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\anezka_bird.w2l]
+21:49:56.520 partition:   unload interior [+68 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\03_elves_village\interior\interior.w2l]
+21:49:56.520 partition:   unload interior [+68 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\04_boatbuilders_village\interior\interior.w2l]
+21:49:56.520 partition:   unload interior [+68 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\05_commoners_village\interior\interior.w2l]
+21:49:56.520 partition:   unload interior [+68 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l] [+98 levels\l02-port\village\buildings\06_commoners_village\interior\interior.w2l]
+21:49:56.520 partition:   load   fake [+68 levels\l02-port\fake_interiors\binduga\fake.w2l] [+98 levels\l02-port\fake_interiors\binduga\fake.w2l] [+F8 levels\l02-port\fake_interiors\flotsam\group.w2lg]
+21:49:56.521 interiors: before the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:56.541 savelist: before the switch private=1526 MB commit=1901 reserve=219 free=1975 largest_free=1900 MB, previews held=124
+21:49:56.555 partition: sync job ran 40 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+21:49:56.555 partition: keep_outdoors kept 64 of 64 layers, unloaded 0; loaded 0 (0 interiors added), skipped 1 (fake rooms, low-poly)
+21:49:56.556 interiors: after the switch - 1690 layers in the world, 850 loaded; 64 building interiors, 64 loaded
+21:49:56.569 load-trace: window 8 start (streaming door): task 57F86030 vtable 00EF0410, ticking for 0 ms (46 threads)
+21:49:56.575 savelist: after the switch private=1525 MB commit=1901 reserve=219 free=1975 largest_free=1900 MB, previews held=124
+21:49:56.575 partition: switch returned 1 after 61 ms
+21:49:56.584 doors: interior ready after 78 ms - picture back now (state 2)
+21:49:56.593 partition: door task ends - player (171.88, 214.93, 3.37), door (172.34, 214.27, 3.37)
+21:49:56.653 load-trace: window 8 end: streaming door (4 ticks, 0 overlapping) 94 ms; process CPU 78 ms = 0.83 cores; timer resolution 0.500 ms
+21:49:56.653 load-trace:   tid=44868 (main) start=029262EE cpu=47 ms (50%) | wait 3x (0 polls) 0 ms
+21:49:56.653 load-trace:   tid=39520 start=0066F607 cpu=16 ms (17%) | sleep 56x (0:0 1:56) 87 ms
+21:49:56.653 load-trace:   tid=48652 start=0066F607 cpu=16 ms (17%) | sleep 54x (0:0 1:54) 83 ms
+21:49:56.653 load-trace:   tid=29392 start=0066F607 cpu=78 ms (83%) | loose read 65x 0.2 MB 0 ms | wait 13036x (0 polls) 37 ms | present 3x 0 ms (max 31.3)
+21:49:56.653 load-trace: window 8 totals | loose read 65x 0.2 MB 0 ms | sleep 110x (0:0 1:110) 170 ms | wait 13039x (0 polls) 37 ms | present 3x 0 ms
+21:49:56.653 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+21:49:59.034 distance stats: mesh=1130639 shadow=581660 baseline_reject=372111 admitted=212618 (3.00x/3.00x)
+21:50:00.840 load-trace: streaming burst 250 ms | loose read 1x 16.8 MB 4 ms | sleep 322x (0:0 1:322) 495 ms | wait 3x (0 polls) 0 ms
+21:50:03.605 crash: filter armed, chaining to 0x00676B04 (witcher2.EXE+0x276B04)
+21:50:03.747 unloaded

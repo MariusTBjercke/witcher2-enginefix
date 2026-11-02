@@ -1,0 +1,414 @@
+﻿22:08:16.118 witcher2_enginefix 0.8.0 loaded (image base 0x00400000)
+22:08:16.118 diagnostics: crash_dump=1 (previous log kept as witcher2_enginefix.prev.log)
+22:08:16.118 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+22:08:16.118 distance config: experimental=1 visibility=3.00x shadow=3.00x
+22:08:16.118 saves: fix_thumbnails=1 save_trace=0
+22:08:16.118 startup: skip_intro=1
+22:08:16.118 diagnostics: file_trace=0 load_trace=1
+22:08:16.118 loading: fast_doors=1 door_fade=0.05 area_fade=0.25 keep_outdoors=1 keep_interiors=1 preload_interiors=1 skip_door_gc=1 instant_doors=1
+22:08:16.118 scriptpatches: book_marker=1 continue=1 pause_quit=1 window_mode=1
+22:08:16.118 window: enabled=1 borderless=0 dpi_aware=1
+22:08:16.118 presets: default=extreme, cycle modifiers=1 VK=79 (Options > Graphics remembers the level)
+22:08:16.121 load-trace: hooked kernel32.dll!ReadFile
+22:08:16.121 load-trace: hooked kernel32.dll!CreateFileW
+22:08:16.121 load-trace: hooked kernel32.dll!Sleep
+22:08:16.121 load-trace: hooked kernel32.dll!WaitForSingleObject
+22:08:16.121 load-trace: hooked kernel32.dll!WaitForSingleObjectEx
+22:08:16.121 load-trace: hooked after 0 ms (5/5 import slots), main thread 2852
+22:08:16.121 load-trace: streaming door timer hooked
+22:08:16.123 presets: startup=extreme (options menu)
+22:08:16.123 window: dpi awareness = system aware (fallback)
+22:08:16.123 window: borderless=1 (options menu), dpi_aware=1, menu=1
+22:08:16.269 startup: movie list and tick hooked after 156 ms
+22:08:16.269 load-trace: block unpack call hooked after 156 ms
+22:08:16.269 partition: switch calls hooked/hooked, sync run hooked (load_trace=1 keep_outdoors=1)
+22:08:16.284 window: startup borderless style patched
+22:08:16.292 window: menu channel hooked (Options > Graphics applies borderless at once)
+22:08:16.292 window: viewport tick hooked (Full screen switches at once)
+22:08:16.386 script overlay: cache <game>\bin\witcher2_enginefix_cache
+22:08:16.619 script overlay: cache: reused (4 redirects)
+22:08:16.620 script patches: book_marker=on continue=on pause_quit=on window_mode=on cache=reused
+22:08:17.017 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+22:08:17.027 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+22:08:17.372 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+22:08:17.623 crash: filter armed, chaining to 0x5F492571 (CSERHelper.dll+0x12571)
+22:08:17.631 osd: window ready (font 34 px)
+22:08:17.631 stability: ray cast guard installed (collector slot 00D41A38)
+22:08:17.631 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
+22:08:17.631 osd: Graphics: extreme  (LOD only)
+22:08:17.636 lod enforced: mesh=8.000 foliage=5.000
+22:08:17.637 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=3.00x shadow=3.00x
+22:08:17.637 osd: Graphics: extreme  (4/4)
+22:08:17.637 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+22:08:17.637 thumbnail: menu image registry hooked (QuickSave preview refresh)
+22:08:17.637 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=1 trace=0
+22:08:17.637 saves: ISteamRemoteStorage 132A0BE8 FileWrite hooked; thumbnail fix=1
+22:08:17.637 doors: door start hooked (door_fade 0.05 s, area_fade 0.25 s)
+22:08:17.637 doors: fade commands hooked/hooked - instant_doors on
+22:08:17.637 doors: fade-out patched, fade-in patched, 0.05 s, area changes 0.25 s (game 0.5 s); fast_doors=1
+22:08:19.620 load-trace: streaming burst 250 ms | dzip read 264x 0.6 MB 1 ms | loose read 2158x 8.4 MB 4 ms | other read 1x 0.0 MB 0 ms | open 34x 58 ms | unpack 150x 0.6->3.8 MB 2 ms | sleep 45x (0:21 1:24) 371 ms
+22:08:20.120 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 40408x 8.9 MB 52 ms | open 2x 11 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 32x (0:0 1:32) 501 ms
+22:08:32.866 window: game window 3840x2160, User.ini viewport 3840x2160
+22:08:32.935 load-trace: device 12709480 Present hooked after 16828 ms
+22:08:32.935 load-trace: device found: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+22:08:33.105 load-trace: window 1 start (loading screen): render thread 0BEC3700 movie 0B7F54E0 screen 00000000 shown=0 (41 threads)
+22:08:33.266 load-trace: window 1 +250 ms | dzip read 2002x 85.7 MB 21 ms | loose read 21x 1.4 MB 0 ms | open 2x 10 ms | unpack 1915x 85.7->116.9 MB 87 ms | sleep 293x (0:0 1:293) 481 ms | wait 2x (0 polls) 0 ms | present 8x 44 ms
+22:08:33.521 input: CreateDevice hook installed
+22:08:33.522 input: keyboard state filter installed
+22:08:33.522 input: keyboard cooperative level hook installed
+22:08:33.523 input: window procedure hooked (key messages ignored while DirectInput reads the keyboard)
+22:08:33.523 input: keyboard cooperative level 0x05 -> 0x06 (Windows keys and Print Screen work in game)
+22:08:33.523 load-trace: window 1 end: loading screen (screen object 0 ms) 453 ms; process CPU 719 ms = 1.59 cores; timer resolution 0.500 ms
+22:08:33.523 load-trace:   tid=2852 (main) start=029262EE cpu=359 ms (79%) | dzip read 3211x 123.8 MB 31 ms | loose read 62x 4.6 MB 1 ms | open 9x 48 ms | unpack 2933x 123.8->171.9 MB 127 ms
+22:08:33.523 load-trace:   tid=6884 start=0066F607 cpu=0 ms (0%) | sleep 279x (0:0 1:279) 446 ms
+22:08:33.523 load-trace:   tid=48236 start=0066F607 cpu=0 ms (0%) | loose read 3x 0.4 MB 0 ms | sleep 278x (0:0 1:278) 444 ms
+22:08:33.523 load-trace:   tid=25388 start=0066F607 cpu=359 ms (79%) | wait 426x (0 polls) 0 ms | present 14x 44 ms (max 32.8)
+22:08:33.523 load-trace: window 1 totals | dzip read 3211x 123.8 MB 31 ms | loose read 65x 5.0 MB 1 ms | open 9x 48 ms | unpack 2933x 123.8->171.9 MB 127 ms | sleep 557x (0:0 1:557) 890 ms | wait 426x (0 polls) 0 ms | present 14x 44 ms
+22:08:33.524 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+22:08:33.524 startup: movie list built (1 entries), skip armed
+22:08:33.833 startup: stopping startup movie 1 of 1
+22:08:33.956 startup: 1 startup movie(s) stopped, main menu reached
+22:08:34.219 load-trace: streaming burst 250 ms | loose read 2x 30.8 MB 6 ms | open 1x 5 ms | sleep 330x (0:0 1:330) 506 ms | wait 3x (0 polls) 0 ms
+22:08:41.467 load-trace: streaming burst 250 ms | loose read 1x 16.8 MB 3 ms | sleep 486x (0:0 1:486) 751 ms | wait 3x (0 polls) 0 ms
+22:08:56.729 load-trace: window 2 start (loading screen): render thread 0BEC3700 movie 0B7F54E0 screen 00000000 shown=0 (53 threads)
+22:08:56.847 partition: switch '' -> 'all\Village\outside' (load)
+22:08:56.847 partition: at the switch - player unknown (0.00, 0.00, 0.00)
+22:08:56.847 partition: sync job to 'all\Village\outside': unload 0 layers, load 343 layers in 1 buckets
+22:08:56.847 partition:   load   cs_waypoints [+68 levels\l01-keep\cs_waypoints.w2l] [+98 levels\l01-keep\cs_waypoints.w2l]
+22:08:56.848 partition:   load   denied_areas [+68 levels\l01-keep\denied_areas.w2l] [+98 levels\l01-keep\denied_areas.w2l]
+22:08:56.848 partition:   load   dragon [+68 levels\l01-keep\dragon.w2l] [+98 levels\l01-keep\dragon.w2l]
+22:08:56.848 partition:   load   fow_triggers [+68 levels\l01-keep\fow_triggers.w2l] [+98 levels\l01-keep\fow_triggers.w2l]
+22:08:56.848 partition:   load   loader [+68 levels\l01-keep\loader.w2l] [+98 levels\l01-keep\loader.w2l]
+22:08:56.848 partition:   load   lores terrain [+68 levels\l01-keep\lores terrain.w2l] [+98 levels\l01-keep\lores terrain.w2l]
+22:08:56.848 partition:   load   mapproperty [+68 levels\l01-keep\mapproperty.w2l] [+98 levels\l01-keep\mapproperty.w2l]
+22:08:56.848 partition:   load   navigation_surfaces [+68 levels\l01-keep\navigation_surfaces.w2l] [+98 levels\l01-keep\navigation_surfaces.w2l]
+22:08:56.848 partition:   load   npc_spawnsets [+68 levels\l01-keep\npc_spawnsets.w2l] [+98 levels\l01-keep\npc_spawnsets.w2l]
+22:08:56.848 partition:   load   paths [+68 levels\l01-keep\paths.w2l] [+98 levels\l01-keep\paths.w2l]
+22:08:56.848 partition:   load   prologue_quest [+68 levels\l01-keep\prologue_quest.w2l] [+98 levels\l01-keep\prologue_quest.w2l]
+22:08:56.848 partition:   load   streaming_stickers [+68 levels\l01-keep\streaming_stickers.w2l] [+98 levels\l01-keep\streaming_stickers.w2l]
+22:08:56.848 partition:   load   streaming_triggers [+68 levels\l01-keep\streaming_triggers.w2l] [+98 levels\l01-keep\streaming_triggers.w2l]
+22:08:56.848 partition:   load   tech [+68 levels\l01-keep\tech.w2l] [+98 levels\l01-keep\tech.w2l]
+22:08:56.848 partition:   load   teleport [+68 levels\l01-keep\teleport.w2l] [+98 levels\l01-keep\teleport.w2l]
+22:08:56.848 partition:   load   testt_fx [+68 levels\l01-keep\testt_fx.w2l] [+98 levels\l01-keep\testt_fx.w2l]
+22:08:56.849 partition:   load   worldEnvironment [+68 levels\l01-keep\worldEnvironment.w2l] [+98 levels\l01-keep\worldenvironment.w2l]
+22:08:56.849 partition:   load   tile 000x001 [+68 levels\l01-keep\hires terrain\tile 000x001\tile 000x001.w2l] [+98 levels\l01-keep\hires terrain\tile 000x001\tile 000x001.w2l]
+22:08:56.849 partition:   load   tile 001x000 [+68 levels\l01-keep\hires terrain\tile 001x000\tile 001x000.w2l] [+98 levels\l01-keep\hires terrain\tile 001x000\tile 001x000.w2l]
+22:08:56.849 partition:   load   tile 001x001 [+68 levels\l01-keep\hires terrain\tile 001x001\tile 001x001.w2l] [+98 levels\l01-keep\hires terrain\tile 001x001\tile 001x001.w2l]
+22:08:56.849 partition:   load   tile 001x002 [+68 levels\l01-keep\hires terrain\tile 001x002\tile 001x002.w2l] [+98 levels\l01-keep\hires terrain\tile 001x002\tile 001x002.w2l]
+22:08:56.849 partition:   load   tile 001x003 [+68 levels\l01-keep\hires terrain\tile 001x003\tile 001x003.w2l] [+98 levels\l01-keep\hires terrain\tile 001x003\tile 001x003.w2l]
+22:08:56.849 partition:   load   tile 002x000 [+68 levels\l01-keep\hires terrain\tile 002x000\tile 002x000.w2l] [+98 levels\l01-keep\hires terrain\tile 002x000\tile 002x000.w2l]
+22:08:56.849 partition:   load   tile 002x003 [+68 levels\l01-keep\hires terrain\tile 002x003\tile 002x003.w2l] [+98 levels\l01-keep\hires terrain\tile 002x003\tile 002x003.w2l]
+22:08:56.849 partition:   load   tile 003x000 [+68 levels\l01-keep\hires terrain\tile 003x000\tile 003x000.w2l] [+98 levels\l01-keep\hires terrain\tile 003x000\tile 003x000.w2l]
+22:08:56.849 partition:   load   tile 003x003 [+68 levels\l01-keep\hires terrain\tile 003x003\tile 003x003.w2l] [+98 levels\l01-keep\hires terrain\tile 003x003\tile 003x003.w2l] [+F8 levels\l01-keep\inside_tower\group.w2lg]
+22:08:56.849 partition:   load   env [+68 levels\l01-keep\environmets\env.w2l] [+98 levels\l01-keep\environmets\env.w2l]
+22:08:56.849 partition:   load   flaresun [+68 levels\l01-keep\environmets\flaresun.w2l] [+98 levels\l01-keep\environmets\flaresun.w2l]
+22:08:56.849 partition:   load   skybox [+68 levels\l01-keep\environmets\skybox.w2l] [+98 levels\l01-keep\environmets\skybox.w2l] [+F8 levels\l01-keep\finisher_spots\group.w2lg]
+22:08:56.849 partition:   load   l01_bridge [+68 levels\l01-keep\sounds\l01_bridge.w2l] [+98 levels\l01-keep\sounds\l01_bridge.w2l]
+22:08:56.849 partition:   load   l01_bridge_solitude [+68 levels\l01-keep\sounds\l01_bridge_solitude.w2l] [+98 levels\l01-keep\sounds\l01_bridge_solitude.w2l]
+22:08:56.850 partition:   load   l01_cementary [+68 levels\l01-keep\sounds\l01_cementary.w2l] [+98 levels\l01-keep\sounds\l01_cementary.w2l]
+22:08:56.850 partition:   load   l01_church [+68 levels\l01-keep\sounds\l01_church.w2l] [+98 levels\l01-keep\sounds\l01_church.w2l]
+22:08:56.850 partition:   load   l01_dungeons [+68 levels\l01-keep\sounds\l01_dungeons.w2l] [+98 levels\l01-keep\sounds\l01_dungeons.w2l]
+22:08:56.850 partition:   load   l01_harbour [+68 levels\l01-keep\sounds\l01_harbour.w2l] [+98 levels\l01-keep\sounds\l01_harbour.w2l]
+22:08:56.850 partition:   load   l01_old_tunel [+68 levels\l01-keep\sounds\l01_old_tunel.w2l] [+98 levels\l01-keep\sounds\l01_old_tunel.w2l]
+22:08:56.850 partition:   load   l01_siege_tower [+68 levels\l01-keep\sounds\l01_siege_tower.w2l] [+98 levels\l01-keep\sounds\l01_siege_tower.w2l]
+22:08:56.850 partition:   load   l01_solitude [+68 levels\l01-keep\sounds\l01_solitude.w2l] [+98 levels\l01-keep\sounds\l01_solitude.w2l]
+22:08:56.850 partition:   load   l01_square [+68 levels\l01-keep\sounds\l01_square.w2l] [+98 levels\l01-keep\sounds\l01_square.w2l]
+22:08:56.850 partition:   load   l01_tower [+68 levels\l01-keep\sounds\l01_tower.w2l] [+98 levels\l01-keep\sounds\l01_tower.w2l]
+22:08:56.850 partition:   load   l01_walls [+68 levels\l01-keep\sounds\l01_walls.w2l] [+98 levels\l01-keep\sounds\l01_walls.w2l]
+22:08:56.850 partition:   load   l01_warcamp [+68 levels\l01-keep\sounds\l01_warcamp.w2l] [+98 levels\l01-keep\sounds\l01_warcamp.w2l]
+22:08:56.850 partition:   load   l01_warcamp_tents [+68 levels\l01-keep\sounds\l01_warcamp_tents.w2l] [+98 levels\l01-keep\sounds\l01_warcamp_tents.w2l] [+F8 levels\l01-keep\streaming_island_old_tunnel\group.w2lg]
+22:08:56.850 partition:   load   dragon_waypoints [+68 levels\l01-keep\boss_fight\dragon_waypoints.w2l] [+98 levels\l01-keep\boss_fight\dragon_waypoints.w2l] [+F8 levels\l01-keep\bridge\group.w2lg]
+22:08:56.850 partition:   load   explorations_draft [+68 levels\l01-keep\basement\explorations\explorations_draft.w2l] [+98 levels\l01-keep\basement\explorations\explorations_draft.w2l] [+F8 levels\l01-keep\basement\interogation_room\group.w2lg]
+22:08:56.850 partition:   load   closeup [+68 levels\l01-keep\bastille\exploration\closeup.w2l] [+98 levels\l01-keep\bastille\exploration\closeup.w2l] [+F8 levels\l01-keep\bastille\fx\group.w2lg]
+22:08:56.851 partition:   load   quest_explorations [+68 levels\l01-keep\bridge\explorations\quest_explorations.w2l] [+98 levels\l01-keep\bridge\explorations\quest_explorations.w2l] [+F8 levels\l01-keep\bridge\hoarding\group.w2lg]
+22:08:56.851 partition:   load   explorations [+68 levels\l01-keep\tents\explorations\explorations.w2l] [+98 levels\l01-keep\tents\explorations\explorations.w2l] [+F8 levels\l01-keep\tents\scaffold_cs\group.w2lg]
+22:08:56.851 partition:   load   q000_begin [+68 levels\l01-keep\quests\q000_begin\q000_begin\q000_begin.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_begin\q000_begin.w2l]
+22:08:56.851 partition:   load   q000_tent_triss [+68 levels\l01-keep\quests\q000_begin\q000_begin\q000_tent_triss.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_begin\q000_tent_triss.w2l] [+F8 levels\l01-keep\quests\q000_begin\q000_default\group.w2lg]
+22:08:56.851 partition:   load   q000_formation1_leader [+68 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_leader.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_leader.w2l]
+22:08:56.851 partition:   load   q000_formation1_leader_end [+68 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_leader_end.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_leader_end.w2l]
+22:08:56.851 partition:   load   q000_formation1_soldiers [+68 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_soldiers.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_soldiers.w2l]
+22:08:56.851 partition:   load   q000_formation1_soldiers_end [+68 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_soldiers_end.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation1_soldiers_end.w2l]
+22:08:56.851 partition:   load   q000_formation_scene_technical [+68 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation_scene_technical.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_begin\q000_formation_scene\q000_formation_scene_technical.w2l]
+22:08:56.851 partition:   load   q000_spawnsets [+68 levels\l01-keep\quests\q000_begin\q000_default\q000_spawnsets.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_default\q000_spawnsets.w2l] [+F8 levels\l01-keep\quests\q000_begin\q000_fireplace1_chat\group.w2lg]
+22:08:56.851 partition:   load   q000_pushable_ball [+68 levels\l01-keep\quests\q000_begin\q000_pushable_ball\q000_pushable_ball.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_pushable_ball\q000_pushable_ball.w2l] [+F8 levels\l01-keep\quests\q000_begin\q000_shooters_area_deadbodies\group.w2lg]
+22:08:56.851 partition:   load   q000_sc2 [+68 levels\l01-keep\quests\q000_begin\q000_side_scenes\q000_sc2.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_side_scenes\q000_sc2.w2l]
+22:08:56.851 partition:   load   q000_siedgetower [+68 levels\l01-keep\quests\q000_begin\q000_side_scenes\q000_siedgetower.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_side_scenes\q000_siedgetower.w2l] [+F8 levels\l01-keep\quests\q000_begin\q000_siege_tower\group.w2lg]
+22:08:56.851 partition:   load   denied_area_walkmesh [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\denied_area_walkmesh.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\denied_area_walkmesh.w2l]
+22:08:56.851 partition:   load   q000_assault_knight1 [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_assault_knight1.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_assault_knight1.w2l]
+22:08:56.852 partition:   load   q000_assault_knights_crowd [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_assault_knights_crowd.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_assault_knights_crowd.w2l]
+22:08:56.852 partition:   load   q000_assault_soldier1 [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_assault_soldier1.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_assault_soldier1.w2l]
+22:08:56.852 partition:   load   q000_crossbowman_last_floor [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_crossbowman_last_floor.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_crossbowman_last_floor.w2l]
+22:08:56.852 partition:   load   q000_crossbowman_lvl2 [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_crossbowman_lvl2.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_crossbowman_lvl2.w2l]
+22:08:56.852 partition:   load   q000_crossbowmen [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_crossbowmen.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_crossbowmen.w2l]
+22:08:56.852 partition:   load   q000_decurion [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_decurion.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_decurion.w2l]
+22:08:56.852 partition:   load   q000_foltest_1stfloor [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_1stfloor.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_1stfloor.w2l]
+22:08:56.852 partition:   load   q000_foltest_2ndfloor [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_2ndfloor.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_2ndfloor.w2l]
+22:08:56.852 partition:   load   q000_foltest_3rdfloor [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_3rdfloor.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_3rdfloor.w2l]
+22:08:56.852 partition:   load   q000_foltest_start [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_start.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_foltest_start.w2l]
+22:08:56.852 partition:   load   q000_recruit1 [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_recruit1.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_recruit1.w2l]
+22:08:56.852 partition:   load   q000_siege_lvl1_crowd [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_lvl1_crowd.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_lvl1_crowd.w2l]
+22:08:56.852 partition:   load   q000_siege_lvl2_crowd [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_lvl2_crowd.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_lvl2_crowd.w2l]
+22:08:56.852 partition:   load   q000_siege_lvl3_crowd [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_lvl3_crowd.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_lvl3_crowd.w2l]
+22:08:56.852 partition:   load   q000_siege_tower_exploration [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_tower_exploration.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_tower_exploration.w2l]
+22:08:56.852 partition:   load   q000_siege_tower_officer [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_tower_officer.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_tower_officer.w2l]
+22:08:56.852 partition:   load   q000_siege_tower_technical [+68 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_tower_technical.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_siege_tower\q000_siege_tower_technical.w2l] [+F8 levels\l01-keep\quests\q000_begin\q000_siege_tower_starting_pos\group.w2lg]
+22:08:56.852 partition:   load   q000_crossbow_knight [+68 levels\l01-keep\quests\q000_begin\q000_triblock\q000_crossbow_knight.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_triblock\q000_crossbow_knight.w2l]
+22:08:56.852 partition:   load   q000_flotest_near_triblock [+68 levels\l01-keep\quests\q000_begin\q000_triblock\q000_flotest_near_triblock.w2l] [+98 levels\l01-keep\quests\q000_begin\q000_triblock\q000_flotest_near_triblock.w2l]
+22:08:56.852 partition:   (names cut at 80)
+22:08:56.853 interiors: before the switch - 755 layers in the world, 0 loaded; 24 building interiors, 0 loaded
+22:08:56.865 savelist: before the switch private=1036 MB commit=1407 reserve=293 free=2394 largest_free=2044 MB, previews held=124
+22:08:56.867 partition:   preload interior1 [+68 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+98 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior10\group.w2lg]
+22:08:56.867 partition:   preload interior10 [+68 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+98 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior11\group.w2lg]
+22:08:56.867 partition:   preload interior11 [+68 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+98 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior12\group.w2lg]
+22:08:56.867 partition:   preload interior12 [+68 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+98 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior13\group.w2lg]
+22:08:56.867 partition:   preload interior13 [+68 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+98 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior14\group.w2lg]
+22:08:56.867 partition:   preload interior14 [+68 levels\l01-keep\island\village_b_ints\interior14\interior14.w2l] [+98 levels\l01-keep\island\village_b_ints\interior14\interior14.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior15\group.w2lg]
+22:08:56.867 partition:   preload interior15 [+68 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+98 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior16\group.w2lg]
+22:08:56.867 partition:   preload interior16 [+68 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+98 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior17\group.w2lg]
+22:08:56.868 partition:   preload interior17 [+68 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+98 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior18\group.w2lg]
+22:08:56.868 partition:   preload interior18 [+68 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+98 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior19\group.w2lg]
+22:08:56.868 partition:   preload interior19 [+68 levels\l01-keep\island\village_b_ints\interior19\interior19.w2l] [+98 levels\l01-keep\island\village_b_ints\interior19\interior19.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior2\group.w2lg]
+22:08:56.868 partition:   preload interior2 [+68 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+98 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior20\group.w2lg]
+22:08:56.868 partition:   preload interior20 [+68 levels\l01-keep\island\village_b_ints\interior20\interior20.w2l] [+98 levels\l01-keep\island\village_b_ints\interior20\interior20.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior21\group.w2lg]
+22:08:56.868 partition:   preload interior21 [+68 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+98 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior22\group.w2lg]
+22:08:56.868 partition:   preload interior22 [+68 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+98 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior23\group.w2lg]
+22:08:56.868 partition:   preload interior23 [+68 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+98 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior24\group.w2lg]
+22:08:56.868 partition:   preload interior3 [+68 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+98 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior4\group.w2lg]
+22:08:56.868 partition:   preload interior4 [+68 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+98 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior5\group.w2lg]
+22:08:56.868 partition:   preload interior5 [+68 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+98 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior6\group.w2lg]
+22:08:56.868 partition:   preload interior6 [+68 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+98 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior7\group.w2lg]
+22:08:56.868 partition:   preload interior8 [+68 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+98 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior9\group.w2lg]
+22:08:56.868 partition:   preload interior9 [+68 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+98 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement\group.w2lg]
+22:08:56.869 partition:   preload with_basement [+68 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement2\group.w2lg]
+22:08:56.869 partition:   preload with_basement2 [+68 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+F8 levels\l01-keep\island\village_buildings\group.w2lg]
+22:08:56.905 load-trace: window 2 +234 ms: screen object 0BFF2AD8 shown=1
+22:08:56.922 load-trace: window 2 +250 ms | dzip read 356x 4.5 MB 2 ms | loose read 452x 2.4 MB 1 ms | other read 1x 0.0 MB 0 ms | open 5x 27 ms | unpack 253x 4.5->10.4 MB 9 ms | sleep 464x (0:0 1:464) 711 ms | wait 250x (0 polls) 292 ms | present 6x 0 ms
+22:08:57.171 load-trace: window 2 +500 ms | dzip read 784x 18.9 MB 5 ms | loose read 239x 13.0 MB 3 ms | open 64x 118 ms | unpack 587x 18.9->27.3 MB 24 ms | sleep 320x (0:0 1:320) 499 ms | wait 538x (0 polls) 0 ms | present 8x 0 ms
+22:08:57.420 load-trace: window 2 +750 ms | dzip read 777x 20.7 MB 5 ms | loose read 363x 22.9 MB 5 ms | open 44x 128 ms | unpack 625x 20.7->33.3 MB 26 ms | sleep 324x (0:0 1:324) 499 ms | wait 392x (0 polls) 0 ms | present 7x 0 ms
+22:08:57.670 load-trace: window 2 +1000 ms | dzip read 654x 24.8 MB 6 ms | loose read 326x 23.8 MB 5 ms | open 35x 110 ms | unpack 555x 24.8->31.7 MB 34 ms | sleep 320x (0:0 1:320) 499 ms | wait 268x (0 polls) 0 ms | present 8x 0 ms
+22:08:57.923 load-trace: window 2 +1250 ms | dzip read 683x 22.6 MB 5 ms | loose read 371x 26.4 MB 5 ms | open 41x 168 ms | unpack 545x 22.6->29.2 MB 31 ms | sleep 323x (0:0 1:323) 504 ms | wait 364x (0 polls) 0 ms | present 7x 0 ms
+22:08:58.172 load-trace: window 2 +1500 ms | dzip read 851x 25.2 MB 6 ms | loose read 344x 27.7 MB 5 ms | open 36x 116 ms | unpack 663x 25.2->35.4 MB 34 ms | sleep 316x (0:0 1:316) 497 ms | wait 452x (0 polls) 0 ms | present 8x 0 ms
+22:08:58.422 load-trace: window 2 +1750 ms | dzip read 1002x 31.6 MB 7 ms | loose read 291x 16.0 MB 3 ms | open 38x 120 ms | unpack 888x 31.6->51.5 MB 51 ms | sleep 321x (0:0 1:321) 500 ms | wait 308x (0 polls) 0 ms | present 7x 0 ms
+22:08:58.672 load-trace: window 2 +2000 ms | dzip read 1186x 41.9 MB 9 ms | loose read 214x 14.3 MB 3 ms | open 28x 89 ms | unpack 1068x 41.9->62.1 MB 45 ms | sleep 324x (0:0 1:324) 503 ms | wait 280x (0 polls) 0 ms | present 7x 0 ms
+22:08:58.921 load-trace: window 2 +2250 ms | dzip read 1393x 28.2 MB 8 ms | loose read 89x 5.7 MB 2 ms | open 15x 54 ms | unpack 1011x 28.2->42.9 MB 34 ms | sleep 314x (0:0 1:314) 496 ms | wait 680x (0 polls) 0 ms | present 8x 0 ms
+22:08:59.169 load-trace: window 2 +2500 ms | dzip read 563x 14.4 MB 9 ms | loose read 346x 30.2 MB 10 ms | open 38x 124 ms | unpack 399x 14.4->19.8 MB 24 ms | sleep 320x (0:0 1:320) 497 ms | wait 36x (0 polls) 0 ms | present 7x 0 ms
+22:08:59.263 partition: sync job ran 2416 ms (GC  19 ms)
+22:08:59.263 partition: preload kept 0 of 0 layers, unloaded 0; loaded 367 (24 interiors added), skipped 0 (fake rooms, low-poly)
+22:08:59.264 interiors: after the switch - 755 layers in the world, 365 loaded; 24 building interiors, 24 loaded
+22:08:59.277 savelist: after the switch private=1187 MB commit=1559 reserve=278 free=2257 largest_free=2044 MB, previews held=124
+22:08:59.277 partition: switch returned 1 after 2429 ms
+22:08:59.422 load-trace: window 2 +2750 ms | dzip read 359x 10.9 MB 5 ms | loose read 139x 8.8 MB 4 ms | open 15x 49 ms | unpack 296x 10.9->16.3 MB 17 ms | sleep 328x (0:0 1:328) 507 ms | wait 1217x (0 polls) 1 ms | present 8x 0 ms
+22:08:59.670 load-trace: window 2 +3000 ms | dzip read 578x 16.5 MB 4 ms | loose read 203x 13.5 MB 3 ms | open 23x 80 ms | unpack 471x 16.5->25.4 MB 26 ms | sleep 194x (0:0 1:194) 299 ms | wait 38619x (0 polls) 26 ms | present 7x 0 ms
+22:08:59.921 load-trace: window 2 +3250 ms | dzip read 745x 31.1 MB 7 ms | loose read 263x 18.1 MB 4 ms | open 26x 96 ms | unpack 702x 31.0->43.0 MB 45 ms | sleep 99x (0:0 1:99) 150 ms | wait 66086x (0 polls) 30 ms | present 8x 0 ms
+22:09:00.170 load-trace: window 2 +3500 ms | dzip read 902x 37.0 MB 9 ms | loose read 219x 15.0 MB 3 ms | open 22x 80 ms | unpack 854x 37.0->52.4 MB 50 ms | sleep 149x (0:0 1:149) 228 ms | wait 59182x (0 polls) 26 ms | present 7x 0 ms
+22:09:00.310 load-trace: window 2 end: loading screen (screen object 3329 ms) 3563 ms; process CPU 6281 ms = 1.76 cores; timer resolution 0.500 ms
+22:09:00.310 load-trace:   tid=2852 (main) start=029262EE cpu=2156 ms (61%) | dzip read 8761x 245.4 MB 68 ms | loose read 2756x 190.6 MB 46 ms | other read 1x 0.0 MB 0 ms | open 361x 1107 ms | unpack 6990x 245.4->363.6 MB 331 ms | sleep 3x (0:0 1:3) 4 ms | wait 376x (0 polls) 11 ms
+22:09:00.310 load-trace:   tid=6884 start=0066F607 cpu=94 ms (3%) | dzip read 3x 0.0 MB 0 ms | unpack 2x 0.0->0.1 MB 0 ms | sleep 2183x (0:0 1:2183) 3388 ms
+22:09:00.310 load-trace:   tid=48236 start=0066F607 cpu=484 ms (14%) | dzip read 2204x 87.8 MB 21 ms | loose read 711x 49.6 MB 11 ms | open 70x 258 ms | unpack 2044x 87.8->124.0 MB 124 ms | sleep 1836x (0:0 1:1836) 2854 ms
+22:09:00.310 load-trace:   tid=49996 start=77088D10 cpu=16 ms (0%) | open 3x 4 ms
+22:09:00.310 load-trace:   tid=25388 start=0066F607 cpu=3469 ms (97%) | loose read 435x 1.7 MB 1 ms | open 1x 10 ms | wait 180040x (0 polls) 79 ms | present 105x 1 ms (max 32.8)
+22:09:00.310 load-trace:   tid=45112 start=00000000 cpu=-1 ms (0%) | wait 15x (0 polls) 292 ms
+22:09:00.310 load-trace:   tid=47684 start=00000000 cpu=-1 ms (0%) | sleep 136x (0:0 1:136) 208 ms | wait 1x (0 polls) 0 ms
+22:09:00.310 load-trace:   tid=48512 start=6F828F20 cpu=94 ms (3%) | no traced call
+22:09:00.310 load-trace:   tid=24016 start=55FB0460 cpu=78 ms (2%) | no traced call
+22:09:00.310 load-trace: window 2 totals | dzip read 10968x 333.3 MB 88 ms | loose read 3902x 241.8 MB 57 ms | other read 1x 0.0 MB 0 ms | open 435x 1379 ms | unpack 9036x 333.2->487.7 MB 456 ms | sleep 4158x (0:0 1:4158) 6454 ms | wait 180432x (0 polls) 383 ms | present 105x 1 ms
+22:09:00.311 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+22:09:00.482 load-trace: streaming burst 250 ms | dzip read 279x 11.2 MB 3 ms | loose read 71x 37.1 MB 18 ms | open 17x 28 ms | unpack 258x 11.2->15.6 MB 14 ms | sleep 124x (0:0 1:124) 194 ms
+22:09:00.734 load-trace: streaming burst 250 ms | dzip read 388x 19.3 MB 4 ms | loose read 95x 247.8 MB 129 ms | open 80x 5 ms | unpack 374x 19.4->23.4 MB 23 ms | sleep 164x (0:0 1:164) 256 ms | wait 957x (0 polls) 489 ms
+22:09:01.984 load-trace: streaming burst 250 ms | loose read 2x 4.0 MB 3 ms | open 2x 0 ms | sleep 323x (0:0 1:323) 493 ms | wait 15877x (0 polls) 37 ms | present 18x 149 ms
+22:09:02.732 load-trace: streaming burst 250 ms | dzip read 68x 3.4 MB 1 ms | loose read 30x 77.5 MB 40 ms | open 24x 2 ms | unpack 66x 3.4->4.1 MB 4 ms | sleep 278x (0:0 1:278) 424 ms | wait 14197x (0 polls) 144 ms | present 17x 61 ms
+22:09:02.982 load-trace: streaming burst 250 ms | dzip read 36x 1.7 MB 0 ms | loose read 5x 18.0 MB 9 ms | open 5x 1 ms | unpack 34x 1.7->2.1 MB 1 ms | sleep 305x (0:0 1:305) 470 ms | wait 14977x (0 polls) 36 ms | present 17x 137 ms
+22:09:03.091 distance stats: mesh=544588 shadow=153703 baseline_reject=20543 admitted=17733 (3.00x/3.00x)
+22:09:03.233 load-trace: streaming burst 250 ms | dzip read 52x 2.7 MB 1 ms | loose read 23x 52.0 MB 28 ms | open 20x 2 ms | unpack 50x 2.7->3.1 MB 2 ms | sleep 291x (0:0 1:291) 445 ms | wait 16570x (0 polls) 117 ms | present 19x 77 ms
+22:09:03.484 load-trace: streaming burst 250 ms | dzip read 66x 3.3 MB 1 ms | loose read 4x 14.0 MB 8 ms | open 3x 0 ms | unpack 65x 3.3->4.1 MB 3 ms | sleep 313x (0:0 1:313) 474 ms | wait 16160x (0 polls) 83 ms | present 18x 127 ms
+22:09:03.735 load-trace: streaming burst 250 ms | dzip read 2x 0.0 MB 0 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | unpack 1x 0.0->0.0 MB 0 ms | sleep 318x (0:0 1:318) 487 ms | wait 16100x (0 polls) 70 ms | present 18x 136 ms
+22:09:08.148 distance stats: mesh=1443099 shadow=224331 baseline_reject=26487 admitted=25778 (3.00x/3.00x)
+22:09:08.235 load-trace: streaming burst 250 ms | dzip read 145x 6.2 MB 2 ms | loose read 31x 2.0 MB 0 ms | open 3x 14 ms | unpack 136x 6.2->8.3 MB 8 ms | sleep 260x (0:0 1:260) 399 ms | wait 12280x (0 polls) 4 ms | present 18x 186 ms
+22:09:10.254 doors: 'all\Village\outside' -> 'all\Village\interior20' is loaded - no fade
+22:09:10.269 partition: door task starts - player (175.99, 346.13, 12.75), door (175.33, 346.78, 12.85)
+22:09:10.272 partition: switch 'all\Village\outside' -> 'all\Village\interior20' (door)
+22:09:10.272 partition: at the switch - player (176.00, 346.09, 12.78)
+22:09:10.272 partition: sync job to 'all\Village\interior20': unload 28 layers, load 0 layers in 0 buckets
+22:09:10.273 partition:   unload a0_village_chickens [+68 levels\l01-keep\animals\village\a0_village_chickens.w2l] [+98 levels\l01-keep\animals\village\a0_village_chickens.w2l] [+F8 levels\l01-keep\army\group.w2lg]
+22:09:10.273 partition:   unload distance [+68 levels\l01-keep\bridge_solitude\distance\distance.w2l] [+98 levels\l01-keep\bridge_solitude\distance\distance.w2l]
+22:09:10.273 partition:   unload out_fspots [+68 levels\l01-keep\finisher_spots\village\outside\out_fspots.w2l] [+98 levels\l01-keep\finisher_spots\village\outside\out_fspots.w2l] [+F8 levels\l01-keep\foliage_system\group.w2lg]
+22:09:10.273 partition:   unload interior1 [+68 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+98 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior10\group.w2lg]
+22:09:10.273 partition:   unload interior10 [+68 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+98 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior11\group.w2lg]
+22:09:10.273 partition:   unload interior11 [+68 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+98 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior12\group.w2lg]
+22:09:10.273 partition:   unload interior12 [+68 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+98 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior13\group.w2lg]
+22:09:10.273 partition:   unload interior13 [+68 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+98 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior14\group.w2lg]
+22:09:10.273 partition:   unload interior14 [+68 levels\l01-keep\island\village_b_ints\interior14\interior14.w2l] [+98 levels\l01-keep\island\village_b_ints\interior14\interior14.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior15\group.w2lg]
+22:09:10.273 partition:   unload interior15 [+68 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+98 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior16\group.w2lg]
+22:09:10.273 partition:   unload interior16 [+68 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+98 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior17\group.w2lg]
+22:09:10.273 partition:   unload interior17 [+68 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+98 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior18\group.w2lg]
+22:09:10.273 partition:   unload interior18 [+68 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+98 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior19\group.w2lg]
+22:09:10.273 partition:   unload interior19 [+68 levels\l01-keep\island\village_b_ints\interior19\interior19.w2l] [+98 levels\l01-keep\island\village_b_ints\interior19\interior19.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior2\group.w2lg]
+22:09:10.274 partition:   unload interior2 [+68 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+98 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior20\group.w2lg]
+22:09:10.274 partition:   unload interior21 [+68 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+98 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior22\group.w2lg]
+22:09:10.274 partition:   unload interior22 [+68 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+98 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior23\group.w2lg]
+22:09:10.274 partition:   unload interior23 [+68 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+98 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior24\group.w2lg]
+22:09:10.274 partition:   unload interior3 [+68 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+98 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior4\group.w2lg]
+22:09:10.274 partition:   unload interior4 [+68 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+98 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior5\group.w2lg]
+22:09:10.274 partition:   unload interior5 [+68 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+98 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior6\group.w2lg]
+22:09:10.274 partition:   unload interior6 [+68 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+98 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior7\group.w2lg]
+22:09:10.274 partition:   unload interior8 [+68 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+98 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior9\group.w2lg]
+22:09:10.274 partition:   unload interior9 [+68 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+98 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement\group.w2lg]
+22:09:10.274 partition:   unload with_basement [+68 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement2\group.w2lg]
+22:09:10.274 partition:   unload with_basement2 [+68 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+F8 levels\l01-keep\island\village_buildings\group.w2lg]
+22:09:10.274 partition:   unload fire [+68 levels\l01-keep\island\village_buildings\closeup\fire.w2l] [+98 levels\l01-keep\island\village_buildings\closeup\fire.w2l] [+F8 levels\l01-keep\island\village_buildings\distance\group.w2lg]
+22:09:10.274 partition:   unload low [+68 levels\l01-keep\ship\low\low.w2l] [+98 levels\l01-keep\ship\low\low.w2l]
+22:09:10.275 partition: sync job ran 2 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:09:10.275 partition: keep_outdoors kept 28 of 28 layers, unloaded 0; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:09:10.275 partition: switch returned 1 after 2 ms
+22:09:10.306 doors: interior ready after 31 ms - picture back now (state 2)
+22:09:10.312 partition: door task ends - player (176.00, 346.08, 12.78), door (175.33, 346.78, 12.85)
+22:09:10.331 load-trace: window 3 start (streaming door): task 0E6DC6C0 vtable 00EF0410, ticking for 0 ms (52 threads)
+22:09:10.395 load-trace: window 3 end: streaming door (4 ticks, 0 overlapping) 47 ms; process CPU 0 ms = 0.00 cores; timer resolution 0.500 ms
+22:09:10.395 load-trace:   tid=2852 (main) start=029262EE cpu=62 ms (133%) | wait 5x (0 polls) 25 ms
+22:09:10.395 load-trace:   tid=6884 start=0066F607 cpu=0 ms (0%) | sleep 40x (0:0 1:40) 60 ms
+22:09:10.395 load-trace:   tid=48236 start=0066F607 cpu=0 ms (0%) | sleep 41x (0:0 1:41) 63 ms
+22:09:10.395 load-trace:   tid=25388 start=0066F607 cpu=0 ms (0%) | loose read 79x 0.3 MB 0 ms | open 1x 9 ms | wait 3182x (0 polls) 1 ms | present 5x 31 ms (max 32.8)
+22:09:10.395 load-trace:   tid=48512 start=6F828F20 cpu=62 ms (133%) | no traced call
+22:09:10.396 load-trace: window 3 totals | loose read 79x 0.3 MB 0 ms | open 1x 9 ms | sleep 81x (0:0 1:81) 124 ms | wait 3187x (0 polls) 26 ms | present 5x 31 ms
+22:09:10.396 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+22:09:13.204 distance stats: mesh=186712 shadow=100021 baseline_reject=11250 admitted=11096 (3.00x/3.00x)
+22:09:15.076 load-trace: streaming burst 250 ms | dzip read 4x 0.0 MB 0 ms | loose read 4x 8.0 MB 4 ms | open 4x 1 ms | unpack 2x 0.0->0.1 MB 0 ms | sleep 305x (0:0 1:305) 465 ms | wait 8959x (0 polls) 72 ms | present 18x 175 ms
+22:09:15.825 load-trace: streaming burst 250 ms | loose read 2x 4.0 MB 2 ms | open 2x 0 ms | sleep 309x (0:0 1:309) 471 ms | wait 8985x (0 polls) 116 ms | present 18x 176 ms
+22:09:17.018 doors: 'all\Village\interior20' -> 'all\Village\outside' is loaded - no fade
+22:09:17.032 partition: door task starts - player (176.06, 347.31, 12.91), door (175.33, 346.78, 12.85)
+22:09:17.035 partition: switch 'all\Village\interior20' -> 'all\Village\outside' (door)
+22:09:17.035 partition: at the switch - player (176.02, 347.34, 12.90)
+22:09:17.035 partition: sync job to 'all\Village\outside': unload 22 layers, load 0 layers in 0 buckets
+22:09:17.036 partition:   unload interior1 [+68 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+98 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior10\group.w2lg]
+22:09:17.036 partition:   unload interior10 [+68 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+98 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior11\group.w2lg]
+22:09:17.036 partition:   unload interior11 [+68 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+98 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior12\group.w2lg]
+22:09:17.036 partition:   unload interior12 [+68 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+98 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior13\group.w2lg]
+22:09:17.036 partition:   unload interior13 [+68 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+98 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior14\group.w2lg]
+22:09:17.036 partition:   unload interior15 [+68 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+98 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior16\group.w2lg]
+22:09:17.036 partition:   unload interior16 [+68 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+98 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior17\group.w2lg]
+22:09:17.036 partition:   unload interior17 [+68 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+98 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior18\group.w2lg]
+22:09:17.036 partition:   unload interior18 [+68 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+98 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior19\group.w2lg]
+22:09:17.036 partition:   unload interior2 [+68 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+98 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior20\group.w2lg]
+22:09:17.036 partition:   unload interior20 [+68 levels\l01-keep\island\village_b_ints\interior20\interior20.w2l] [+98 levels\l01-keep\island\village_b_ints\interior20\interior20.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior21\group.w2lg]
+22:09:17.036 partition:   unload interior21 [+68 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+98 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior22\group.w2lg]
+22:09:17.036 partition:   unload interior22 [+68 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+98 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior23\group.w2lg]
+22:09:17.037 partition:   unload interior23 [+68 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+98 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior24\group.w2lg]
+22:09:17.037 partition:   unload interior3 [+68 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+98 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior4\group.w2lg]
+22:09:17.037 partition:   unload interior4 [+68 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+98 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior5\group.w2lg]
+22:09:17.037 partition:   unload interior5 [+68 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+98 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior6\group.w2lg]
+22:09:17.037 partition:   unload interior6 [+68 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+98 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior7\group.w2lg]
+22:09:17.037 partition:   unload interior8 [+68 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+98 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior9\group.w2lg]
+22:09:17.037 partition:   unload interior9 [+68 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+98 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement\group.w2lg]
+22:09:17.037 partition:   unload with_basement [+68 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement2\group.w2lg]
+22:09:17.037 partition:   unload with_basement2 [+68 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+F8 levels\l01-keep\island\village_buildings\group.w2lg]
+22:09:17.037 partition: sync job ran 1 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:09:17.037 partition: keep_outdoors kept 22 of 22 layers, unloaded 0; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:09:17.037 partition: switch returned 1 after 2 ms
+22:09:17.061 doors: interior ready after 32 ms - picture back now (state 2)
+22:09:17.075 partition: door task ends - player (176.02, 347.34, 12.90), door (175.33, 346.78, 12.85)
+22:09:17.098 load-trace: window 4 start (streaming door): task 0E6DB4C0 vtable 00EF0410, ticking for 0 ms (50 threads)
+22:09:17.163 load-trace: window 4 end: streaming door (4 ticks, 0 overlapping) 47 ms; process CPU 0 ms = 0.00 cores; timer resolution 0.500 ms
+22:09:17.163 load-trace:   tid=2852 (main) start=029262EE cpu=0 ms (0%) | wait 5x (0 polls) 43 ms
+22:09:17.163 load-trace:   tid=6884 start=0066F607 cpu=0 ms (0%) | sleep 42x (0:0 1:42) 66 ms
+22:09:17.163 load-trace:   tid=48236 start=0066F607 cpu=0 ms (0%) | sleep 44x (0:0 1:44) 69 ms
+22:09:17.163 load-trace:   tid=25388 start=0066F607 cpu=0 ms (0%) | loose read 51x 0.2 MB 0 ms | wait 3009x (0 polls) 1 ms | present 5x 24 ms (max 32.8)
+22:09:17.163 load-trace:   tid=48512 start=6F828F20 cpu=62 ms (133%) | no traced call
+22:09:17.163 load-trace: window 4 totals | loose read 51x 0.2 MB 0 ms | sleep 86x (0:0 1:86) 135 ms | wait 3014x (0 polls) 44 ms | present 5x 24 ms
+22:09:17.163 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+22:09:18.259 distance stats: mesh=452142 shadow=136933 baseline_reject=46578 admitted=40363 (3.00x/3.00x)
+22:09:19.840 load-trace: streaming burst 250 ms | dzip read 6x 0.2 MB 0 ms | loose read 5x 6.2 MB 3 ms | open 4x 0 ms | unpack 5x 0.2->0.3 MB 0 ms | sleep 310x (0:0 1:310) 476 ms | wait 12215x (0 polls) 176 ms | present 18x 140 ms
+22:09:20.092 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 318x (0:0 1:318) 484 ms | wait 13542x (0 polls) 107 ms | present 18x 149 ms
+22:09:20.341 load-trace: streaming burst 250 ms | loose read 1x 4.0 MB 2 ms | open 1x 0 ms | sleep 310x (0:0 1:310) 475 ms | wait 13868x (0 polls) 22 ms | present 18x 179 ms
+22:09:23.314 distance stats: mesh=576337 shadow=236495 baseline_reject=40693 admitted=36971 (3.00x/3.00x)
+22:09:23.462 doors: 'all\Village\outside' -> 'all\Village\interior20' is loaded - no fade
+22:09:23.477 partition: door task starts - player (175.89, 345.92, 12.54), door (175.33, 346.78, 12.85)
+22:09:23.479 partition: switch 'all\Village\outside' -> 'all\Village\interior20' (door)
+22:09:23.479 partition: at the switch - player (175.91, 345.94, 12.58)
+22:09:23.479 partition: sync job to 'all\Village\interior20': unload 28 layers, load 0 layers in 0 buckets
+22:09:23.479 partition:   unload a0_village_chickens [+68 levels\l01-keep\animals\village\a0_village_chickens.w2l] [+98 levels\l01-keep\animals\village\a0_village_chickens.w2l] [+F8 levels\l01-keep\army\group.w2lg]
+22:09:23.479 partition:   unload distance [+68 levels\l01-keep\bridge_solitude\distance\distance.w2l] [+98 levels\l01-keep\bridge_solitude\distance\distance.w2l]
+22:09:23.480 partition:   unload out_fspots [+68 levels\l01-keep\finisher_spots\village\outside\out_fspots.w2l] [+98 levels\l01-keep\finisher_spots\village\outside\out_fspots.w2l] [+F8 levels\l01-keep\foliage_system\group.w2lg]
+22:09:23.480 partition:   unload interior1 [+68 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+98 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior10\group.w2lg]
+22:09:23.480 partition:   unload interior10 [+68 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+98 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior11\group.w2lg]
+22:09:23.480 partition:   unload interior11 [+68 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+98 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior12\group.w2lg]
+22:09:23.480 partition:   unload interior12 [+68 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+98 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior13\group.w2lg]
+22:09:23.480 partition:   unload interior13 [+68 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+98 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior14\group.w2lg]
+22:09:23.480 partition:   unload interior14 [+68 levels\l01-keep\island\village_b_ints\interior14\interior14.w2l] [+98 levels\l01-keep\island\village_b_ints\interior14\interior14.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior15\group.w2lg]
+22:09:23.480 partition:   unload interior15 [+68 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+98 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior16\group.w2lg]
+22:09:23.480 partition:   unload interior16 [+68 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+98 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior17\group.w2lg]
+22:09:23.480 partition:   unload interior17 [+68 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+98 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior18\group.w2lg]
+22:09:23.480 partition:   unload interior18 [+68 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+98 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior19\group.w2lg]
+22:09:23.480 partition:   unload interior19 [+68 levels\l01-keep\island\village_b_ints\interior19\interior19.w2l] [+98 levels\l01-keep\island\village_b_ints\interior19\interior19.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior2\group.w2lg]
+22:09:23.480 partition:   unload interior2 [+68 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+98 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior20\group.w2lg]
+22:09:23.480 partition:   unload interior21 [+68 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+98 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior22\group.w2lg]
+22:09:23.480 partition:   unload interior22 [+68 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+98 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior23\group.w2lg]
+22:09:23.480 partition:   unload interior23 [+68 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+98 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior24\group.w2lg]
+22:09:23.480 partition:   unload interior3 [+68 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+98 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior4\group.w2lg]
+22:09:23.481 partition:   unload interior4 [+68 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+98 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior5\group.w2lg]
+22:09:23.481 partition:   unload interior5 [+68 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+98 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior6\group.w2lg]
+22:09:23.481 partition:   unload interior6 [+68 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+98 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior7\group.w2lg]
+22:09:23.481 partition:   unload interior8 [+68 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+98 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior9\group.w2lg]
+22:09:23.481 partition:   unload interior9 [+68 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+98 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement\group.w2lg]
+22:09:23.481 partition:   unload with_basement [+68 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement2\group.w2lg]
+22:09:23.482 partition:   unload with_basement2 [+68 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+F8 levels\l01-keep\island\village_buildings\group.w2lg]
+22:09:23.482 partition:   unload fire [+68 levels\l01-keep\island\village_buildings\closeup\fire.w2l] [+98 levels\l01-keep\island\village_buildings\closeup\fire.w2l] [+F8 levels\l01-keep\island\village_buildings\distance\group.w2lg]
+22:09:23.482 partition:   unload low [+68 levels\l01-keep\ship\low\low.w2l] [+98 levels\l01-keep\ship\low\low.w2l]
+22:09:23.482 partition: sync job ran 2 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:09:23.482 partition: keep_outdoors kept 28 of 28 layers, unloaded 0; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:09:23.482 partition: switch returned 1 after 2 ms
+22:09:23.505 doors: interior ready after 31 ms - picture back now (state 2)
+22:09:23.519 partition: door task ends - player (175.93, 345.96, 12.61), door (175.33, 346.78, 12.85)
+22:09:23.540 load-trace: window 5 start (streaming door): task 0E6DA338 vtable 00EF0410, ticking for 0 ms (50 threads)
+22:09:23.599 load-trace: window 5 end: streaming door (4 ticks, 0 overlapping) 47 ms; process CPU 0 ms = 0.00 cores; timer resolution 0.500 ms
+22:09:23.599 load-trace:   tid=2852 (main) start=029262EE cpu=62 ms (133%) | wait 4x (0 polls) 14 ms
+22:09:23.599 load-trace:   tid=6884 start=0066F607 cpu=0 ms (0%) | sleep 41x (0:0 1:41) 63 ms
+22:09:23.599 load-trace:   tid=48236 start=0066F607 cpu=0 ms (0%) | sleep 43x (0:0 1:43) 67 ms
+22:09:23.599 load-trace:   tid=25388 start=0066F607 cpu=16 ms (33%) | loose read 51x 0.2 MB 0 ms | wait 2370x (0 polls) 1 ms | present 4x 30 ms (max 32.8)
+22:09:23.599 load-trace:   tid=48512 start=6F828F20 cpu=62 ms (133%) | no traced call
+22:09:23.599 load-trace: window 5 totals | loose read 51x 0.2 MB 0 ms | sleep 84x (0:0 1:84) 130 ms | wait 2374x (0 polls) 15 ms | present 4x 30 ms
+22:09:23.599 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+22:09:28.368 distance stats: mesh=103790 shadow=45450 baseline_reject=11784 admitted=9786 (3.00x/3.00x)
+22:09:30.518 doors: 'all\Village\interior20' -> 'all\Village\outside' is loaded - no fade
+22:09:30.532 partition: door task starts - player (175.83, 347.49, 12.92), door (175.33, 346.78, 12.85)
+22:09:30.535 partition: switch 'all\Village\interior20' -> 'all\Village\outside' (door)
+22:09:30.535 partition: at the switch - player (175.87, 347.45, 12.90)
+22:09:30.535 partition: sync job to 'all\Village\outside': unload 22 layers, load 0 layers in 0 buckets
+22:09:30.535 partition:   unload interior1 [+68 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+98 levels\l01-keep\island\village_b_ints\interior1\interior1.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior10\group.w2lg]
+22:09:30.535 partition:   unload interior10 [+68 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+98 levels\l01-keep\island\village_b_ints\interior10\interior10.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior11\group.w2lg]
+22:09:30.535 partition:   unload interior11 [+68 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+98 levels\l01-keep\island\village_b_ints\interior11\interior11.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior12\group.w2lg]
+22:09:30.535 partition:   unload interior12 [+68 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+98 levels\l01-keep\island\village_b_ints\interior12\interior12.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior13\group.w2lg]
+22:09:30.535 partition:   unload interior13 [+68 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+98 levels\l01-keep\island\village_b_ints\interior13\interior13.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior14\group.w2lg]
+22:09:30.535 partition:   unload interior15 [+68 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+98 levels\l01-keep\island\village_b_ints\interior15\interior15.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior16\group.w2lg]
+22:09:30.536 partition:   unload interior16 [+68 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+98 levels\l01-keep\island\village_b_ints\interior16\interior16.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior17\group.w2lg]
+22:09:30.536 partition:   unload interior17 [+68 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+98 levels\l01-keep\island\village_b_ints\interior17\interior17.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior18\group.w2lg]
+22:09:30.536 partition:   unload interior18 [+68 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+98 levels\l01-keep\island\village_b_ints\interior18\interior18.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior19\group.w2lg]
+22:09:30.536 partition:   unload interior2 [+68 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+98 levels\l01-keep\island\village_b_ints\interior2\interior2.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior20\group.w2lg]
+22:09:30.536 partition:   unload interior20 [+68 levels\l01-keep\island\village_b_ints\interior20\interior20.w2l] [+98 levels\l01-keep\island\village_b_ints\interior20\interior20.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior21\group.w2lg]
+22:09:30.536 partition:   unload interior21 [+68 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+98 levels\l01-keep\island\village_b_ints\interior21\interior21.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior22\group.w2lg]
+22:09:30.536 partition:   unload interior22 [+68 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+98 levels\l01-keep\island\village_b_ints\interior22\interior22.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior23\group.w2lg]
+22:09:30.536 partition:   unload interior23 [+68 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+98 levels\l01-keep\island\village_b_ints\interior23\interior23.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior24\group.w2lg]
+22:09:30.536 partition:   unload interior3 [+68 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+98 levels\l01-keep\island\village_b_ints\interior3\interior3.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior4\group.w2lg]
+22:09:30.536 partition:   unload interior4 [+68 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+98 levels\l01-keep\island\village_b_ints\interior4\interior4.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior5\group.w2lg]
+22:09:30.536 partition:   unload interior5 [+68 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+98 levels\l01-keep\island\village_b_ints\interior5\interior5.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior6\group.w2lg]
+22:09:30.536 partition:   unload interior6 [+68 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+98 levels\l01-keep\island\village_b_ints\interior6\interior6.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior7\group.w2lg]
+22:09:30.536 partition:   unload interior8 [+68 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+98 levels\l01-keep\island\village_b_ints\interior8\interior8.w2l] [+F8 levels\l01-keep\island\village_b_ints\interior9\group.w2lg]
+22:09:30.536 partition:   unload interior9 [+68 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+98 levels\l01-keep\island\village_b_ints\interior9\interior9.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement\group.w2lg]
+22:09:30.536 partition:   unload with_basement [+68 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement\with_basement.w2l] [+F8 levels\l01-keep\island\village_b_ints\with_basement2\group.w2lg]
+22:09:30.536 partition:   unload with_basement2 [+68 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+98 levels\l01-keep\island\village_b_ints\with_basement2\with_basement2.w2l] [+F8 levels\l01-keep\island\village_buildings\group.w2lg]
+22:09:30.542 partition: sync job ran 7 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:09:30.542 partition: keep_outdoors kept 22 of 22 layers, unloaded 0; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:09:30.543 partition: switch returned 1 after 8 ms
+22:09:30.560 doors: interior ready after 32 ms - picture back now (state 2)
+22:09:30.574 partition: door task ends - player (175.87, 347.45, 12.90), door (175.33, 346.78, 12.85)
+22:09:30.598 load-trace: window 6 start (streaming door): task 0E6D7818 vtable 00EF0410, ticking for 0 ms (50 threads)
+22:09:30.665 load-trace: window 6 end: streaming door (4 ticks, 0 overlapping) 47 ms; process CPU 0 ms = 0.00 cores; timer resolution 0.500 ms
+22:09:30.666 load-trace:   tid=2852 (main) start=029262EE cpu=0 ms (0%) | wait 5x (0 polls) 38 ms
+22:09:30.666 load-trace:   tid=6884 start=0066F607 cpu=47 ms (100%) | sleep 24x (0:0 1:24) 35 ms
+22:09:30.666 load-trace:   tid=48236 start=0066F607 cpu=0 ms (0%) | sleep 44x (0:0 1:44) 67 ms
+22:09:30.666 load-trace:   tid=25388 start=0066F607 cpu=0 ms (0%) | loose read 27x 0.1 MB 0 ms | wait 3021x (0 polls) 1 ms | present 5x 26 ms (max 32.8)
+22:09:30.666 load-trace: window 6 totals | loose read 27x 0.1 MB 0 ms | sleep 68x (0:0 1:68) 103 ms | wait 3026x (0 polls) 39 ms | present 5x 26 ms
+22:09:30.666 load-trace: window end: back buffer 3840x2160 windowed=1 refresh=0 PresentationInterval=80000000 (0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=0
+22:09:33.421 distance stats: mesh=731569 shadow=222607 baseline_reject=62515 admitted=54124 (3.00x/3.00x)
+22:09:34.595 load-trace: streaming burst 250 ms | loose read 2x 16.8 MB 3 ms | open 2x 0 ms | sleep 286x (0:0 1:286) 443 ms | wait 5645x (0 polls) 31 ms | present 7x 59 ms
+22:09:38.266 unloaded
+

@@ -4,6 +4,18 @@ Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
 with all earlier fixes included in one initial Nexus changelog entry; earlier
 versions are not separate Nexus releases.
 
+## 0.8.0
+
+- Houses, shops and inns without a loading blink (`[loading] interiors=2`, default). Interiors are not separate levels: each is a world partition (a list of layers) inside its own building, and a door swaps partitions. Going into a house the game unloaded the outdoors around it (bushes, rocks, animals, fog, in Flotsam also far buildings, ships and the town's sound) and loaded it all again on the way out, behind a fade. Now:
+  - the outdoors stays loaded (visible through the windows); a door only swaps what each place has of its own: ambient sound, occluders, the indoor environment, the area's flat "fake room" boxes and low-poly stand-ins;
+  - the area's interiors are loaded together with the area (behind the loading screen or the area-change fade; ~1 s more on loading a save), so open doors show the real rooms and no house door loads anything. The interiors are found from the game's partition tree (an area's indoor sibling partitions) and from their folders (`\buildings\<name>\interior\`, the prologue's `_ints\`);
+  - the engine's full object garbage collection is skipped on those doors (25-40 ms each, with nothing to collect);
+  - house doors go without a fade; a door whose switch once takes 50 ms or more keeps a 0.05 s fade (`door_fade`);
+  - an indoor partition keeps drawing terrain and grass (the game hid them, which made the ground vanish behind Geralt walking in once the fade was gone).
+  A door now takes 7-50 ms instead of ~0.65 s (0.7.x) or ~2.2 s (the game). Measured in Binduga, Flotsam (houses, shops, the inn, Sheala's quarter) and the prologue village; process memory ~1.3-1.6 GB in Flotsam with over 1.6 GB of address space free. `interiors=1` keeps the outdoors but loads each interior on its first visit (a short fade then; other houses' open doors show nothing until the next area change); `interiors=0` restores the game's behaviour. Hooks: the partition switch (calls `00AAA1FF`/`00AAB089` -> `FUN_00a91bf9`), its job run (`00A91DAD`), the GC call `00A91AD7`, the door start slot `00EF02E8`, the two fade render commands' execute slots and the indoor draw check `009C0232`. See `docs/fixes/interior-preload.md`.
+- Doors that change area, such as the gate into Flotsam (~1 s of real loading), keep a 0.25 s fade (`[loading] area_fade`) so the short house fade does not flash black there.
+- Diagnostics: `load_trace` also logs every partition switch (from/to, each layer loaded and unloaded with its path, time), the preloaded interiors with memory before and after, and where Geralt and the door are when a door starts and ends.
+
 ## 0.7.1
 
 - Options > Graphics gets a **Draw distance** row under Display mode: default (the game's own values), high, ultra and extreme, the same four levels as Ctrl+F10, in the game's text language in all twelve languages. A choice applies at once, without the on-screen text (the row shows it), and the game remembers it in `Documents\Witcher 2\Config\User.ini` (`[Rendering] EngineFixDrawDistance`); when stored, it wins over `[presets] default`. Ctrl+F10 still works and the row follows it: the DLL writes the live level into the game's config on the game's main thread, from the viewport tick hook, so the row always opens on the level in use. Part of `[scriptpatches] window_mode`; needs `[presets] enabled=1` and `[window] enabled=1`. The patched scripts are rebuilt once (`OV_CACHE_LAYOUT` 5). See `docs/fixes/graphics-presets.md`.

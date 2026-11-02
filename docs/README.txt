@@ -16,8 +16,11 @@ What it does:
 - Faster save list: the list unpacks only the few parts of each save it
   reads, in memory, instead of every save in full (~2.5x faster with 120
   saves). Loading a save is unchanged.
-- Faster house doors: the picture comes back as soon as the interior is in,
-  with shorter fades: ~0.65 s per door instead of ~2.2 s.
+- Houses, shops and inns without a loading blink: the outdoors stays loaded
+  (visible through the windows), the area's interiors load with the area, so
+  open doors show the real rooms, and a door takes a few hundredths of a
+  second without a fade instead of ~2.2 s. Doors that change area (the gate
+  into Flotsam) keep a short fade.
 - Display mode in Options > Graphics: full screen, borderless window or
   windowed, switched at once without a restart.
 - Snipping Tool and Windows keys work in game (Win+Shift+S, Print Screen,
@@ -82,13 +85,15 @@ Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
   ...\steamapps\common\the witcher 2\bin\dinput8.dll
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix 0.7.1 loaded".
+"witcher2_enginefix 0.8.0 loaded".
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
   [saves]   fix_thumbnails=1     0 turns the save-preview fix off
   [saves]   fix_list_leak=1      0 turns the save-list leak fix off
   [saves]   fast_list=1          0 unpacks every save in full for the list
+  [loading] interiors=2          1 loads each interior on its first visit,
+                                 0 restores the game's doors
   [loading] fast_doors=1         0 restores the game's door timing
   [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
   [window]  borderless=0         start-up fallback; Options owns it after
