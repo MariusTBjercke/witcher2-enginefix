@@ -427,3 +427,15 @@ partition tree found 27 indoor siblings / 36 layer groups for the prologue villa
 for Binduga and Flotsam** (Act 1's houses are not `LT_INDOOR`), where the folder rule
 supplied the 64 interiors. Every house door in all three places went without a fade. For
 0.8.0 both sources are used together (tree first, then folder names, no duplicates).
+
+## After 0.8.0 (on `main`, not in a release yet)
+
+More logging so a player's log shows missed interiors without `load_trace`:
+
+* On every area change: `preload: '<area>' found (type N); siblings by location type:
+  default .., indoor .., outdoor .., cave ..; M layer groups from the indoor ones`, and
+  `preload: X interior layers from the partition tree, Y more by folder name`. With
+  `load_trace` each sibling's name and location type is listed too.
+* On a kept door with preload on: `doors: '<from>' -> '<to>' loaded N layer(s) not preloaded
+  (T ms): <paths>`, for every loaded layer that is not sound/occluder/environment, low-poly,
+  fake rooms or townspeople - i.e. an interior the preload did not cover.

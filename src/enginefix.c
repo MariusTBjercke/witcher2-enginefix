@@ -2912,13 +2912,21 @@ static int kp_interior_groups(void* world, const wchar_t* target)
     void* parent = node ? read_ptr((char*)node + 0x60) : NULL;
     void** kids = parent ? (void**)read_ptr((char*)parent + 0x64) : NULL;
     DWORD k = parent ? (DWORD)(uintptr_t)read_ptr((char*)parent + 0x68) : 0, i, j;
-    int sibs = 0;
+    int sibs = 0, types[5] = { 0, 0, 0, 0, 0 };
     g_kpGroups = 0;
     for (i = 0; kids && k < 10000 && i < k; i++) {
         void* c = read_ptr(kids + i);
         char* groups;
         DWORD n;
-        if (!c || c == node || kp_location(c) != 1) continue;
+        LONG loc;
+        if (!c || c == node) continue;
+        loc = kp_location(c);
+        types[loc >= 0 && loc <= 3 ? loc : 4]++;
+        if (cfg_load_trace) {
+            wchar_t nm[96];
+            logf_("preload:   sibling '%ls' location type %ld", pt_text((char*)c + 0x04, nm, 96), loc);
+        }
+        if (loc != 1) continue;
         sibs++;
         groups = (char*)read_ptr((char*)c + 0x74);
         n = (DWORD)(uintptr_t)read_ptr((char*)c + 0x78);
@@ -2927,9 +2935,9 @@ static int kp_interior_groups(void* world, const wchar_t* target)
             if (g_kpGroup[g_kpGroups][0]) g_kpGroups++;
         }
     }
-    if (cfg_load_trace)
-        logf_("preload: '%ls' %s, %d indoor siblings, %d layer groups", target,
-              node ? "found" : "NOT found in the partition tree", sibs, g_kpGroups);
+    logf_("preload: '%ls' %s (type %ld); siblings by location type: default %d, indoor %d, outdoor %d, cave %d, other %d; "
+          "%d layer groups from the indoor ones", target, node ? "found" : "NOT found in the partition tree",
+          node ? kp_location(node) : -1L, types[0], types[1], types[2], types[3], types[4], g_kpGroups);
     return sibs;
 }
 
@@ -3065,7 +3073,7 @@ static void __stdcall hook_PartRun(void* job)
                     f.max = t.max - t.added;
                     ko_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &f);
                     t.added += f.added;
-                    if (cfg_load_trace) logf_("preload: %lu interior layers from the partition tree, %lu more by folder name", tree, f.added);
+                    logf_("preload: %lu interior layers from the partition tree, %lu more by folder name", tree, f.added);
                 }
                 added = (LONG)t.added;
                 g_koPreloaded = 1;
@@ -3107,6 +3115,33 @@ static void __stdcall hook_PartRun(void* job)
         for (i = 0; i < unloaded; i++) if (ko_class(g_koUnloadOut[i]) != LC_FAKE) swaps = 1;
         ko_pair_add(g_ptFrom, g_ptTo);
         if (!swaps) ko_pair_add(g_ptTo, g_ptFrom);
+    }
+    // With preload a house door should load nothing but what each place swaps (sound,
+    // occluders, the indoor environment) and its townspeople. Anything else is an interior the
+    // preload missed: logged always, so a player's log shows which.
+    if (on && cfg_preload_interiors) {
+        char line[600];
+        size_t used = 0;
+        int missed = 0;
+        for (b = 0; b < nb; b++) {
+            LONG n = savedN[b];
+            if (n <= 0) continue;
+            for (i = 0; i < n; i++) {
+                void* l = ((void**)savedData[b])[i];
+                int c = ko_class(l);
+                wchar_t name[64], path[260];
+                if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
+                pt_text((char*)l + 0x78, name, 64);
+                pt_text((char*)l + 0x68, path, 260);
+                if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\community")) continue;
+                missed++;
+                if (used < sizeof line - 1)
+                    used += (size_t)_snprintf_s(line + used, sizeof line - used, _TRUNCATE, " %ls", path);
+            }
+        }
+        if (missed)
+            logf_("doors: '%ls' -> '%ls' loaded %d layer(s) not preloaded (%lu ms):%s", g_ptFrom, g_ptTo, missed,
+                  (DWORD)(tRun / 1000), used ? line : "");
     }
     if (on && tRun / 1000 >= KO_SLOW_MS) {
         ko_pair_put(g_koSlow, &g_koSlowCount, g_ptFrom, g_ptTo);
