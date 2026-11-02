@@ -2552,6 +2552,7 @@ static HRESULT WINAPI hook_Present(void* self, const RECT* src, const RECT* dst,
 #define VA_GC               0x00ABD770u
 
 static int g_ptMode = -1;   // mode of the switch in progress (game thread)
+static int g_koDeferOcc;     // occluders wait for Geralt to clear the door (ko_frame)
 static wchar_t g_ptFrom[160], g_ptTo[160];   // its partitions
 // instant_doors: door switches (from, to) that keep_interiors/preload_interiors have made
 // load nothing; forgotten on an area change unless every interior stays loaded.
@@ -2800,6 +2801,7 @@ static unsigned char __fastcall hook_PartSwitch(void* world, void* edx, void* na
         pt_where("at the switch", NULL);
     }
     g_ptMode = mode;
+    g_koDeferOcc = 0;
     ok = ((PartSwitch_t)(uintptr_t)VA_PART_SWITCH)(world, edx, name, mode, screen);
     g_ptMode = -1;
     if (cfg_load_trace) {
@@ -2996,6 +2998,93 @@ static void kp_walk(const void* group, int depth, kp_collect_t* t)
     for (i = 0; infos && n < 100000 && i < n; i++) kp_walk(read_ptr(infos + i), depth + 1, t);
 }
 
+// Occluders on a kept door. Occluders are invisible blocks the renderer uses to skip what is
+// hidden behind a building. A door into a Flotsam building unloads the town's occluders
+// (`marketplace\occluders`, `occluders\flotsam_outside`) and the way out loads them back; with
+// no fade the camera is still inside the building's occluder block at that moment, so
+// everything in front of it is culled and only water and sky show until Geralt is out (owner,
+// 0.8.0, the inn's harbour door). The game hid this behind its fade. So a kept door leaves
+// its occluder layers out of the job, and once Geralt is KO_OCC_DIST metres from the door (or
+// after KO_OCC_MAX_MS) ko_frame queues a switch to the partition that is already current: the
+// game's own job then loads exactly what is missing - the occluders. That switch (from and to
+// the same partition) is never deferred itself, or it would repeat every KO_OCC_MIN_MS (it did
+// in the first test). Needs a per-frame tick
+// on the game thread (the viewport tick, wf_vp_tick_hook); without it nothing is deferred.
+#define KO_OCC_DIST     5.0f
+#define KO_OCC_MIN_MS   400
+#define KO_OCC_MAX_MS   30000
+#define VA_PART_REQUEST 0x00AA7E18u   // EAX = game; stdcall (String* name, mode, String* screen), RET 0xC
+#define VA_EMPTY_STRING 0x0160FBA0u   // the game's empty String, its usual loading-screen argument
+
+static volatile DWORD g_koFrameTick;   // last viewport tick (game thread)
+static int   g_koDeferOcc;
+static DWORD g_koDeferSince;
+static float g_koDoorPos[3];
+static int   g_koDoorPosOk;
+
+static int ko_frames_alive(void) { return g_koFrameTick && GetTickCount() - g_koFrameTick < 1000; }
+
+static int ko_is_occluder(const void* layer)
+{
+    wchar_t name[64];
+    if (ko_class(layer) != LC_SWAP) return 0;
+    pt_text((const char*)layer + 0x78, name, 64);
+    return wcsistr(name, L"occ") != NULL;
+}
+
+static void ko_defer_occluders(void)
+{
+    g_koDeferOcc = 1;
+    g_koDeferSince = GetTickCount();
+}
+
+#pragma warning(push)
+#pragma warning(disable: 4100)   // the arguments are read by the asm
+__declspec(naked) static unsigned char __stdcall ko_part_request(void* game, void* name, int mode, void* screen)
+{
+    __asm {
+        mov eax, [esp + 4]
+        push dword ptr [esp + 16]
+        push dword ptr [esp + 16]
+        push dword ptr [esp + 16]
+        mov ecx, 0x00AA7E18           ; VA_PART_REQUEST
+        call ecx
+        ret 16
+    }
+}
+#pragma warning(pop)
+
+// Viewport tick, once per frame on the game thread.
+static void ko_frame(void)
+{
+    void *game, *world, *player;
+    float pos[3], dx, dy, dz;
+    DWORD waited;
+    int i, away = 0;
+    g_koFrameTick = GetTickCount();
+    if (!g_koDeferOcc) return;
+    waited = GetTickCount() - g_koDeferSince;
+    if (waited < KO_OCC_MIN_MS) return;
+    game = read_ptr((void*)(uintptr_t)VA_GAME);
+    world = game ? read_ptr((char*)game + 0x40) : NULL;
+    player = game ? read_ptr((char*)game + OFF_GAME_PLAYER) : NULL;
+    if (!world) return;
+    if (player && g_koDoorPosOk) {
+        for (i = 0; i < 3 && read_f32((char*)player + OFF_NODE_POS + 4 * i, &pos[i]); i++) {}
+        if (i == 3) {
+            dx = pos[0] - g_koDoorPos[0]; dy = pos[1] - g_koDoorPos[1]; dz = pos[2] - g_koDoorPos[2];
+            away = dx * dx + dy * dy + dz * dz >= KO_OCC_DIST * KO_OCC_DIST;
+        }
+    }
+    if (!away && waited < KO_OCC_MAX_MS) return;
+    // A request already queued (another door) brings the occluders back itself.
+    g_koDeferOcc = 0;
+    if (read_ptr((char*)game + 0xE8) || read_ptr((char*)world + 0x30C)) return;
+    logf_("doors: Geralt is %s - loading the occluders (%lu ms after the door)",
+          away ? "through the door" : "still near the door, waited long enough", waited);
+    ko_part_request(game, (char*)world + 0x310, 4, (void*)(uintptr_t)VA_EMPTY_STRING);
+}
+
 // The job's lists are pointed at our own arrays for the run (its own arrays are left untouched
 // and put back after it). Game thread only.
 #define KO_LIST 4096
@@ -3012,7 +3101,7 @@ static void __stdcall hook_PartRun(void* job)
     LONG nb = (LONG)(uintptr_t)read_ptr((char*)job + 0x20);
     void* savedData[5];
     LONG savedN[5];
-    LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, i, b;
+    LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
     int on = 0, area = 0, filter;
     LONGLONG tRun;
     void* world = read_ptr((char*)job);
@@ -3053,6 +3142,8 @@ static void __stdcall hook_PartRun(void* job)
                 int c = ko_class(d[i]);
                 if ((c == LC_FAKE && (cfg_preload_interiors || (on && cfg_keep_interiors))) || (on && c == LC_LOWPOLY))
                     skipped++;
+                else if (on && g_ptMode == 4 && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo) && ko_is_occluder(d[i]))
+                    deferred++;
                 else
                     g_koLoadOut[b][m++] = d[i];
             }
@@ -3105,8 +3196,10 @@ static void __stdcall hook_PartRun(void* job)
               g_ptGcSkipped ? "skipped," : "", (DWORD)(g_ptGcUs / 1000),
               on ? " - keep_outdoors: outdoor layers left loaded" : "");
     if (filter)
-        logf_("partition: %s kept %ld of %ld layers, unloaded %ld; loaded %ld (%ld interiors added), skipped %ld (fake rooms, low-poly)",
-              on ? "keep_outdoors" : "preload", kept, unloadN, unloaded, loaded, added, skipped);
+        logf_("partition: %s kept %ld of %ld layers, unloaded %ld; loaded %ld (%ld interiors added), skipped %ld (fake rooms, low-poly)%s",
+              on ? "keep_outdoors" : "preload", kept, unloadN, unloaded, loaded, added, skipped,
+              deferred ? ", occluders wait until Geralt is through the door" : "");
+    if (deferred) ko_defer_occluders();
     if (area) ko_count("after the switch", world);
     // A kept door that loaded nothing will not load anything next time either: no fade then.
     // When it only dropped fake rooms (no sound/occluder swap) the way back loads nothing too.
@@ -3387,6 +3480,9 @@ static void fade_exec_install(void)
 
 static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
 {
+    g_koDoorPosOk = read_f32((char*)door + OFF_NODE_POS, &g_koDoorPos[0]) &&
+                    read_f32((char*)door + OFF_NODE_POS + 4, &g_koDoorPos[1]) &&
+                    read_f32((char*)door + OFF_NODE_POS + 8, &g_koDoorPos[2]);
     wchar_t from[160], to[160];
     void* game = read_ptr((void*)(uintptr_t)VA_GAME);
     void* world = game ? read_ptr((char*)game + 0x40) : NULL;
@@ -4436,6 +4532,7 @@ static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
     char r;
 
     InterlockedIncrement(&g_fsTicks);
+    if (GetCurrentThreadId() == g_mainTid) ko_frame();
     if (g_ddSync && GetCurrentThreadId() != g_mainTid) g_ddOffThread = 1;
     else if (g_ddSync && wf_real_write && InterlockedExchange(&g_ddSync, 0)) {
         float level = (float)g_preset;

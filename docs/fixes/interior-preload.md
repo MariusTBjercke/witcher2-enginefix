@@ -428,7 +428,7 @@ for Binduga and Flotsam** (Act 1's houses are not `LT_INDOOR`), where the folder
 supplied the 64 interiors. Every house door in all three places went without a fade. For
 0.8.0 both sources are used together (tree first, then folder names, no duplicates).
 
-## After 0.8.0 (on `main`, not in a release yet)
+## 0.8.1
 
 More logging so a player's log shows missed interiors without `load_trace`:
 
@@ -439,3 +439,26 @@ More logging so a player's log shows missed interiors without `load_trace`:
 * On a kept door with preload on: `doors: '<from>' -> '<to>' loaded N layer(s) not preloaded
   (T ms): <paths>`, for every loaded layer that is not sound/occluder/environment, low-poly,
   fake rooms or townspeople - i.e. an interior the preload did not cover.
+* **Occluders wait for Geralt to clear the door** (runs 16-17). Owner, 0.8.0:
+  walking out of the Flotsam inn's harbour door, everything in front turned see-through
+  (only water showed) until Geralt was outside. The way out of every Flotsam building loads
+  the town's occluders (`marketplace\occluders\occluders.w2l`,
+  `occluders\flotsam_outside\flotsam_out_occ.w2l`, run 13 trace); with no fade the camera is
+  still inside the building's occluder block when they arrive, so the renderer culls
+  everything in front of it except water and sky. The game hid this behind its fade (and its
+  ~1.2 s wait for the door animation's `fade_out` event). Now a kept door leaves its occluder
+  layers out of the job; `ko_frame` (called from the viewport tick on the game thread) waits
+  until the player is 5 m from the door (at least 0.4 s, at most 30 s), then queues a switch to
+  the partition that is already current through the game's own request function
+  `FUN_00aa7e18` (EAX = game, stdcall `(String* name, mode 4, String* screen)`, `RET 0xC`;
+  name = `world+0x310`, screen = the empty String `0160FBA0`). That job's diff is exactly the
+  missing occluders. A new switch in between cancels the wait. Without the viewport tick
+  (window features off) nothing is deferred. Log: `doors: Geralt is through the door -
+  loading the occluders (N ms after the door)`.
+
+  Run 16 (`docs/validation/occluders-run16-loop-2026-11-02.log`): the view stayed right, but
+  the reload switch (from and to the same partition) deferred the occluders again, so it
+  repeated every 0.4 s and they never loaded. Fixed: a switch with from == to is never
+  deferred. Run 17 (`docs/validation/occluders-run17-2026-11-02.log`): out through both inn
+  doors and back, one reload per door 3.3-5.0 s after it, 2 layers in 12-13 ms; owner: much
+  better.

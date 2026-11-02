@@ -4,6 +4,11 @@ Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
 with all earlier fixes included in one initial Nexus changelog entry; earlier
 versions are not separate Nexus releases.
 
+## 0.8.1
+
+- Fixed: walking out of a Flotsam building (seen at the inn's harbour door), everything in front of Geralt turned see-through, only water showed, until he was outside. The way out loads the town's occluders (invisible blocks the renderer uses to skip what is hidden behind buildings) while the camera is still inside the building's own block, so the renderer culled everything in front of it; the game hid that behind its fade. A kept door now leaves its occluder layers out, and once Geralt is 5 m from the door (at least 0.4 s, at most 30 s) the DLL queues a switch to the partition already current through the game's request function (`FUN_00aa7e18`), whose job loads just the occluders (12-13 ms). Needs the viewport tick (`[window] enabled=1`, the default); without it the occluders load with the door as in 0.8.0.
+- The log now says, without `load_trace`, how an area's interiors were found (partition tree or folder names, with the sibling partitions' location types) and lists any layer a house door still had to load that looks like an interior the preload missed, so a player's log shows an area that needs work.
+
 ## 0.8.0
 
 - Seamless interiors: walk into houses, shops and inns without a fade (`[loading] interiors=2`, default). Interiors are not separate levels: each is a world partition (a list of layers) inside its own building, and a door swaps partitions. Going into a house the game unloaded the outdoors around it (bushes, rocks, animals, fog, in Flotsam also far buildings, ships and the town's sound) and loaded it all again on the way out, behind a fade. Now:

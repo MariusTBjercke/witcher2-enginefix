@@ -1,0 +1,106 @@
+﻿23:12:12.553 witcher2_enginefix 0.8.0 loaded (image base 0x00400000)
+23:12:12.553 diagnostics: crash_dump=1 (previous log kept as witcher2_enginefix.prev.log)
+23:12:12.553 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+23:12:12.553 distance config: experimental=1 visibility=3.00x shadow=3.00x
+23:12:12.553 saves: fix_thumbnails=1 save_trace=0
+23:12:12.553 startup: skip_intro=1
+23:12:12.553 diagnostics: file_trace=0 load_trace=0
+23:12:12.553 loading: fast_doors=1 door_fade=0.05 area_fade=0.25 interiors=2 (keep_outdoors=1 keep_interiors=1 preload_interiors=1 skip_door_gc=1 instant_doors=1 indoor_outdoors=1)
+23:12:12.554 scriptpatches: book_marker=1 continue=1 pause_quit=1 window_mode=1
+23:12:12.554 window: enabled=1 borderless=0 dpi_aware=1
+23:12:12.554 presets: default=extreme, cycle modifiers=1 VK=79 (Options > Graphics remembers the level)
+23:12:12.557 script-patcher: hooked kernel32.dll!CreateFileW
+23:12:12.557 script-patcher: hooked kernel32.dll!FindFirstFileW
+23:12:12.557 script-patcher: hooked kernel32.dll!FindNextFileW
+23:12:12.557 script patches: hooks installed after 0 ms (3/3 slots)
+23:12:12.560 presets: startup=extreme (options menu)
+23:12:12.560 window: dpi awareness = system aware (fallback)
+23:12:12.560 window: borderless=1 (options menu), dpi_aware=1, menu=1
+23:12:12.695 startup: movie list and tick hooked after 141 ms
+23:12:12.695 window: startup borderless style patched
+23:12:12.697 window: menu channel hooked (Options > Graphics applies borderless at once)
+23:12:12.697 window: viewport tick hooked (Full screen switches at once)
+23:12:12.814 script overlay: cache <game>\bin\witcher2_enginefix_cache
+23:12:12.823 script overlay: cache: reused (4 redirects)
+23:12:12.823 script patches: book_marker=on continue=on pause_quit=on window_mode=on cache=reused
+23:12:13.197 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+23:12:13.201 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+23:12:13.509 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+23:12:14.072 crash: filter armed, chaining to 0x5F492571 (CSERHelper.dll+0x12571)
+23:12:14.079 osd: window ready (font 34 px)
+23:12:14.079 stability: ray cast guard installed (collector slot 00D41A38)
+23:12:14.079 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
+23:12:14.079 osd: Graphics: extreme  (LOD only)
+23:12:14.085 lod enforced: mesh=8.000 foliage=5.000
+23:12:14.085 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=3.00x shadow=3.00x
+23:12:14.085 osd: Graphics: extreme  (4/4)
+23:12:14.086 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+23:12:14.086 thumbnail: menu image registry hooked (QuickSave preview refresh)
+23:12:14.086 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=1 trace=0
+23:12:14.086 saves: ISteamRemoteStorage 13030BE8 FileWrite hooked; thumbnail fix=1
+23:12:14.086 doors: indoor partitions keep drawing terrain and grass (indoor_outdoors=1)
+23:12:14.086 partition: switch calls hooked/hooked, sync run hooked (load_trace=0 keep_outdoors=1)
+23:12:14.086 doors: streaming door timer hooked
+23:12:14.086 doors: door start hooked (door_fade 0.05 s, area_fade 0.25 s)
+23:12:14.086 doors: fade commands hooked/hooked - instant_doors on
+23:12:14.086 doors: fade-out patched, fade-in patched, 0.05 s, area changes 0.25 s (game 0.5 s); fast_doors=1
+23:12:28.929 window: game window 3840x2160, User.ini viewport 3840x2160
+23:12:29.483 input: CreateDevice hook installed
+23:12:29.485 input: keyboard state filter installed
+23:12:29.485 input: keyboard cooperative level hook installed
+23:12:29.485 input: window procedure hooked (key messages ignored while DirectInput reads the keyboard)
+23:12:29.485 input: keyboard cooperative level 0x05 -> 0x06 (Windows keys and Print Screen work in game)
+23:12:29.486 startup: movie list built (1 entries), skip armed
+23:12:29.803 startup: stopping startup movie 1 of 1
+23:12:29.896 startup: 1 startup movie(s) stopped, main menu reached
+23:12:44.800 interiors: before the switch - 1690 layers in the world, 0 loaded; 64 building interiors, 0 loaded
+23:12:44.812 savelist: before the switch private=1047 MB commit=1429 reserve=273 free=2392 largest_free=2044 MB, previews held=124
+23:12:44.812 preload: 'Outdoor\global\landing_site\outside\inn_interior' found (type 0); siblings by location type: default 15, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+23:12:44.814 preload: 0 interior layers from the partition tree, 64 more by folder name
+23:12:47.221 partition: sync job ran 2421 ms (GC  25 ms)
+23:12:47.221 partition: preload kept 0 of 0 layers, unloaded 0; loaded 965 (64 interiors added), skipped 0 (fake rooms, low-poly)
+23:12:47.222 interiors: after the switch - 1690 layers in the world, 959 loaded; 64 building interiors, 64 loaded
+23:12:47.235 savelist: after the switch private=1304 MB commit=1689 reserve=271 free=2135 largest_free=2044 MB, previews held=124
+23:12:49.507 distance stats: mesh=68298 shadow=53695 baseline_reject=13398 admitted=11682 (3.00x/3.00x)
+23:12:54.561 distance stats: mesh=461009 shadow=355239 baseline_reject=105768 admitted=93291 (3.00x/3.00x)
+23:12:58.794 doors: 'Outdoor\global\landing_site\outside\inn_interior' -> 'Outdoor\global\landing_site\outside\Flotsam' is loaded - no fade
+23:12:59.042 partition: sync job ran 225 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:12:59.042 partition: keep_outdoors kept 69 of 76 layers, unloaded 7; loaded 54 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+23:12:59.042 doors: 'Outdoor\global\landing_site\outside\inn_interior' -> 'Outdoor\global\landing_site\outside\Flotsam' loaded 49 layer(s) not preloaded (225 ms): levels\l02-port\city_lights\city_lights.w2l levels\l02-port\pier\buildings\06_custom_house_pier\door_fog\mesh.w2l levels\l02-port\environments\lights_exterior_port_01\lights_port_01.w2l levels\l02-port\landing_site\roche_ship\containers.w2l levels\l02-port\landing_site\roche_ship\lights_background.w2l levels\l02-port\landing_site\roche_ship\ship.w2l levels\l02-port\global_rocks\craftsmen_district\rocks.w2l levels\l02-port\global_rocks\landing_site\explorations.w2l levels\l02-port\global_rocks\landing_site\parawan.w2l levels\l02-port\global_rocks\ levels\l02-port\global_rocks\ levels\l02-port
+23:12:59.042 doors: 'Outdoor\global\landing_site\outside\inn_interior' -> 'Outdoor\global\landing_site\outside\Flotsam' took 225 ms - it keeps its fade
+23:12:59.065 doors: interior ready after 250 ms - picture back now (state 2)
+23:12:59.615 distance stats: mesh=348788 shadow=266337 baseline_reject=70242 admitted=64421 (3.00x/3.00x)
+23:13:03.982 doors: Geralt is through the door - loading the occluders (4954 ms after the door)
+23:13:03.997 partition: sync job ran 13 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:03.997 partition: keep_outdoors kept 69 of 69 layers, unloaded 0; loaded 2 (0 interiors added), skipped 1 (fake rooms, low-poly)
+23:13:04.668 distance stats: mesh=1076259 shadow=442925 baseline_reject=201711 admitted=170202 (3.00x/3.00x)
+23:13:09.308 doors: 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\inn_interior' is loaded - no fade
+23:13:09.351 partition: sync job ran 21 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:09.351 partition: keep_outdoors kept 109 of 114 layers, unloaded 5; loaded 3 (0 interiors added), skipped 2 (fake rooms, low-poly), occluders wait until Geralt is through the door
+23:13:09.364 doors: interior ready after 47 ms - picture back now (state 2)
+23:13:09.723 distance stats: mesh=857110 shadow=634876 baseline_reject=250276 admitted=201433 (3.00x/3.00x)
+23:13:12.658 doors: Geralt is through the door - loading the occluders (3312 ms after the door)
+23:13:12.678 partition: sync job ran 12 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:12.678 partition: keep_outdoors kept 109 of 109 layers, unloaded 0; loaded 2 (0 interiors added), skipped 2 (fake rooms, low-poly)
+23:13:14.777 distance stats: mesh=921736 shadow=599101 baseline_reject=276915 admitted=248998 (3.00x/3.00x)
+23:13:14.956 partition: sync job ran 12 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:14.956 partition: keep_outdoors kept 69 of 74 layers, unloaded 5; loaded 3 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+23:13:14.968 doors: interior ready after 47 ms - picture back now (state 2)
+23:13:18.264 doors: Geralt is through the door - loading the occluders (3313 ms after the door)
+23:13:18.280 partition: sync job ran 14 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:18.280 partition: keep_outdoors kept 69 of 69 layers, unloaded 0; loaded 2 (0 interiors added), skipped 1 (fake rooms, low-poly)
+23:13:19.830 distance stats: mesh=1013631 shadow=480997 baseline_reject=283183 admitted=246136 (3.00x/3.00x)
+23:13:20.593 doors: 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\inn_interior' is loaded - no fade
+23:13:20.637 partition: sync job ran 20 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:20.637 partition: keep_outdoors kept 109 of 114 layers, unloaded 5; loaded 3 (0 interiors added), skipped 2 (fake rooms, low-poly), occluders wait until Geralt is through the door
+23:13:20.650 doors: interior ready after 31 ms - picture back now (state 2)
+23:13:24.588 doors: Geralt is through the door - loading the occluders (3937 ms after the door)
+23:13:24.608 partition: sync job ran 13 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:24.608 partition: keep_outdoors kept 109 of 109 layers, unloaded 0; loaded 2 (0 interiors added), skipped 2 (fake rooms, low-poly)
+23:13:24.885 distance stats: mesh=722782 shadow=497717 baseline_reject=173008 admitted=147917 (3.00x/3.00x)
+23:13:26.107 partition: sync job ran 12 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:13:26.107 partition: keep_outdoors kept 69 of 74 layers, unloaded 5; loaded 3 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+23:13:26.119 doors: interior ready after 32 ms - picture back now (state 2)
+23:13:29.937 distance stats: mesh=632868 shadow=326608 baseline_reject=138342 admitted=118189 (3.00x/3.00x)
+23:13:34.568 unloaded
+

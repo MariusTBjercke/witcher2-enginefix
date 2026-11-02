@@ -85,7 +85,7 @@ Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
   ...\steamapps\common\the witcher 2\bin\dinput8.dll
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix 0.8.0 loaded".
+"witcher2_enginefix 0.8.1 loaded".
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
