@@ -43,8 +43,9 @@ static const wchar_t* const k_carriers[] = {
 
 // Part of the cache key: bump it whenever the cache's contents or layout change, so an older
 // cache built by the same ENGINEFIX_VERSION is never served. 2 = icons in a carrier archive;
-// 3 = the WindowMode rows in guimainmenu.ws; 4 = one Display mode selector instead of two rows.
-#define OV_CACHE_LAYOUT 4
+// 3 = the WindowMode rows in guimainmenu.ws; 4 = one Display mode selector instead of two rows;
+// 5 = the Draw distance selector.
+#define OV_CACHE_LAYOUT 5
 
 // ---- logging -----------------------------------------------------------
 

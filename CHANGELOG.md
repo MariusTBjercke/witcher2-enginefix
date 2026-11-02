@@ -4,6 +4,10 @@ Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
 with all earlier fixes included in one initial Nexus changelog entry; earlier
 versions are not separate Nexus releases.
 
+## 0.7.1
+
+- Options > Graphics gets a **Draw distance** row under Display mode: default (the game's own values), high, ultra and extreme, the same four levels as Ctrl+F10, in the game's text language in all twelve languages. A choice applies at once, without the on-screen text (the row shows it), and the game remembers it in `Documents\Witcher 2\Config\User.ini` (`[Rendering] EngineFixDrawDistance`); when stored, it wins over `[presets] default`. Ctrl+F10 still works and the row follows it: the DLL writes the live level into the game's config on the game's main thread, from the viewport tick hook, so the row always opens on the level in use. Part of `[scriptpatches] window_mode`; needs `[presets] enabled=1` and `[window] enabled=1`. The patched scripts are rebuilt once (`OV_CACHE_LAYOUT` 5). See `docs/fixes/graphics-presets.md`.
+
 ## 0.7.0
 
 Includes 0.6.1 (below), which was not released on its own.

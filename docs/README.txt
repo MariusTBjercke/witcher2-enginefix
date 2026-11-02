@@ -28,7 +28,8 @@ What it does:
   can be reported.
 - Graphics presets: Ctrl+F10 cycles baseline / high / ultra / extreme. Each
   level sets mesh LOD, foliage distance, mesh visibility and mesh-shadow
-  distance together, shown on screen. Starts at extreme.
+  distance together, shown on screen. Starts at extreme. The same levels are
+  a Draw distance row in Options > Graphics; the game remembers that choice.
 - The LOD values stay put when the options menu rewrites them.
 - Ctrl/Alt+F9/F10 never trigger a quick load. Plain F9 still quick-loads.
 - Interior maps: 25 interiors (temples, inns, Loredo's house, towers) had a
@@ -81,7 +82,7 @@ Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
   ...\steamapps\common\the witcher 2\bin\dinput8.dll
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix 0.7.0 loaded".
+"witcher2_enginefix 0.7.1 loaded".
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level

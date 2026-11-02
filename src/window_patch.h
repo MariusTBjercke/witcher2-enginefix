@@ -99,7 +99,8 @@ static char __stdcall wf_write_hook(const wchar_t* category, const wchar_t* sect
     r = wf_real_write(category, section, key, value);
     if (category && section && key && value && _wcsicmp(category, L"User") == 0 &&
         _wcsicmp(section, L"Rendering") == 0 &&
-        (_wcsicmp(key, L"EngineFixBorderless") == 0 || _wcsicmp(key, L"Fullscreen") == 0))
+        (_wcsicmp(key, L"EngineFixBorderless") == 0 || _wcsicmp(key, L"Fullscreen") == 0 ||
+         _wcsicmp(key, L"EngineFixDrawDistance") == 0))
         wf_on_config_write(section, key, *value);
     return r;
 }

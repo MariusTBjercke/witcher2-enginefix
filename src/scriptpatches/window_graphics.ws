@@ -2,3 +2,8 @@ w2efModes.PushBack( StrUpperUTF( W2EF_WindowText( 1 ) ) );
 w2efModes.PushBack( StrUpperUTF( W2EF_WindowText( 2 ) ) );
 w2efModes.PushBack( StrUpperUTF( W2EF_WindowText( 4 ) ) );
 InsertMenuSelector( AS_MenuItems, 9201, StrUpperUTF( W2EF_WindowText( 3 ) ), w2efModes, W2EF_WindowModeIndex() );
+w2efDist.PushBack( StrUpperUTF( W2EF_WindowText( 6 ) ) );
+w2efDist.PushBack( StrUpperUTF( W2EF_WindowText( 7 ) ) );
+w2efDist.PushBack( StrUpperUTF( W2EF_WindowText( 8 ) ) );
+w2efDist.PushBack( StrUpperUTF( W2EF_WindowText( 9 ) ) );
+InsertMenuSelector( AS_MenuItems, 9202, StrUpperUTF( W2EF_WindowText( 5 ) ), w2efDist, W2EF_DrawDistanceIndex() );

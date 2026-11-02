@@ -40,8 +40,37 @@ row's built-in defaults. Invalid preset names use extreme. Names ignore case.
 The supported preset bindings are F9/F10 with Ctrl and/or Alt, optionally Shift;
 other bindings fall back to Ctrl+F10 because only these keys have input filtering.
 
-Hotkeys never write an ini file or a save. Restarting returns to `default=`. Ini
-edits are read at startup. `[hotkeys] enabled=0` disables live switching while
+Hotkeys never write an ini file or a save. Ini edits are read at startup.
+
+### Options > Graphics > Draw distance (0.7.1)
+
+The same four levels are a selector row under Display mode (default, high, ultra, extreme,
+in the game's language; "default" is `baseline`, the game's own values). It belongs to the
+`[scriptpatches] window_mode` script feature and the window section's config-writer hook
+(`docs/fixes/borderless-window.md`):
+
+* the row writes `[Rendering] EngineFixDrawDistance` (0-3) with the game's own
+  `WriteConfigParamFloat`; the writer hook passes it to the worker, which selects the preset
+  like Ctrl+F10 but shows no OSD (the row shows the choice) and logs
+  `preset: <name> ... (options menu)`;
+* the other way round, whenever the level changes elsewhere (start, Ctrl+F10) the viewport tick
+  hook writes the live level into that key through the writer's trampoline, on the game's main
+  thread (checked against the thread `DllMain` ran on), so the row always opens on the level in
+  use. The trampoline skips the hook, so that write is not taken for a menu choice;
+* the engine saves the key in `Documents\Witcher 2\Config\User.ini` like its other options.
+  At start the stored level, when present, wins over `default=` (log
+  `presets: startup=<name> (options menu)`). With a read-only User.ini (the owner's machine)
+  nothing is stored and `default=` applies at every start.
+
+Needs `[presets] enabled=1` and `[window] enabled=1` (the writer and viewport hooks); otherwise
+the row is shown but has no effect. The script cache layout is `OV_CACHE_LAYOUT` 5.
+
+Verified 2026-11-02. Offline: `build.bat` clean; `sptest test` 0 failures; `sptest build` puts
+the selector after Display mode in `FillOptionsGraphics` and the `9202` handler in
+`InputOptionsGraphics`; `check_texts.py` ok for the nine window texts in all twelve languages;
+`windowprobe` and `distanceprobe` 0 failures. In game (owner, 0.7.1): the scripts compiled, the
+row showed the live level, menu choices changed the distances at once without the OSD, and the
+row followed Ctrl+F10. `[hotkeys] enabled=0` disables live switching while
 retaining the startup selection. `[general] enabled=0` stops the runtime worker.
 
 ## What changes in memory

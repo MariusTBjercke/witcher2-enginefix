@@ -106,6 +106,7 @@ static const quality_preset k_presets[PRESET_COUNT] = {
 };
 static quality_preset cfg_presets[PRESET_COUNT];
 static int cfg_preset_mode, g_preset = PRESET_COUNT - 1;
+static volatile LONG g_ddSync;  // 1: write the live preset into the game's config (Draw distance row)
 static int cfg_vk_preset = VK_F10, cfg_mod_preset = EF_MOD_CTRL;
 static int cfg_save_trace;      // [diagnostics] save_trace: log the save-thumbnail path
 static int cfg_save_thumbs = 1; // [saves] fix_thumbnails: write the late save preview
@@ -582,6 +583,7 @@ static void poll_hotkeys(void)
             pid == GetCurrentProcessId()) {
             select_preset((g_preset + 1) % PRESET_COUNT);
             apply_lod();
+            InterlockedExchange(&g_ddSync, 1);   // the Draw distance row follows the hotkey
             logf_("preset: %s mesh=%.2f foliage=%.2f visibility=%.2fx shadow=%.2fx; distance_active=%d",
                   cfg_presets[g_preset].name, cfg_mesh, cfg_foliage,
                   cfg_visibility, cfg_shadow_range, ef_distance_active);
@@ -3301,6 +3303,14 @@ static volatile LONG g_fsTicks;          // viewport ticks seen, so a stalled sw
 static volatile LONG g_fsStage;          // 0 idle, 1 released (the hook asked for state 1)
 static BOOL g_fsPrevWindowed;
 static HWND g_wfWnd;
+// Draw distance row (Options > Graphics). The menu writes [Rendering] EngineFixDrawDistance; the
+// worker applies that level without the OSD. The other way round, the live level is written into
+// the game's config whenever it changes elsewhere (start, Ctrl+F10), so the row opens on it. That
+// write calls the engine's config writer, so it happens on the game's main thread, inside the
+// viewport tick, never from the DLL's threads.
+static volatile LONG g_ddMenu = -1;      // level the menu chose, -1 nothing pending
+static DWORD g_mainTid;                  // the thread DllMain ran on: the game's main thread
+static volatile LONG g_ddOffThread;      // the viewport tick ran elsewhere: no sync (logged)
 // The swapchain's size: [Viewport] Width/Height from User.ini, else the client area the window
 // was born with. A restyle always restores it, because a framed window as large as the screen is
 // clipped by Windows (WM_GETMINMAXINFO), so its client area shrinks and cannot be trusted later.
@@ -3325,7 +3335,10 @@ static void wf_on_config_write(const wchar_t* section, const wchar_t* key, float
 {
     (void)section;
     if (!cfg_wf_enabled) return;
-    if (_wcsicmp(key, L"EngineFixBorderless") == 0) {
+    if (_wcsicmp(key, L"EngineFixDrawDistance") == 0) {
+        if (cfg_preset_mode)
+            InterlockedExchange(&g_ddMenu, value < 0.5f ? 0 : value < 1.5f ? 1 : value < 2.5f ? 2 : 3);
+    } else if (_wcsicmp(key, L"EngineFixBorderless") == 0) {
         wf_request(value > 0.0f, 1);
     } else if (_wcsicmp(key, L"Fullscreen") == 0) {
         if (g_fsHooked) InterlockedExchange(&g_fsWant, value > 0.0f ? 1 : 0);
@@ -3354,6 +3367,18 @@ static int wf_user_ini_borderless(int* found)
     if (v < 0) return 0;
     *found = 1;
     return v != 0;
+}
+
+// [Rendering] EngineFixDrawDistance in User.ini: the Draw distance row's last level (0-3), -1
+// when absent. The engine stores floats ("2.000000"); the integer part is the level.
+static int wf_user_ini_draw_distance(void)
+{
+    wchar_t path[MAX_PATH];
+    int v;
+
+    if (!wf_user_ini_path(path)) return -1;
+    v = (int)GetPrivateProfileIntW(L"Rendering", L"EngineFixDrawDistance", -1, path);
+    return v >= 0 && v < PRESET_COUNT ? v : -1;
 }
 
 // [Viewport] Width/Height in User.ini: the resolution the launcher's Configurator sets, and the
@@ -3575,6 +3600,13 @@ static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
     char r;
 
     InterlockedIncrement(&g_fsTicks);
+    if (g_ddSync && GetCurrentThreadId() != g_mainTid) g_ddOffThread = 1;
+    else if (g_ddSync && wf_real_write && InterlockedExchange(&g_ddSync, 0)) {
+        float level = (float)g_preset;
+
+        // The trampoline skips wf_write_hook, so this is not taken for a menu choice.
+        wf_real_write(L"User", L"Rendering", L"EngineFixDrawDistance", &level);
+    }
     if (g_fsStage == 0) {
         if (want < 0 || *state != 0 || wf_engine_fullscreen() < 0) return real(vp, edx);
         if ((*windowed == FALSE) == (want != 0)) {   // already in that mode
@@ -3611,6 +3643,23 @@ static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
     }
     InterlockedExchange(&g_fsStage, 0);
     return r;
+}
+
+// Worker tick: the Draw distance row's choice. Like Ctrl+F10 but silent, the menu shows it.
+static void dd_tick(void)
+{
+    static int off_logged;
+    LONG level = InterlockedExchange(&g_ddMenu, -1);
+
+    if (g_ddOffThread && !off_logged) {
+        off_logged = 1;
+        logf_("presets: viewport tick not on the main thread - the Draw distance row is not kept in step with Ctrl+F10");
+    }
+    if (level < 0 || level >= PRESET_COUNT || level == g_preset) return;
+    select_preset((int)level);
+    apply_lod();
+    logf_("preset: %s mesh=%.2f foliage=%.2f visibility=%.2fx shadow=%.2fx (options menu)",
+          cfg_presets[g_preset].name, cfg_mesh, cfg_foliage, cfg_visibility, cfg_shadow_range);
 }
 
 // Worker tick: the switch results, then the wanted style against the live window.
@@ -3778,6 +3827,15 @@ static DWORD WINAPI window_init_thread(LPVOID param)
     on = wf_user_ini_borderless(&found);
     if (!found) on = cfg_wf_borderless;
     wf_user_ini_resolution();
+    if (cfg_preset_mode) {
+        int level = wf_user_ini_draw_distance();
+
+        if (level >= 0) {
+            select_preset(level);
+            logf_("presets: startup=%s (options menu)", cfg_presets[g_preset].name);
+        }
+        InterlockedExchange(&g_ddSync, 1);   // the row opens on the level in use
+    }
     wf_state(on);
     if (on && cfg_wf_dpi) wf_set_dpi_aware();
     logf_("window: borderless=%d (%s), dpi_aware=%d, menu=%d",
@@ -3842,6 +3900,7 @@ static DWORD WINAPI worker(LPVOID param)
         crash_tick();
         ray_guard_tick();
         osd_pump();
+        dd_tick();
         apply_lod();
         if (cfg_wf_enabled) wf_tick();
         if (cfg_hotkeys) poll_hotkeys();
@@ -4144,6 +4203,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
+        g_mainTid = GetCurrentThreadId();   // DllMain runs on the game's main thread
         g_self = inst;
         DisableThreadLibraryCalls(inst);
         InitializeCriticalSection(&g_logLock);
@@ -4176,7 +4236,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",
               cfg_wf_enabled, cfg_wf_borderless, cfg_wf_dpi);
         if (cfg_preset_mode)
-            logf_("presets: startup=%s, cycle modifiers=%d VK=%02X (session only)",
+            logf_("presets: default=%s, cycle modifiers=%d VK=%02X (Options > Graphics remembers the level)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
         if (cfg_enabled || cfg_file_trace || cfg_load_trace) {
             g_running = 1;
