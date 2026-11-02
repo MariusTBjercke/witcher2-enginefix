@@ -13,6 +13,19 @@ What it does:
   instead of a purple/blue gradient. Old saves cannot get their picture back.
 - Save list leak: every Load/Save menu open leaked ~0.9 MB per save until
   you quit (hundreds of MB with many saves). Fixed; no save is deleted.
+- Faster save list: the list unpacks only the few parts of each save it
+  reads, in memory, instead of every save in full (~2.5x faster with 120
+  saves). Loading a save is unchanged.
+- Faster house doors: the picture comes back as soon as the interior is in,
+  with shorter fades: ~0.65 s per door instead of ~2.2 s.
+- Display mode in Options > Graphics: full screen, borderless window or
+  windowed, switched at once without a restart.
+- Snipping Tool and Windows keys work in game (Win+Shift+S, Print Screen,
+  Win+D); a Windows key tapped on its own still does not open Start.
+- Crash guard: a physics ray cast against an object that was just unloaded
+  (seen once leaving the Flotsam inn) no longer closes the game.
+- Crash capture: a crash is logged with a small dump next to the log, so it
+  can be reported.
 - Graphics presets: Ctrl+F10 cycles baseline / high / ultra / extreme. Each
   level sets mesh LOD, foliage distance, mesh visibility and mesh-shadow
   distance together, shown on screen. Starts at extreme.
@@ -68,21 +81,26 @@ Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
   ...\steamapps\common\the witcher 2\bin\dinput8.dll
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix 0.6.0 loaded".
+"witcher2_enginefix 0.7.0 loaded".
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
   [saves]   fix_thumbnails=1     0 turns the save-preview fix off
   [saves]   fix_list_leak=1      0 turns the save-list leak fix off
+  [saves]   fast_list=1          0 unpacks every save in full for the list
+  [loading] fast_doors=1         0 restores the game's door timing
+  [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
+  [window]  borderless=0         start-up fallback; Options owns it after
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)
-  [scriptpatches] book_marker=1, continue=1, pause_quit=1
+  [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1
                                  0 turns that one off
   [general] enabled=1            0 turns off everything the DLL does
 
 Known issue: the pause-menu Quit confirmation needs one click before it
 responds to hover. The Quit button still works.
 
-Uninstall: delete bin\dinput8.dll, bin\witcher2_enginefix.ini, the folder
+Uninstall: delete bin\dinput8.dll, bin\witcher2_enginefix.ini, the logs and
+any crash dumps (bin\witcher2_enginefix*.log / *.dmp), the folder
 bin\witcher2_enginefix_cache, CookedPC\globals\map_scales.csv and the
 *_2048x2048.dds files this zip put in CookedPC\globals\gui\maps\ (the game's
 own maps are inside pack0.dzip). Nothing else needs undoing.
