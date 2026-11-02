@@ -13,6 +13,10 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Graphics presets** | One hotkey, **Ctrl+F10**, cycles baseline / high / ultra / extreme. Each level sets mesh LOD distance, foliage distance, the hard mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. Starts at `extreme`; the hotkey lasts until you quit. | on (extreme) |
 | **LOD values that stick** | The game's `MeshDistanceScale`/`FoliageDistanceScale` are held at the preset values, also after the options menu rewrites them, and the two "gameplay LOD downscale" flags are kept off. | on |
 | **Black map in interiors** | In 25 interior map entries (temples, inns, Loredo's house, towers and other houses) the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
+| **Faster house doors** | Entering or leaving a house faded to black, swapped in the interior in a fraction of a second and then stayed black until the door animation ended. The picture now comes back as soon as the interior is in, with shorter fades: ~0.65 s instead of ~2.2 s per door. `[loading] fast_doors`, `door_fade`. | on |
+| **Faster save list** | To show the Load/Save list (and at game start) the game unpacked every save in full to read a few header values. The mod unpacks only the parts the list reads, in memory: about 2.5x faster with 120 saves, same list. Loading a save is unchanged. `[saves] fast_list`. | on |
+| **Crash guard** | A physics ray cast that meets an object that was just unloaded (seen once when walking out of the Flotsam inn) misses it instead of closing the game. `[stability] raycast_guard`. | on |
+| **Crash capture** | The game's own crash handler closes the game without a word. The mod logs what crashed and writes a small dump next to the log, so a crash can be reported and analysed. `[diagnostics] crash_dump`. | on |
 | **Skip the startup videos** | `[startup] skip_intro=1` starts at the main menu without the logo videos and the intro movie. The mod presses "skip" for the game on each startup movie (the same path as Esc), so a short black moment remains. Works with or without an intro removal mod. | off |
 | **Ctrl+F9/F10 do not quick-load** | F9 (quick load) and F10 cannot be rebound in this game. While Ctrl or Alt is held, the mod hides F9/F10 from the game, so the mod's hotkeys never trigger a quick load. Plain F9 still quick-loads. | on |
 | **Snipping Tool and Windows keys** | The game blocks every Windows key combination while it is in front, so Win+Shift+S and Print Screen (Snipping Tool) did nothing. Now they work, as do Win+D and the rest; a Windows key tapped on its own still does not open the Start menu. `[hotkeys] windows_keys`. | on |
@@ -79,6 +83,9 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[preset.<name>]` | see table | Your own values per level |
 | `[saves] fix_thumbnails` | 1 | 0 turns the save-preview fix off |
 | `[saves] fix_list_leak` | 1 | 0 turns the save-list leak fix off |
+| `[saves] fast_list` | 1 | 0 lets the game unpack every save in full for the Load/Save list |
+| `[loading] fast_doors`, `door_fade` | 1, 0.25 | 0 and 0.5 restore the game's door timing |
+| `[stability] raycast_guard` | 1 | 0 turns the ray-cast crash guard off |
 | `[startup] skip_intro` | 0 | 1 starts at the main menu, without logo videos and intro |
 | `[window] borderless` | 0 | 1 starts borderless (Full screen off, desktop resolution). After the first use, Options > Graphics owns the setting; it is stored in the game's User.ini |
 | `[window] enabled` | 1 | 0 turns the window patches, the live switch and the menu channel off |
@@ -87,6 +94,8 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[osd] enabled`, `size`, `ms` | 1, 34, 2500 | On-screen readout; 34 px suits 4K, 22 px 1080p |
 | `[diagnostics] save_trace` | 0 | 1 logs the save-preview path (Steam writes, screenshot encoding) |
 | `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
+| `[diagnostics] load_trace` | 0 | 1 measures every loading screen and house door |
+| `[diagnostics] crash_dump` | 1 | 1 logs a crash and writes a minidump, 2 a full dump, 0 off |
 
 The ini file itself documents every key, including the legacy separate hotkeys (`[presets] enabled=0`).
 
