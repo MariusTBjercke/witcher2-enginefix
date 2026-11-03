@@ -58,8 +58,10 @@ What it does:
 - Continue: the main menu gets a Continue button that loads the newest save.
 - Quit in the pause menu: quits the game after a confirmation, without
   going back to the main menu first.
+- Medallion on the move: Geralt keeps moving when you use the medallion, and
+  it is ready again after 1 second instead of 2.
 
-The last three change the game's scripts and UI screens. The DLL does that
+The last four change the game's scripts and UI screens. The DLL does that
 at game start without touching the game's files: the first start builds
 patched copies of the files your game uses (base_scripts.dzip, also Project
 Mersey's; the trade and storage screens, also Witcher 2 HD UI AI Upscale's;
@@ -98,7 +100,8 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
   [window]  borderless=0         start-up fallback; Options owns it after
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)
-  [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1
+  [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1,
+                  medallion=1
                                  0 turns that one off
   [general] enabled=1            0 turns off everything the DLL does
 
