@@ -13,7 +13,7 @@
 typedef struct { wchar_t target[MAX_PATH]; wchar_t cached[MAX_PATH]; } sp_redirect;
 
 // [scriptpatches] in the ini.
-typedef struct { int book_marker, cont, pause_quit, window_mode; } sp_features;
+typedef struct { int book_marker, cont, pause_quit, window_mode, medallion; } sp_features;
 
 // Builds the patched files for the enabled features into cache_dir (created when missing).
 // An earlier build is reused when the cache key still matches; the redirect table then lists

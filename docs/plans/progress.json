@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-02T18:30:00+01:00",
+  "updated": "2026-11-03T23:50:00+01:00",
   "owner": "dsh",
   "items": [
     {
@@ -229,6 +229,18 @@
       ],
       "verify": "Log shows 'stability: ray cast guard installed (collector slot 00D41A38)'; walk in and out of the Flotsam inn several times without a crash; any 'ray cast hit a freed physics object' line shows a caught case.",
       "evidence": "docs/fixes/crash-raycast-stale-body.md - dump 2026-11-02 18:02:55: movaps fault at 0084C7AF in collector callback FUN_0084c750 (slot 00D41A38); owner pointer 5947BE03 odd and transform pointer inside nvgpucomp32.dll: stale handle from the worker's broadphase ray cast while the inn layer unloaded. Guard returns the callback's own no-hit fraction on an access violation. Run 3: guard installed, inn in/out without a crash, no caught case logged (race, so not proof)."
+    },
+    {
+      "id": "medallion-on-the-move",
+      "title": "Medallion usable while moving, 1 s cooldown",
+      "status": "done",
+      "files": [
+        "docs/fixes/medallion.md",
+        "src/scriptpatches/medallion_use.ws",
+        "src/scriptpatches/edits.txt"
+      ],
+      "verify": "Log shows 'script overlay: medallion=on'; Geralt keeps running when the medallion key is pressed.",
+      "evidence": "docs/validation/medallion-2026-11-03.md"
     }
   ]
 }

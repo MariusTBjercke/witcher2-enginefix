@@ -4,6 +4,10 @@ Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
 with all earlier fixes included in one initial Nexus changelog entry; earlier
 versions are not separate Nexus releases.
 
+## 0.9.0
+
+- Medallion on the move (`[scriptpatches] medallion=1`, default): the medallion key works at once. Geralt keeps walking, running or fighting instead of stopping for the use animation, and the cooldown is 1 s instead of 2 s. The pulse, sound and highlights are unchanged, because they belong to the effect and not to the animation. It also works where the animation used to be refused, and Geralt no longer touches the medallion on screen. A medallion started by a quest keeps the animation and 2 s. The patched scripts are rebuilt once (`OV_CACHE_LAYOUT` 6). See `docs/fixes/medallion.md`.
+
 ## 0.8.1
 
 - Fixed: walking out of a Flotsam building (seen at the inn's harbour door), everything in front of Geralt turned see-through, only water showed, until he was outside. The way out loads the town's occluders (invisible blocks the renderer uses to skip what is hidden behind buildings) while the camera is still inside the building's own block, so the renderer culled everything in front of it; the game hid that behind its fade. A kept door now leaves its occluder layers out, and once Geralt is 5 m from the door (at least 0.4 s, at most 30 s) the DLL queues a switch to the partition already current through the game's request function (`FUN_00aa7e18`), whose job loads just the occluders (12-13 ms). Needs the viewport tick (`[window] enabled=1`, the default); without it the occluders load with the door as in 0.8.0.

@@ -1336,33 +1336,35 @@ done:
     return why;
 }
 
-// The RCDATA table: 17 rows in $FeatureList order, 8 BookMarker, 2 Continue, 4 PauseQuit,
-// 3 WindowMode.
+// The RCDATA table: 20 rows in $FeatureList order, 8 BookMarker, 2 Continue, 4 PauseQuit,
+// 4 WindowMode, 2 Medallion.
 static const char* test_script_data(void)
 {
     static const char* const frags[] = {
         "book_helpers.ws", "book_texts.ws", "continue_button.ws", "continue_input.ws",
         "quit_button.ws", "quit_input.ws", "quit_members.ws", "quit_box.ws",
-        "inventory_refill.ws", "window_graphics.ws", "window_input.ws", "window_texts.ws"
+        "inventory_refill.ws", "window_graphics.ws", "window_input.ws", "window_texts.ws",
+        "medallion_use.ws"
     };
     const sp_edit* e = NULL;
     const char* why = NULL;
-    int n = 0, i, book = 0, cont = 0, quit = 0, window = 0, ends = 0;
+    int n = 0, i, book = 0, cont = 0, quit = 0, window = 0, medal = 0, ends = 0;
 
     if (!sp_edits_load(&e, &n)) {
         _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "sp_edits_load: %s", sp_script_error());
         why = g_why;
         goto done;
     }
-    CHECK(n == 18);
+    CHECK(n == 20);
     for (i = 0; i < n; i++) {
         if (strcmp(e[i].feature, "BookMarker") == 0) book++;
         else if (strcmp(e[i].feature, "Continue") == 0) cont++;
         else if (strcmp(e[i].feature, "PauseQuit") == 0) quit++;
         else if (strcmp(e[i].feature, "WindowMode") == 0) window++;
+        else if (strcmp(e[i].feature, "Medallion") == 0) medal++;
         if (e[i].where == SP_END) ends++;
     }
-    CHECK(book == 8 && cont == 2 && quit == 4 && window == 4 && ends == 3);
+    CHECK(book == 8 && cont == 2 && quit == 4 && window == 4 && medal == 2 && ends == 3);
     CHECK(strcmp(e[0].feature, "BookMarker") == 0);
     CHECK(strcmp(e[0].entry, "game\\gui\\guiutils.ws") == 0);
     CHECK(e[0].where == SP_AFTER && e[0].count == 1);
@@ -1475,18 +1477,20 @@ done:
 // the live files may already carry the 0.5 patches), producing the expected block counts.
 static const char* test_script_real(void)
 {
-    static const char* const entries[5] = {
+    static const char* const entries[7] = {
         "game\\gui\\guiutils.ws",
         "game\\gui\\guishop.ws",
         "game\\gui\\guimainmenu.ws",
         "game\\gameplay\\container_class.ws",
-        "game\\gui\\guiinventory.ws"
+        "game\\gui\\guiinventory.ws",
+        "game\\player\\player.ws",
+        "game\\player\\states\\extendedmovable.ws"
     };
-    static const int want[5] = { 2, 1, 10, 6, 2 };
+    static const int want[7] = { 2, 1, 10, 6, 2, 1, 1 };
     static const char* books[2] = { "Book of Nekkers", "Book of Drowners" };
     const char* why = NULL;
     wchar_t zip[MAX_PATH], backup[MAX_PATH], cc[MAX_PATH];
-    sp_text texts[5];
+    sp_text texts[7];
     sp_buf body = { NULL, 0 };
     sp_ctx ctx;
     char whytxt[512];
@@ -1500,7 +1504,7 @@ static const char* test_script_real(void)
     if (GetFileAttributesW(backup) != INVALID_FILE_ATTRIBUTES) {
         wcscpy_s(zip, MAX_PATH, backup);            // the unpatched originals
     }
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < 7; i++) {
         const char* err = read_dzip_entry(zip, entries[i], &texts[i].text);
 
         if (err) {
@@ -1519,11 +1523,12 @@ static const char* test_script_real(void)
     ctx.collect_body = (const char*)body.p;
     ctx.books = books;
     ctx.nbooks = 2;
-    CHECK(sp_script_apply("BookMarker", texts, 5, &ctx, whytxt, sizeof whytxt));
-    CHECK(sp_script_apply("Continue", texts, 5, &ctx, whytxt, sizeof whytxt));
-    CHECK(sp_script_apply("PauseQuit", texts, 5, &ctx, whytxt, sizeof whytxt));
-    CHECK(sp_script_apply("WindowMode", texts, 5, &ctx, whytxt, sizeof whytxt));
-    for (i = 0; i < 5; i++) {
+    CHECK(sp_script_apply("BookMarker", texts, 7, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("Continue", texts, 7, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("PauseQuit", texts, 7, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("WindowMode", texts, 7, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("Medallion", texts, 7, &ctx, whytxt, sizeof whytxt));
+    for (i = 0; i < 7; i++) {
         int got = count_in_text(&texts[i].text, "//===witcher2-enginefix=== BEGIN");
 
         if (got != want[i]) {
@@ -1533,11 +1538,11 @@ static const char* test_script_real(void)
             goto done;
         }
     }
-    printf("  markers 2 1 10 6 2, %d bytes of scripts\n",
+    printf("  markers 2 1 10 6 2 1 1, %d bytes of scripts\n",
            (int)(texts[0].text.n + texts[1].text.n + texts[2].text.n + texts[3].text.n +
-                 texts[4].text.n));
+                 texts[4].text.n + texts[5].text.n + texts[6].text.n));
 done:
-    for (i = 0; i < 5; i++) sp_free(&texts[i].text);
+    for (i = 0; i < 7; i++) sp_free(&texts[i].text);
     sp_free(&body);
     return why;
 }
@@ -1732,6 +1737,7 @@ static int run_build(const char* game_arg, const char* out_arg)
     f.cont = 1;
     f.pause_quit = 1;
     f.window_mode = 1;
+    f.medallion = 1;
     GetSystemTimeAsFileTime(&ft);
     now.LowPart = ft.dwLowDateTime;
     now.HighPart = ft.dwHighDateTime;

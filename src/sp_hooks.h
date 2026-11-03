@@ -13,7 +13,7 @@
 // `cache` the folder next to the DLL. The overlay is not built here; the first hook hit does
 // it. 0 = no feature is enabled (nothing to hook).
 int sp_hooks_start(const wchar_t* game, const wchar_t* cache, int book_marker, int cont,
-                   int pause_quit, int window_mode, sp_log_fn log);
+                   int pause_quit, int window_mode, int medallion, sp_log_fn log);
 
 
 // CreateFileW support: builds the overlay when a target is first touched, then answers `out`

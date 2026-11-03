@@ -130,6 +130,7 @@ static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new
 static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
 static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
 static int cfg_window_mode = 1; // [scriptpatches] window_mode: Full screen / Borderless in Options
+static int cfg_medallion = 1;   // [scriptpatches] medallion: used on the move, 1 s cooldown
 static int cfg_wf_enabled = 1;  // [window] enabled: borderless support (patch + live toggle + menu)
 static int cfg_wf_borderless;   // [window] borderless: start borderless until the menu has saved it
 static int cfg_wf_dpi = 1;      // [window] dpi_aware: DPI awareness when borderless starts on
@@ -361,6 +362,7 @@ static void load_config(void)
     cfg_continue = ini_int("scriptpatches", "continue", 1);
     cfg_pause_quit = ini_int("scriptpatches", "pause_quit", 1);
     cfg_window_mode = ini_int("scriptpatches", "window_mode", 1);
+    cfg_medallion = ini_int("scriptpatches", "medallion", 1);
     cfg_wf_enabled = ini_int("window", "enabled", 1);
     cfg_wf_borderless = ini_int("window", "borderless", 0);
     cfg_wf_dpi = ini_int("window", "dpi_aware", 1);
@@ -5164,8 +5166,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("startup: skip_intro=%d", cfg_skip_intro);
         logf_("diagnostics: file_trace=%d load_trace=%d", cfg_file_trace, cfg_load_trace);
         logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d)", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors);
-        logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d",
-              cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode);
+        logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
+              cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",
               cfg_wf_enabled, cfg_wf_borderless, cfg_wf_dpi);
         if (cfg_preset_mode)
@@ -5198,12 +5200,13 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                 if (h) CloseHandle(h);
                 else { logf_("load-trace: TlsAlloc or CreateThread failed - load trace off"); cfg_load_trace = 0; }
             }
-            if (cfg_enabled && (cfg_book_marker || cfg_continue || cfg_pause_quit || cfg_window_mode)) {
+            if (cfg_enabled && (cfg_book_marker || cfg_continue || cfg_pause_quit || cfg_window_mode ||
+                                cfg_medallion)) {
                 wchar_t sgame[MAX_PATH], scache[MAX_PATH];
 
                 if (script_dirs(sgame, scache) &&
                     sp_hooks_start(sgame, scache, cfg_book_marker, cfg_continue, cfg_pause_quit,
-                                   cfg_window_mode, logf_)) {
+                                   cfg_window_mode, cfg_medallion, logf_)) {
                     g_scriptHooks = 1;
                 } else {
                     logf_("script patches: cannot locate the game or cache folder - off");

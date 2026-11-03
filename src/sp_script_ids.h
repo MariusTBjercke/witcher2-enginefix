@@ -16,5 +16,6 @@
 #define SP_RC_WINDOW_GRAPHICS 1011
 #define SP_RC_WINDOW_INPUT    1012
 #define SP_RC_WINDOW_TEXTS    1013
+#define SP_RC_MEDALLION_USE   1014
 
 #endif

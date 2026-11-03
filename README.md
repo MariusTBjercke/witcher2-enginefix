@@ -23,6 +23,7 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Book read markers** | Books show `Read`, `Nothing new` or `Unread` in the inventory, trade and storage lists, with a tooltip describing what reading them would still teach you. A tick marks books you have read; at merchants and in storage it also keeps the game's carried-copy meaning. `Nothing new` is text only, since the book itself is still unread. Reading a book refreshes the inventory immediately. Looted books show the read tick too; the loot window shows `(Nothing new)` after the name where applicable. In 12 languages. | on |
 | **Continue** | The main menu gets a Continue button (the game's own translated label) that loads your newest save. | on |
 | **Quit in the pause menu** | The pause menu gets the game's Quit button, with a confirmation, next to "Exit to main menu". | on |
+| **Medallion on the move** | The medallion key works at once: Geralt keeps walking, running or fighting instead of stopping for the animation, and the cooldown is 1 second instead of 2. Same pulse, sound and highlights. `[scriptpatches] medallion`. | on |
 | **Display mode in game** | Options > Graphics gets a **Display mode** row: full screen, borderless window or windowed, switched at once without a restart. Borderless fills the screen at the desktop resolution without a border or title bar, while Direct3D stays windowed, so alt-tab does not recreate the device; the process is made DPI-aware so the picture stays 1:1 on a scaled desktop. | on (borderless off) |
 
 Each DLL part can be switched off in `witcher2_enginefix.ini`; the interior maps are removed by deleting their files (see below).
@@ -91,7 +92,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[window] borderless` | 0 | 1 starts borderless (Full screen off, desktop resolution). After the first use, Options > Graphics owns the setting; it is stored in the game's User.ini |
 | `[window] enabled` | 1 | 0 turns the window patches, the live switch and the menu channel off |
 | `[window] dpi_aware` | 1 | Make the process DPI-aware when borderless starts on |
-| `[scriptpatches] book_marker`, `continue`, `pause_quit`, `window_mode` | 1, 1, 1, 1 | 0 turns that script patch off (the cache is rebuilt); `window_mode` is the Display mode and Draw distance rows |
+| `[scriptpatches] book_marker`, `continue`, `pause_quit`, `window_mode`, `medallion` | 1, 1, 1, 1, 1 | 0 turns that script patch off (the cache is rebuilt); `window_mode` is the Display mode and Draw distance rows |
 | `[osd] enabled`, `size`, `ms` | 1, 34, 2500 | On-screen readout; 34 px suits 4K, 22 px 1080p |
 | `[diagnostics] save_trace` | 0 | 1 logs the save-preview path (Steam writes, screenshot encoding) |
 | `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
