@@ -78,7 +78,8 @@ Fixes applied after that report:
 * mesh cycling moved from F9 to **F7** (`[hotkeys] cycle_mesh`);
 * an on-screen readout (topmost layered window, `[osd]`) shows the active value and the
   step index for ~2.5 s after each press, e.g. `Foliage LOD 2.0 (2/4)`;
-* the same readout confirms at startup (`LOD fix active mesh 4.0 foliage 2.0`).
+* the same readout confirmed at startup (`LOD fix active mesh 4.0 foliage 2.0`), since removed:
+  it could show before the game had a window, so startup is now in the log only.
 
 If the readout does not appear the game is presenting in true exclusive fullscreen,
 which a DWM-composited topmost window cannot cover — then the only option is W1's

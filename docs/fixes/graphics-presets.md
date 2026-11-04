@@ -87,9 +87,13 @@ retaining the startup selection. `[general] enabled=0` stops the runtime worker.
    settings initialization. A preset change updates the DLL's squared factors,
    which the same bridge code reads on each evaluation. It does not install or
    rewrite another instruction patch on every press.
-4. Before distance hooks succeed, the OSD explicitly says `LOD only`. Successful
-   installation replaces that with the ordinary preset name/position. Refused
-   installation remains fail-closed and is recorded in the runtime log.
+4. A `Ctrl+F10` press before distance hooks succeed shows `LOD only` on the OSD; after that
+   it shows the ordinary preset name/position. Refused installation remains fail-closed and is
+   recorded in the runtime log. Nothing shows at startup: the settings object and the hooks
+   can be ready before the game has a window, so the text floated over the launcher or the
+   desktop. The log has the level instead (`preset: <name> at startup`). Seen on Steam
+   2026-11-04: no text at startup, and that line in the log. `Ctrl+F10` was not re-tested; its
+   code path is unchanged.
 
 Baseline resets only these four factors to 1; it does not uninstall hooks or
 disable gameplay downscale enforcement. Presets do not change UberSampling,

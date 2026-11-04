@@ -648,8 +648,10 @@ static void apply_lod(void)
         logf_("settings object 0x%08X found: mesh=%.3f foliage=%.3f",
               (unsigned)(uintptr_t)sv.obj, sv.mesh, sv.foliage);
         g_applied = 1;
-        if (cfg_preset_mode) preset_show();
-        else osd_show("LOD fix active   mesh %.1f   foliage %.1f", cfg_mesh, cfg_foliage);
+        // Log only: at this point the game's window may not exist yet, so the OSD would float
+        // over the launcher or the desktop. The OSD is for changes the player makes.
+        if (cfg_preset_mode) logf_("preset: %s at startup", cfg_presets[g_preset].name);
+        else logf_("lod: active at startup, mesh %.1f foliage %.1f", cfg_mesh, cfg_foliage);
     }
 
     if (cfg_enforce && sane_scale(cfg_mesh) && sane_scale(cfg_foliage)) {
@@ -780,8 +782,6 @@ static void distance_tick(void)
         }
         logf_("distance: hooks installed at RVA %08X / %08X; visibility=%.2fx shadow=%.2fx",
               (unsigned)ef_range_rva, (unsigned)ef_shadow_rva, cfg_visibility, cfg_shadow_range);
-        if (cfg_preset_mode) preset_show();
-        else osd_show("Distance test ready   visibility %.1fx   shadow %.1fx", cfg_visibility, cfg_shadow_range);
         last_stats = now;
     }
     if (cfg_hotkeys) poll_distance_hotkeys();
