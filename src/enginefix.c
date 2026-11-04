@@ -138,6 +138,7 @@ static int cfg_crash_dump = 1;  // [diagnostics] crash_dump: 0 off, 1 log + mini
 static int cfg_ray_guard = 1;   // [stability] raycast_guard: a ray cast that hits freed physics misses it
 static int cfg_cpu32_guard = 1; // [stability] cpu32_guard: no endless CPU count on 32+ logical processors
 static int cfg_quit_guard = 1;  // [stability] quit_guard: FactsAdd without a world (quitting) does not crash
+static int g_proxyOnly;         // loaded by another program in bin (Configurator.exe): forward only
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
 
@@ -5222,7 +5223,7 @@ HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD ver, REFIID riid, LPVOI
     PFN_Create fn = (PFN_Create)real_proc("DirectInput8Create");
     if (!fn) return E_FAIL;
     HRESULT hr = fn(hinst, ver, riid, out, outer);
-    if (SUCCEEDED(hr) && out && *out && (cfg_suppress || cfg_winkeys)) {
+    if (!g_proxyOnly && SUCCEEDED(hr) && out && *out && (cfg_suppress || cfg_winkeys)) {
         if (patch_vtable(*out, 3, (void*)hook_CreateDevice, (void**)&g_origCreateDevice))
             logf_("input: CreateDevice hook installed");
     }
@@ -5277,13 +5278,33 @@ static int script_dirs(wchar_t* game, wchar_t* cache)
     return _snwprintf_s(game, MAX_PATH, _TRUNCATE, L"%s", bin) >= 0;
 }
 
+// Other programs in bin load this DLL too: the launcher's Configurator.exe imports dinput8.
+// There it only forwards to the system DLL, with no log (it rotated and overwrote the game's
+// log and .prev.log, so a crash log was lost when the settings were opened), no hooks and no
+// threads. The input probe (tools\inputprobe\probe.exe) keeps everything: it tests the hooks.
+static int host_is_game(void)
+{
+    wchar_t exe[MAX_PATH];
+    const wchar_t* name;
+    DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
+
+    if (!n || n >= MAX_PATH) return 1;      // unknown: behave as before
+    name = wcsrchr(exe, L'\\');
+    name = name ? name + 1 : exe;
+    return _wcsicmp(name, L"witcher2.exe") == 0 || _wcsicmp(name, L"probe.exe") == 0;
+}
+
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
-        g_mainTid = GetCurrentThreadId();   // DllMain runs on the game's main thread
         g_self = inst;
         DisableThreadLibraryCalls(inst);
+        if (!host_is_game()) {
+            g_proxyOnly = 1;
+            return TRUE;
+        }
+        g_mainTid = GetCurrentThreadId();   // DllMain runs on the game's main thread
         InitializeCriticalSection(&g_logLock);
         InitializeCriticalSection(&g_thumbLock);
         InitializeCriticalSection(&g_ftLock);

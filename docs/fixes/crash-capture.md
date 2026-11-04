@@ -38,7 +38,10 @@ directly; those do reach WER and would show up in the event log.
 ## What the DLL does
 
 - `DllMain`: renames the last log to `witcher2_enginefix.prev.log`, then installs
-  `crash_filter`. The game's initializer replaces it moments later.
+  `crash_filter`. The game's initializer replaces it moments later. Only in `witcher2.exe` (and
+  the input probe): the launcher's `bin\Configurator.exe` loads the DLL too, and until 0.9.0 it
+  rotated and rewrote both logs, so opening the settings after a crash lost the crash's log
+  (seen 2026-11-04). In any other program the DLL now only forwards to the system DLL.
 - Worker (`crash_init`, then `crash_tick` every 120 ms): loads
   `MiniDumpWriteDump` from the already loaded `dbghelp.dll`, prunes old dumps to the
   newest 5, and calls `SetUnhandledExceptionFilter(crash_filter)`. Whatever it

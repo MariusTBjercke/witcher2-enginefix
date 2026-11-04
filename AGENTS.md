@@ -69,6 +69,8 @@ never run it while the game is in the foreground. It loads `dinput8.dll` by bare
 the application directory is searched before the CWD, so run it with `probe.exe` copied into
 `<game>\bin` - from `tools\inputprobe` it silently tests the system DLL instead of the proxy.
 Its F9/F10 checks also need the console to have foreground focus; without it every key reads 0.
+The DLL only hooks inside `witcher2.exe` and `probe.exe` (`host_is_game`); in any other program,
+such as the launcher's `Configurator.exe`, it just forwards, so keep the probe's name.
 
 No CI: the build needs a local MSVC, and every behaviour test needs the game.
 
