@@ -297,3 +297,60 @@ needed: skip the preview read for a held name, cache the four header values per 
 (name + Steam timestamp + size) so unchanged saves need no `.sav` read at all.
 
 Installed ini set to `fast_list=1`, `savelist_trace=0` afterwards.
+
+## GOG 3.5.0.26g
+
+GOG saves to local files and has no storage provider, so its list differs from Steam's:
+
+- **The builder.** `VA_SAVELIST` is `005072D1`. It is `__thiscall` (ECX = panel, plain `RET`;
+  Steam is stdcall, `RET 4`). Its calls are `00507969` (startup) and `0050794A` (the
+  `RefreshSaveData` native).
+- **No preview leak.** The builder has no preview block, and nothing hands a preview to the image
+  registry. The Load menu's Flash asks for `img://<path>`. `GFxImageLoader::LoadImage`
+  (`00B5E3A8`) loads it from disk without registering it. So `fix_list_leak` is not needed on
+  GOG; the log says so, and the gate turns it off. (The registry's addresses are found,
+  `00F68BDC` / `00B5E02E` / `00B5DF9E` / `00B65B5E` / `004BDE35`, but nothing uses them on GOG.)
+- **The full unpack is the same.** Each `.sav` is opened by `00AEBEDA` (thiscall, ECX = the
+  gamesaves folder). It builds a `CDZipFileReader` in place with the constructor `00AA1DFC`:
+  - `this` in ESI and the full path String on the stack (`RET 4`; Steam's `00A4E42E` takes
+    `this` in EDI);
+  - the reader reads the file and unpacks it in full into its array at +0x20, with a
+    `CMemoryFileReader` at +0x30 (`00F1A248`) over that array.
+
+  There is no temp file and no Steam read, but the whole save is still unpacked to read four
+  header sections.
+
+**fast_list on GOG.** The constructor's one call, `00AEBF37`, goes through a stub. Inside the
+list builder, for a `.sav`, the DLL:
+1. reads the file itself and opens it as a DZIP;
+2. reserves the region (shared with Steam's path: `lazy_prepare`);
+3. builds the reader with an empty path, whose open of `L""` fails cleanly with no read, no
+   unpack and no buffer;
+4. points the stream at +0x30 at the lazy array. The fault handler and the block unpack are
+   Steam's.
+
+Nothing in the reader frees or writes through that pointer. If anything does not match, the
+reader is destroyed in place and built from the real path. Fingerprints:
+- the constructor's first 16 bytes;
+- `push eax; call` at the site;
+- the vtable's forwarders `00AA1D96` / `00AA1D86` (+0x30);
+- the memory stream's slots 1 and 3 and their code.
+
+`savelist_trace` works on GOG, with a `__fastcall` wrapper for the builder. Its Steam read
+counters stay 0 there; the `.sav` opens are timed at the constructor call.
+
+Validation:
+- `tools/savelisttest` runs the GOG path with a fake constructor: an empty reader with its stream
+  on the lazy array and bytes equal to a full unpack; a non-DZIP file gets the real path; outside
+  the list nothing changes.
+- All **118 local GOG saves** read lazily are byte-identical to a full unpack, and the header
+  reads touch 3 blocks each.
+- In game on 2026-11-04 (`docs/validation/gog-saves-2026-11-04.md`, `fast_list=2`):
+
+  | Build | Reads | Total | `.sav` part |
+  |---|---|---|---|
+  | 1 | fast | 538 ms | 53 ms |
+  | 2 | full | 1300 ms | 854 ms |
+  | 3 | fast | 484 ms | 55 ms |
+
+  Every fast read worked: 0 fallbacks, 0 bad blocks.

@@ -148,8 +148,8 @@ int main(int argc, char** argv)
     printf("GOG mapped at %08X, delta %08X\n", (unsigned)gog, (unsigned)g_delta);
     check("GOG: detected as GOG 3.5.0.26g", g_build == BUILD_GOG);
     check("GOG: import slots found by name (no SteamRemoteStorage)", slots_match(gog, k_gogSlots));
-    check("GOG: unported addresses read as 0", !ga(VA_SAVELIST) && !ga(VA_ENV_STAB_CALL) &&
-          !ga_have(VA_SPINNER_EXEC, 0));
+    check("GOG: unported addresses read as 0", !ga(VA_IMAGES_ADD) && !ga(VA_STEAM_STREAM) &&
+          !ga_have(VA_PROV_OPEN, 0));
     check("GOG: ported RVAs and the delta", ga_rva(RVA_SETTINGS) == 0x021EAEB8u &&
           ga_rva(EF_RANGE_RVA) == 0x0060C120u && ga_rva(EF_SHADOW_RVA) == 0x0060C4F6u &&
           ga_have(RVA_SETTINGS, EF_RANGE_RVA, EF_SHADOW_RVA, 0));
@@ -256,13 +256,57 @@ int main(int argc, char** argv)
               code_matches(ga(VA_UNPACK), "55 8b ec 8b 4d 08 0f b6 01 c1 e8 05") &&
               *(const unsigned char*)u == 0xE8 && u + 5 + *(const LONG*)(u + 1) == ga(VA_UNPACK));
     }
+    // Saves (phase 2): the list builder (thiscall) and its two calls; the capture flags are
+    // relocated absolutes in the save writer (low 16 bits).
     {
-        uintptr_t lc = ga(VA_LAYER_LOAD_CALL);
-        check("GOG: the per-layer load (stdcall info, ctx; RET 8) and its one call (memory guard)",
-              code_matches(lc - 14, "8d 45 d4 50 ff 75 ec 89 5d d4 c6 45 d8 01 e8 f3") &&
-              lc + 5 + *(const LONG*)(lc + 1) == ga(VA_LAYER_LOAD) &&
-              code_matches(ga(VA_LAYER_LOAD), "55 8b ec 83 ec 0c 53 8b 5d 08 56 57 33 ff c6 43") &&
-              code_matches(ga(VA_LAYER_LOAD) + 0x85, "c2 08 00"));
+        uintptr_t a = ga(VA_SAVELIST_CALL_A), b = ga(VA_SAVELIST_CALL_B);
+        const unsigned char* clr = (const unsigned char*)(gog + 0xE7480);   // 004E7480: mov [pending],bl
+        check("GOG: the save list builder (thiscall) and both calls",
+              code_matches(ga(VA_SAVELIST), "55 8b ec 81 ec 00 02 00 00 53 56 33 db 8b f1") &&
+              *(const unsigned char*)a == 0xE8 && a + 5 + *(const LONG*)(a + 1) == ga(VA_SAVELIST) &&
+              *(const unsigned char*)b == 0xE8 && b + 5 + *(const LONG*)(b + 1) == ga(VA_SAVELIST) &&
+              code_matches(a - 2, "8b cf e8"));
+        {
+            uintptr_t call = ga(VA_DZIP_READER_CALL);
+            const DWORD* vt = (const DWORD*)ga(VA_DZIP_READER_VT);
+            const DWORD* mem = (const DWORD*)ga(VA_MEM_STREAM);
+            // Slot values are relocated to the file's shared base: compare their low 16 bits and
+            // read the code at the k_gog address of the function they name.
+            check("GOG: the save reader ctor, its one call and its forwarding slots (fast_list)",
+                  code_matches(ga(VA_DZIP_READER), "55 8b ec 51 83 66 0c 00 53 57 ff 75 08 8d 4e 10") &&
+                  code_matches(call - 1, "50 e8") && call + 5 + *(const LONG*)(call + 1) == ga(VA_DZIP_READER) &&
+                  ((vt[1] - (DWORD)(gog + 0x6A1D96)) & 0xFFFF) == 0 && ((vt[3] - (DWORD)(gog + 0x6A1D86)) & 0xFFFF) == 0 &&
+                  code_matches(gog + 0x6A1D96, "55 8b ec 8b 49 30 8b 01 5d ff 60 04") &&
+                  code_matches(gog + 0x6A1D86, "8b 49 30 8b 01 ff 60 0c") &&
+                  ((mem[1] - (DWORD)ga(VA_MEM_SERIALIZE)) & 0xFFFF) == 0 && ((mem[3] - (DWORD)ga(VA_MEM_SIZE)) & 0xFFFF) == 0 &&
+                  code_matches(ga(VA_MEM_SERIALIZE), "55 8b ec 56 8b f1 8b 4e 14 8b 46 10") &&
+                  code_matches(ga(VA_MEM_SIZE), "8b 41 10 8b 40 04 c3"));
+        }
+        {
+            uintptr_t lc = ga(VA_LAYER_LOAD_CALL);
+            check("GOG: the per-layer load (stdcall info, ctx; RET 8) and its one call (memory guard)",
+                  code_matches(lc - 14, "8d 45 d4 50 ff 75 ec 89 5d d4 c6 45 d8 01 e8 f3") &&
+                  lc + 5 + *(const LONG*)(lc + 1) == ga(VA_LAYER_LOAD) &&
+                  code_matches(ga(VA_LAYER_LOAD), "55 8b ec 83 ec 0c 53 8b 5d 08 56 57 33 ff c6 43") &&
+                  code_matches(ga(VA_LAYER_LOAD) + 0x85, "c2 08 00"));
+        }
+        check("GOG: the loading spinner command's execute slot (door_spinner)",
+              ((*(const DWORD*)ga(VA_SPINNER_EXEC_SLOT) - (DWORD)ga(VA_SPINNER_EXEC)) & 0xFFFF) == 0 &&
+              code_matches(ga(VA_SPINNER_EXEC), "0f b6 41 08 50 e8 65 54 ff ff c3"));
+        {
+            uintptr_t add = ga(VA_ENV_ADD_CALL), stab = ga(VA_ENV_STAB_CALL);
+            check("GOG: the area environment add (call) and the door's Stabilize (jmp) (door_light_blend)",
+                  code_matches(add - 9, "51 8d 8e c0 01 00 00 51 50 e8 8f ff 03 00") &&
+                  add + 5 + *(const LONG*)(add + 1) == ga(VA_ENV_ADD) &&
+                  code_matches(stab - 9, "8b 40 40 8b 88 b8 02 00 00 e9 8f 97 51 00") &&
+                  stab + 5 + *(const LONG*)(stab + 1) == ga(VA_ENV_STAB) &&
+                  code_matches(ga(VA_ENV_STAB), "0f 57 c0 8b c1") && code_matches(ga(VA_ENV_STAB) + 0x56, "c3") &&
+                  code_matches(ga(VA_ENV_ADD) + 0x256, "c2 24 00"));
+        }
+        check("GOG: the save writer clears both capture flags (low 16 bits)",
+              clr[0] == 0x88 && clr[1] == 0x1D && clr[6] == 0x88 && clr[7] == 0x1D &&
+              ((*(const DWORD*)(clr + 2) - (DWORD)(ga(VA_CAPTURE_PENDING) - g_delta)) & 0xFFFF) == 0 &&
+              ((*(const DWORD*)(clr + 8) - (DWORD)(ga(VA_CAPTURE_QUEUED) - g_delta)) & 0xFFFF) == 0);
     }
     check("GOG: the game global is written after 'Initializing Game...' (00AFB1DC)",
           *(const unsigned char*)(gog + 0x6FB1DC) == 0xA3 &&
@@ -271,13 +315,13 @@ int main(int argc, char** argv)
     build_gate();
     check("GOG: LOD, presets, hotkeys and distance stay on", cfg_enforce && cfg_enforce_down &&
           cfg_preset_mode && cfg_hotkeys && cfg_distance);
-    check("GOG: save features off", !cfg_save_thumbs && !cfg_save_trace && !cfg_list_leak &&
-          !cfg_fast_list && !cfg_savelist_trace);
+    check("GOG: preview fix, fast_list, save_trace and savelist_trace on; fix_list_leak not needed",
+          cfg_save_thumbs && cfg_fast_list && cfg_save_trace && cfg_savelist_trace && !cfg_list_leak);
     check("GOG: doors and interiors stay on", cfg_keep_outdoors && cfg_keep_interiors &&
           cfg_preload_interiors && cfg_skip_door_gc && cfg_indoor_outdoors && cfg_fast_doors &&
           cfg_instant_doors && cfg_door_fade == 0.05f && cfg_area_fade == 0.25f);
-    check("GOG: door_light_blend and the hidden spinner off (not ported)",
-          cfg_door_light_blend == 0.0f && cfg_door_spinner == 1);
+    check("GOG: door_light_blend and the hidden spinner on",
+          cfg_door_light_blend == 1.0f && cfg_door_spinner == 0);
     check("GOG: window, window_mode rows, Windows keys stay on", cfg_wf_enabled && cfg_window_mode && cfg_winkeys);
     check("GOG: load_trace stays on", cfg_load_trace);
     check("GOG: skip_intro, raycast and quit guards stay on", cfg_skip_intro && cfg_ray_guard && cfg_quit_guard);
@@ -319,6 +363,50 @@ int main(int argc, char** argv)
         WaitForSingleObject(th, 5000);
         CloseHandle(th);
         check("exit: exit_logf waits at most ~250 ms for a held log lock", dt >= 240 && dt < 1000);
+    }
+
+    // GOG previews: a .sav opened for writing with no preview of its own gets the late capture
+    // next to it; one whose preview the game wrote itself gets nothing.
+    {
+        wchar_t dir[MAX_PATH], sav[MAX_PATH], bmp[MAX_PATH], sav2[MAX_PATH], bmp2[MAX_PATH];
+        static const unsigned char fake[54] = { 'B', 'M' };
+        unsigned char got[64];
+        DWORD n = 0;
+        HANDLE f;
+        int wrote, skipped;
+        g_build = BUILD_GOG;
+        cfg_save_thumbs = 1;
+        InitializeCriticalSection(&g_thumbLock);
+        GetTempPathW(MAX_PATH, dir);
+        swprintf_s(sav, MAX_PATH, L"%sw2ef_probe_%lu_ManualSave_0001.sav", dir, GetCurrentProcessId());
+        thumb_name_w(sav, bmp, MAX_PATH);
+        DeleteFileW(bmp);
+        thumb_note_open_w(sav);
+        thumb_capture(fake, sizeof fake);
+        thumb_tick_local();
+        f = CreateFileW(bmp, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        wrote = f != INVALID_HANDLE_VALUE && ReadFile(f, got, sizeof got, &n, NULL) && n == sizeof fake &&
+                !memcmp(got, fake, sizeof fake);
+        if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+        DeleteFileW(bmp);
+        swprintf_s(sav2, MAX_PATH, L"%sw2ef_probe_%lu_QuickSave.sav", dir, GetCurrentProcessId());
+        thumb_name_w(sav2, bmp2, MAX_PATH);
+        DeleteFileW(bmp2);
+        thumb_note_open_w(bmp2);   // the game wrote its own preview first
+        thumb_note_open_w(sav2);
+        thumb_capture(fake, sizeof fake);
+        thumb_tick_local();
+        skipped = GetFileAttributesW(bmp2) == INVALID_FILE_ATTRIBUTES && !g_saveNameW[0];
+        check("thumbnail (GOG): the late capture is written next to the .sav", wrote);
+        check("thumbnail (GOG): nothing is written when the game wrote its own preview", skipped);
+        // A second QuickSave right after, this time without a preview of its own: the first one's
+        // preview must not pair with it again.
+        thumb_note_open_w(sav2);
+        thumb_capture(fake, sizeof fake);
+        thumb_tick_local();
+        check("thumbnail (GOG): a second QuickSave gets its own late preview",
+              GetFileAttributesW(bmp2) != INVALID_FILE_ATTRIBUTES);
+        DeleteFileW(bmp2);
     }
 
     // Unknown: this probe itself

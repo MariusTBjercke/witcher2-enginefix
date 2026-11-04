@@ -26,8 +26,9 @@ one area at a time.
   build stays off (see below).
 * **ASLR.** The GOG exe can load anywhere, so every address gets the real base added. 0.10.0
   does that for all of them (`ga()`).
-* **Saves.** The thumbnail fix and the fast save list go through `ISteamRemoteStorage`. GOG
-  saves differently, so those two need their own work.
+* **Saves.** On Steam the thumbnail fix and the fast save list go through
+  `ISteamRemoteStorage`. GOG has no storage provider and saves to local files, so both have
+  their own GOG path (`save-previews.md` and `save-bloat.md`, "GOG").
 * **Script patches, maps, icons.** These are data. The script patches need only the file hooks,
   which 0.10.0 finds by import name. The map files are built from `pack0.dzip`, and GOG's has
   the same `globals\map_scales.csv` and the same 127 textures under `globals\gui\maps` as
@@ -117,7 +118,8 @@ only hook file APIs; `build\sptest.exe test --game "<gog>"` passes), the F9/F10 
 not re-checked), crash capture and the interior map files. Ported since (below): LOD, the presets
 with Ctrl+F10 and the distance hooks; then `quit_guard` (and with it `pause_quit`),
 `raycast_guard`, `skip_intro`, the window patches with the Options rows (`window_mode`) and the
-Windows keys; then the doors and interiors (`[loading]`) and `load_trace`.
+Windows keys; then the doors and interiors (`[loading]`) and `load_trace`; then the saves:
+`fix_thumbnails`, `fast_list` and `savelist_trace` (`fix_list_leak` is not needed there).
 
 ## Ported addresses
 
@@ -154,6 +156,14 @@ Windows keys; then the doors and interiors (`[loading]`) and `load_trace`.
 | `VA_INDOOR_CMP` / `_IMM` | `00A11286` / `00A11295` | in the frame setup `00A11181` (the same 160 instructions); the same 18 bytes, once in `.text` |
 | `VA_RENDER_THREAD` | `0167DE94` | `CRenderThread` RTTI, its loop (slot 1, `00A23145`) stores itself there; +0x268/+0x26C as on Steam |
 | `VA_UNPACK` / `VA_UNPACK_CALL` | `007614F0` / `007618C7` | the FastLZ decompressor, byte-identical; its call in the dzip block reader `00761870` |
+| `VA_LAYER_LOAD` / `_CALL` `00A5AC6C` / `00A91709` | `00AAE95E` / `00AE5D66` | the per-layer load and its one call in the bucket loader `00AE5C5A` ("Loading layer '%s'..."); **stdcall (info, ctx), `RET 8`** (Steam: info in EDI, `RET 4`); the memory guard (`door-transitions.md`) |
+| `VA_SPINNER_EXEC` / `_SLOT` `009DC3F1` / `00E7C088` | `00A2D9F9` / `00F1F0C0` | `CRenderCommand_ToggleLoadingIndicator` RTTI, vtable `00F1F0B4` slot 3; show byte +0x08; the same bytes apart from the rel32; created by the same door task (ctor, `fade_out` event, dtor) and partition job (build, end) |
+| `VA_ENV_ADD` / `_CALL` `00A75014` / `00A367CB` | `00AC9EED` / `00A89F59` | the area environment activation (stdcall, 9 arguments, `RET 0x24`, the same body and argument order) and its one call, in the component's activate `00A89ED3` (`__thiscall` on GOG; Steam ESI) |
+| `VA_ENV_STAB` / `_CALL` `00A74FBF` / `0095DC5E` | `00AC8CDF` / `005AF54B` | Stabilize, **`__thiscall`** (ECX = the manager; Steam EAX), plain `RET`; on GOG the door finish `005AF51F` reaches it with a **tail `JMP`** at `005AF54B`, so the hook keeps the `E9` (`patch_rel32`); the 8 Stabilize sites map one to one, and the door's is the only `JMP` |
+| `VA_CAPTURE_PENDING` / `_QUEUED` | `01169160` / `01169161` | cleared by the save writer `004E721B` (`88 1D` + address, relocated); never read on GOG (`save-previews.md`, "GOG") |
+| `VA_SAVELIST` / `_CALL_A` / `_CALL_B` | `005072D1` / `00507969` / `0050794A` | the only code with `L"*.TheWitcherSave"`; **`__thiscall`, ECX = panel, plain `RET`**; its calls from the startup and the `RefreshSaveData` native (`save-bloat.md`, "GOG") |
+| `VA_MEM_STREAM` / `_SERIALIZE` / `_SIZE` | `00F1A248` / `00B138EA` / `00B138E3` | `CMemoryFileReader` RTTI, slots 1 and 3, the same code |
+| `VA_DZIP_READER` / `_CALL` / `_VT` `00A4E42E` / `00A980BC` / `00E8BA80` | `00AA1DFC` / `00AEBF37` / `00F2E990` | the `CDZipFileReader` constructor (**this in ESI**, Steam EDI), its one call in the save open `00AEBEDA`, its vtable; GOG's `fast_list` hooks this call |
 
 The world, job, layer group, layer info and partition node offsets the door code reads are all
 the same on GOG (`world+0x30C/+0x310/+0x50/+0x358`, `game+0xE4/+0xE8`, job `+0x0C..+0x2C`,
@@ -227,25 +237,50 @@ non-zero delta, and which switches the gate turns off on each build.
    which survive the 64 KB load steps. Bytes that differ per build go through `by_build()`.
 4. Re-check struct offsets the feature reads, and the calling convention: the builds were
    compiled apart, and a function can keep its bytes and still take `this` in another register
-   (the config writer, the skip-intro builder and stop, the partition request and the CName
-   lookup are `__thiscall` on GOG; the partition run takes its job in EDI). A float can be
+   (the config writer, the skip-intro builder and stop, the partition request, the CName
+   lookup, the save list builder and Stabilize are `__thiscall` on GOG; the partition run takes
+   its job in EDI, the save reader its `this` in ESI). A call can also become a tail `JMP`
+   (the door's Stabilize), which needs the opcode kept when it is redirected. A float can be
    loaded by another instruction too (the door fades: `fld` on GOG, `movss` on Steam). The
    first bytes usually tell the conventions apart, so check them per build before calling.
 5. When a feature group has all its addresses, `build_gate` lets it run; test it in game on GOG.
 
 ## Still to do
 
-* The door's last step differs on GOG: `005AF51F` (Steam `0095DB81`) does not walk the area
-  environments and ends in a jump to what is probably Stabilize (`00AC8CDF`). Anything that hooks
-  that step on Steam has no one-to-one site on GOG and needs its own research.
-* Saves: the thumbnail fix and the fast save list go through `ISteamRemoteStorage`; GOG has its
-  own save path, which needs its own research.
+Every feature of 0.10.0 now has its GOG addresses. The 11 addresses without a GOG value
+(`docs/addresses.md`) are Steam's storage provider and the image registry the Steam save list
+uses. GOG has neither in that path.
+
+Not yet seen in game on GOG:
+- the preview fix's late write (the game won the race on every save so far);
+- the memory guard skipping a layer.
+
+Seen on GOG on 2026-11-04 (native D3D9, 4K):
+- `door_light_blend` and the hidden spinner at the houses and the inn;
+- a door left to the game for memory (930 MB free at the inn's harbour door). That run is where
+  such a door was found to need the game's own timing (`door-transitions.md`, "Memory").
 
 ## `interiors=2` crash
 
-Not seen with 0.10.0 yet. LAA is ruled out: the GOG exe has the flag, so preloading interiors has
-the same 4 GB as on Steam. A likely cause in a port that only moves the Steam addresses: two of
-the functions the interiors call changed convention on GOG. The partition run takes its job in
-EDI (a stdcall hook passes it on the stack, so the game runs a job from whatever EDI holds), and
-the partition request is `__thiscall` (a call with the game in EAX leaves ECX undefined). The
-player's log and crash dump would tell.
+Not seen with 0.10.0 yet. The GOG exe has the LAA flag, so preloading interiors has the same
+4 GB address space as on Steam. There are two likely causes:
+
+- **Running out of memory with native Direct3D 9.** Most GOG players run without DXVK. Native D3D9
+  keeps its managed textures inside the 32-bit process. On the owner's Steam install, with DXVK
+  turned off, at 4K and the extreme preset (2026-11-04, 15:18):
+  - loading a save made inside the inn with the interiors and the street preloaded left 2807 MB
+    private, with 572 MB the largest free block;
+  - two seconds later the game read through a NULL that its allocator had returned, at 3405 MB.
+    The minidump could not be written (`0x80070008`).
+
+  The same save took 1072 MB at the menu with DXVK and 1738 MB without it. The memory guard
+  (`[loading] preload_memory_mb`, `door_memory_mb`; `door-transitions.md`, "Memory") holds the
+  preload to the free address space, also on GOG. Even so, at 4K with native D3D9 the inn load ran
+  out with nothing preloaded, so DXVK is the advice there.
+- **Calling the GOG functions with Steam's conventions.** This applies to a port that only moves
+  the Steam addresses. Two of the functions the interiors call changed convention on GOG:
+  - The partition run takes its job in EDI. A stdcall hook passes the job on the stack, so the
+    game runs a job from whatever EDI holds.
+  - The partition request is `__thiscall`. A call with the game in EAX leaves ECX undefined.
+
+The player's log and crash dump would tell which.

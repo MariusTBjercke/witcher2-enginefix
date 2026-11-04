@@ -16,6 +16,8 @@ static unsigned char img[921656];
 int main(void)
 {
     InitializeCriticalSection(&g_thumbLock);
+    InitializeCriticalSection(&g_logLock);   // logf_ holds it since 0.4.x
+    g_build = BUILD_STEAM;                   // thumb_tick takes the GOG path only on GOG
     g_log = stdout; cfg_log = 1; cfg_save_thumbs = 1;
     g_remoteStorage = (void*)0x1234; g_origFileWrite = fake_write;
 
@@ -45,6 +47,14 @@ int main(void)
     w_calls = 0; thumb_note_write("ManualSave_0015_640x360.bmp"); thumb_note_write("ManualSave_0016.sav");
     thumb_capture(img, sizeof img); thumb_tick();
     expect("BMP of another save does not satisfy .sav", w_calls == 1 && !strcmp(w_name, "ManualSave_0016_640x360.bmp"));
+
+    // Two QuickSaves: the first with its own preview, the second without. The first preview pairs
+    // with the first save only, so the second gets the late capture.
+    w_calls = 0;
+    thumb_note_write("QuickSave_640x360.bmp"); thumb_note_write("QuickSave.sav"); thumb_tick();
+    thumb_note_write("QuickSave.sav"); thumb_capture(img, sizeof img); thumb_tick();
+    expect("second QuickSave without its own preview gets the capture",
+           w_calls == 1 && !strcmp(w_name, "QuickSave_640x360.bmp"));
 
     // stale marks for the menu registry: our late writes and the game's own BMP writes
     memset(g_stale, 0, sizeof g_stale);

@@ -46,6 +46,50 @@ static int map_game_range(void)
     return VirtualProtect((void*)lo, hi - lo, PAGE_EXECUTE_READWRITE, &old) != 0;
 }
 
+// GOG's CDZipFileReader ctor (00AA1DFC: ESI = this, one stack argument, RET 4), faked: the
+// reader layout the hook expects, an empty reader for an empty path, and for a real path the
+// "full unpack" (here: only noted, the array stays empty).
+static void* g_fakeInner[8];
+static int g_fakeCtorCalls, g_fakeCtorEmpty;
+static void __stdcall fake_ctor_c(void** self, void* path)
+{
+    const wchar_t* t = *(const wchar_t* const*)path;
+    g_fakeCtorCalls++;
+    memset(self, 0, 0x34);
+    self[0] = (void*)(uintptr_t)VA_DZIP_READER_VT;
+    memset(g_fakeInner, 0, sizeof g_fakeInner);
+    g_fakeInner[0] = (void*)(uintptr_t)VA_MEM_STREAM;
+    g_fakeInner[0x10 / 4] = &self[0x20 / 4];
+    self[0x30 / 4] = g_fakeInner;
+    if (!t || !t[0]) g_fakeCtorEmpty++;
+}
+
+__declspec(naked) static void fake_ctor(void)
+{
+    __asm {
+        push dword ptr [esp + 4]
+        push esi
+        call fake_ctor_c
+        mov eax, esi
+        ret 4
+    }
+}
+
+// The game's call site: ESI = the block, the path String pushed.
+static void* call_reader_hook(void* self, void* path)
+{
+    void* r;
+    __asm {
+        push esi
+        mov esi, self
+        push path
+        call dzip_reader_hook_gog
+        pop esi
+        mov r, eax
+    }
+    return r;
+}
+
 static int add_calls;
 static void __fastcall fake_add(void* self, void* edx, void* name, void* stream)
 {
@@ -218,6 +262,45 @@ int main(int argc, char** argv)
         outer[0x10 / 4] = junk.p; outer[0x14 / 4] = (void*)(uintptr_t)junk.n; outer[0x20 / 4] = inner;
         inner[0x10 / 4] = &outer[0x10 / 4];
         expect("lazy: non-DZIP data refused, stream untouched", !lazy_attach(outer) && inner[0x10 / 4] == &outer[0x10 / 4]);
+        // GOG: the reader ctor's call (00AEBF37) with the fake ctor in place of 00AA1DFC.
+        {
+            static void* block[13];   // the 0x34-byte reader the caller allocated
+            wchar_t dir[MAX_PATH], path[MAX_PATH], path2[MAX_PATH];
+            DWORD str[4] = { 0 }, str2[4] = { 0 };
+            sp_buf full = { 0 };
+            void* r;
+            int calls;
+            GetTempPathW(MAX_PATH, dir);
+            swprintf_s(path, MAX_PATH, L"%sw2ef_lazy_%lu.sav", dir, GetCurrentProcessId());
+            swprintf_s(path2, MAX_PATH, L"%sw2ef_junk_%lu.sav", dir, GetCurrentProcessId());
+            str[0] = (DWORD)(uintptr_t)path; str[1] = (DWORD)wcslen(path) + 1;
+            str2[0] = (DWORD)(uintptr_t)path2; str2[1] = (DWORD)wcslen(path2) + 1;
+            expect("lazy (GOG): test files written", sp_write_file_atomic(path, &out) && sp_write_file_atomic(path2, &junk));
+            expect("lazy (GOG): full unpack for comparison", sp_dzip_open(&out, &z) && sp_dzip_extract(&z, 0, &full));
+            sp_dzip_close(&z);
+            g_dzipReader = (uintptr_t)fake_ctor;
+            g_listDepth = 1; g_fastBuild = 1;
+            g_lazyOpens = g_lazyFallbacks = 0;
+            r = call_reader_hook(block, str);
+            expect("lazy (GOG): empty reader, its stream on the lazy array",
+                   r == block && g_fakeCtorEmpty == 1 && g_fakeInner[0x10 / 4] == (void*)g_lazy.arr &&
+                   g_lazyOpens == 1 && (size_t)g_lazy.arr[1] == full.n);
+            expect("lazy (GOG): what the reader sees equals a full unpack",
+                   full.p && !memcmp(g_lazy.arr[0], full.p, full.n) && g_lazy.bad == 0);
+            lazy_release();
+            calls = g_fakeCtorCalls;
+            r = call_reader_hook(block, str2);
+            expect("lazy (GOG): non-DZIP file gets the real path, no region",
+                   r == block && g_fakeCtorCalls == calls + 1 && g_fakeCtorEmpty == 1 &&
+                   g_lazyFallbacks == 1 && !g_lazy.region && g_fakeInner[0x10 / 4] == &block[0x20 / 4]);
+            g_listDepth = 0;
+            r = call_reader_hook(block, str);
+            expect("lazy (GOG): outside the list builder the ctor runs as before",
+                   r == block && g_fakeCtorCalls == calls + 2 && g_fakeCtorEmpty == 1 && !g_lazy.region);
+            g_fastBuild = 0;
+            DeleteFileW(path); DeleteFileW(path2);
+            sp_free(&full);
+        }
         sp_free(&out);
         if (argc > 1) expect("lazy: every real save equal to a full unpack", lazy_saves(argv[1]) == 0);
     }

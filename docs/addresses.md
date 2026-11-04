@@ -16,8 +16,8 @@ running exe's import directory.
 | `EF_RANGE_RVA` | `005BB09F` | `0060C120` |  |
 | `EF_SHADOW_RVA` | `005BB465` | `0060C4F6` |  |
 | `RVA_SETTINGS` | `02180E28` | `021EAEB8` | 0x02580E28 - IMAGE_BASE |
-| `VA_CAPTURE_PENDING` | `0160D0ED` |  |  |
-| `VA_CAPTURE_QUEUED` | `0160D0EE` |  |  |
+| `VA_CAPTURE_PENDING` | `0160D0ED` | `01169160` |  |
+| `VA_CAPTURE_QUEUED` | `0160D0EE` | `01169161` |  |
 | `VA_CNAME_FROM_STR` | `00B28D76` | `00B5E7AC` | __stdcall (DWORD* out, const wchar_t*), RET 8; __thiscall on GOG |
 | `VA_DOOR_FADE_EVENT` | `00502B5F` | `005B0276` | slot 2: thiscall (event, unused), RET 8 |
 | `VA_DOOR_FADE_IN` | `00502BD9` | `005B02ED` | movss xmm0,[00E30444] in 00502B5F (GOG: fld) |
@@ -29,11 +29,14 @@ running exe's import directory.
 | `VA_DOOR_TELEPORT_VT` | `00EF0410` | `00D7A318` | type 1 task: +0x14 state (1 = switch queued) |
 | `VA_DOOR_TIMER` | `0095DB00` | `005AF658` |  |
 | `VA_DOOR_TIMER_SLOT` | `00EF01BC` | `00D7A4CC` | streaming door OnTimer |
+| `VA_DZIP_READER` | `00A4E42E` | `00AA1DFC` | CDZipFileReader ctor, (String* path), RET 4; this in EDI (ESI on GOG) |
+| `VA_DZIP_READER_CALL` | `00A980BC` | `00AEBF37` | its call in the save open 00A9805B (GOG 00AEBEDA, after push eax) |
+| `VA_DZIP_READER_VT` | `00E8BA80` | `00F2E990` | its vtable: slots 1-4 forward to the memory stream at +0x30 |
 | `VA_EMPTY_STRING` | `0160FBA0` | `01680110` | the game's empty String, its usual loading-screen argument |
-| `VA_ENV_ADD` | `00A75014` |  |  |
-| `VA_ENV_ADD_CALL` | `00A367CB` |  | call FUN_00a75014 in FUN_00a36748, its only caller |
-| `VA_ENV_STAB` | `00A74FBF` |  |  |
-| `VA_ENV_STAB_CALL` | `0095DC5E` |  | call FUN_00a74fbf in FUN_0095db81 (door re-evaluation) |
+| `VA_ENV_ADD` | `00A75014` | `00AC9EED` |  |
+| `VA_ENV_ADD_CALL` | `00A367CB` | `00A89F59` | call FUN_00a75014 in FUN_00a36748, its only caller |
+| `VA_ENV_STAB` | `00A74FBF` | `00AC8CDF` |  |
+| `VA_ENV_STAB_CALL` | `0095DC5E` | `005AF54B` | call FUN_00a74fbf in FUN_0095db81 (door re-evaluation) |
 | `VA_FACTS_TIME` | `0099871E` | `0050B0A9` | mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game |
 | `VA_FADE_IN_EXEC` | `009DC2C3` | `00A2D789` |  |
 | `VA_FADE_IN_EXEC_SLOT` | `00E7C394` | `00F1F3CC` |  |
@@ -50,9 +53,9 @@ running exe's import directory.
 | `VA_LAYER_LOAD` | `00A5AC6C` | `00AAE95E` |  |
 | `VA_LAYER_LOAD_CALL` | `00A91709` | `00AE5D66` | call FUN_00a5ac6c in FUN_00a91600, its only caller |
 | `VA_MAP_FIND` | `004A4A03` |  | bool Find(EAX = map, key*, out*), ret 8 |
-| `VA_MEM_SERIALIZE` | `00ABF380` |  | its slot 1 |
-| `VA_MEM_SIZE` | `00ABF379` |  | its slot 3 |
-| `VA_MEM_STREAM` | `00E77440` |  | memory stream vtable: [+0x10] array* {data,size}, [+0x14] pos |
+| `VA_MEM_SERIALIZE` | `00ABF380` | `00B138EA` | its slot 1 |
+| `VA_MEM_SIZE` | `00ABF379` | `00B138E3` | its slot 3 |
+| `VA_MEM_STREAM` | `00E77440` | `00F1A248` | memory stream vtable: [+0x10] array* {data,size}, [+0x14] pos |
 | `VA_PART_GC_CALL` | `00A91AD7` | `00AE614D` | call FUN_00abd770 (GC) in FUN_00a91952 |
 | `VA_PART_REQUEST` | `00AA7E18` | `00AFCFA6` | EAX = game; stdcall (String* name, mode, String* screen), RET 0xC; ECX on GOG |
 | `VA_PART_RUN` | `00A91952` | `00AE5FCA` | stdcall (job), RET 4; job in EDI on GOG |
@@ -67,11 +70,11 @@ running exe's import directory.
 | `VA_RAY_HIT` | `0084C750` | `0091F110` |  |
 | `VA_RAY_SLOT` | `00D41A38` | `00E08740` |  |
 | `VA_RENDER_THREAD` | `0160D0A4` | `0167DE94` | render thread object while its loop runs |
-| `VA_SAVELIST` | `009A49B9` |  | stdcall void BuildSaveList(panel) |
-| `VA_SAVELIST_CALL_A` | `009A5175` |  | E8 rel32, startup / main menu |
-| `VA_SAVELIST_CALL_B` | `009A524F` |  | E8 rel32, GUI request |
-| `VA_SPINNER_EXEC` | `009DC3F1` |  |  |
-| `VA_SPINNER_EXEC_SLOT` | `00E7C088` |  | loading spinner command vtable 00E7C07C, slot 3 |
+| `VA_SAVELIST` | `009A49B9` | `005072D1` | stdcall void BuildSaveList(panel) |
+| `VA_SAVELIST_CALL_A` | `009A5175` | `00507969` | E8 rel32, startup / main menu |
+| `VA_SAVELIST_CALL_B` | `009A524F` | `0050794A` | E8 rel32, GUI request |
+| `VA_SPINNER_EXEC` | `009DC3F1` | `00A2D9F9` |  |
+| `VA_SPINNER_EXEC_SLOT` | `00E7C088` | `00F1F0C0` | loading spinner command vtable 00E7C07C, slot 3 |
 | `VA_STARTVIDEO_CALL` | `009B588F` | `00509EF7` | E8 rel32 in 009B581C (after mov eax,esi) |
 | `VA_STARTVIDEO_LIST` | `009A2190` | `00509DF5` | builds the startup list, EAX = player object |
 | `VA_STARTVIDEO_STOP` | `009A1F2E` | `00509D26` | ends the current movie, ESI = player |

@@ -66,6 +66,8 @@ static uintptr_t g_base;    // where witcher2.exe is loaded
 static uintptr_t g_delta;   // g_base - IMAGE_BASE: 0 on Steam, the ASLR shift on GOG
 static uintptr_t ga(uintptr_t steam_va);
 static uintptr_t ga_rva(uintptr_t steam_rva);
+static const char* build_name(void);
+static int patch_call(uintptr_t at, uintptr_t target, void* hook);
 
 static HINSTANCE g_self;
 static FILE*     g_log;
@@ -1101,6 +1103,7 @@ static void thumb_note_write(const char* name)
         // 009B7149 writes the BMP before the .sav writer closes; if it did, we are done.
         if (!_stricmp(bmp, g_lastBmp) && now - g_lastBmpTick < THUMB_WINDOW) {
             g_saveName[0] = 0;
+            g_lastBmp[0] = 0;   // one preview, one save: a second QuickSave must not reuse it
             free(g_thumbData); g_thumbData = NULL; g_thumbSize = 0;
         } else {
             lstrcpynA(g_saveName, name, sizeof g_saveName);
@@ -1108,6 +1111,60 @@ static void thumb_note_write(const char* name)
         }
     }
     LeaveCriticalSection(&g_thumbLock);
+}
+
+// GOG has no storage provider (CGame+0x230 is never set; no ICloudStorage at all): the save
+// manager writes <Documents>\Witcher 2\gamesaves\<name>.sav and, when its capture buffer is
+// filled, <name>_640x360.bmp as local files. The race is the same as on Steam (save tick
+// 004EB955: capture queue 004E64CB, then the save writer 004E721B, whose BMP step 004E6DF6
+// writes only when the size at +0x40 is set), and so is the order: the BMP, then the .sav when
+// its writer is released (004E74BB, DeleteFileW and a CreateFileW for writing). So
+// hook_CreateFileW reports every successful open for writing, with the full path, and the late
+// capture is written next to the .sav. See docs/fixes/save-previews.md, "GOG".
+static wchar_t g_saveNameW[MAX_PATH];   // .sav (full path) still waiting for its BMP
+static wchar_t g_lastBmpW[MAX_PATH];    // last preview the game wrote itself
+
+static int ends_with_w(const wchar_t* s, const wchar_t* tail)
+{
+    size_t n = wcslen(s), t = wcslen(tail);
+    return n >= t && _wcsicmp(s + n - t, tail) == 0;
+}
+
+// "...\ManualSave_0010.sav" -> "...\ManualSave_0010_640x360.bmp"
+static int thumb_name_w(const wchar_t* sav, wchar_t* out, size_t cap)
+{
+    size_t n = wcslen(sav);
+    if (n < 5 || n - 4 + 13 >= cap) return 0;
+    wmemcpy(out, sav, n - 4);
+    swprintf_s(out + n - 4, cap - (n - 4), L"_%dx%d.bmp", THUMB_W, THUMB_H);
+    return 1;
+}
+
+static void thumb_note_open_w(const wchar_t* path)
+{
+    wchar_t bmp[MAX_PATH];
+    DWORD now = GetTickCount();
+    int sav = 0, own = 0;
+    if (!path || wcslen(path) >= MAX_PATH) return;
+    EnterCriticalSection(&g_thumbLock);
+    if (ends_with_w(path, L"_640x360.bmp")) {
+        lstrcpynW(g_lastBmpW, path, MAX_PATH);
+        g_lastBmpTick = now;
+    } else if (ends_with_w(path, L".sav") && thumb_name_w(path, bmp, MAX_PATH)) {
+        sav = 1;
+        if (!_wcsicmp(bmp, g_lastBmpW) && now - g_lastBmpTick < THUMB_WINDOW) {
+            own = 1;
+            g_saveNameW[0] = 0;
+            g_lastBmpW[0] = 0;   // one preview, one save: a second QuickSave must not reuse it
+            free(g_thumbData); g_thumbData = NULL; g_thumbSize = 0;
+        } else {
+            lstrcpynW(g_saveNameW, path, MAX_PATH);
+            g_saveTick = now;
+        }
+    }
+    LeaveCriticalSection(&g_thumbLock);
+    if (sav && cfg_save_trace)
+        logf_("thumbnail: %ls - %s", path, own ? "the game wrote its preview" : "no preview yet, waiting for the capture");
 }
 
 // hook_CreateFileW sits in the file trace section below: save_trace and file_trace
@@ -1195,13 +1252,54 @@ static unsigned char __fastcall hook_FileWrite(void* self, void* edx, const char
     return ok;
 }
 
+// GOG: the same pairing, and the BMP goes next to the .sav with plain file calls (the DLL's
+// own CreateFileW import, so the game's hook chain is not involved).
+static void thumb_tick_local(void)
+{
+    wchar_t sav[MAX_PATH], bmp[MAX_PATH];
+    unsigned char* data = NULL;
+    DWORD size = 0, now = GetTickCount(), wrote = 0;
+    HANDLE f;
+    BOOL ok = FALSE;
+    EnterCriticalSection(&g_thumbLock);
+    if (g_saveNameW[0]) {
+        LONG age = (LONG)(g_thumbTick - g_saveTick);
+        if (g_thumbData && age < -2000) {   // left over from before this save
+            free(g_thumbData); g_thumbData = NULL; g_thumbSize = 0;
+        }
+        if (g_thumbData && age < THUMB_WINDOW) {
+            lstrcpynW(sav, g_saveNameW, MAX_PATH);
+            data = g_thumbData; size = g_thumbSize;
+            g_thumbData = NULL; g_thumbSize = 0;
+            g_saveNameW[0] = 0;
+        } else if (now - g_saveTick >= THUMB_WINDOW) {
+            logf_("thumbnail: no capture arrived for %ls", g_saveNameW);
+            g_saveNameW[0] = 0;
+        }
+    }
+    LeaveCriticalSection(&g_thumbLock);
+    if (!data) return;
+    if (thumb_name_w(sav, bmp, MAX_PATH)) {
+        f = CreateFileW(bmp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (f != INVALID_HANDLE_VALUE) {
+            ok = WriteFile(f, data, size, &wrote, NULL) && wrote == size;
+            CloseHandle(f);
+            if (!ok) DeleteFileW(bmp);   // no half preview
+        }
+        logf_("thumbnail: wrote %ls (%lu bytes) -> %d", bmp, size, ok);
+    }
+    free(data);
+}
+
 // Worker thread: pair a .sav that got no BMP with the capture that finished after it.
 static void thumb_tick(void)
 {
     char sav[MAX_PATH], bmp[MAX_PATH];
     unsigned char* data = NULL;
     DWORD size = 0, now = GetTickCount();
-    if (!cfg_save_thumbs || !g_origFileWrite || !g_remoteStorage) return;
+    if (!cfg_save_thumbs) return;
+    if (g_build == BUILD_GOG) { thumb_tick_local(); return; }
+    if (!g_origFileWrite || !g_remoteStorage) return;
     EnterCriticalSection(&g_thumbLock);
     if (g_saveName[0]) {
         // The capture must belong to this save: finished at most 2 s before the .sav
@@ -1247,6 +1345,7 @@ static void thumb_tick(void)
 // Shape from 0052AEB6..AECA: ECX = interface, three pushes, callee cleans.
 typedef int (__fastcall *FileRead_t)(void* self, void* edx, const char* name, void* data, int size);
 typedef void (__stdcall *SaveList_t)(void* panel);
+typedef void (__fastcall *SaveListGog_t)(void* panel, void* edx);   // GOG 005072D1: ECX = panel, plain RET
 
 static FileRead_t g_origFileRead;
 
@@ -1282,6 +1381,12 @@ static int __fastcall hook_FileRead(void* self, void* edx, const char* name, voi
 #define VA_MEM_SERIALIZE   0x00ABF380u   // its slot 1
 #define VA_MEM_SIZE        0x00ABF379u   // its slot 3
 #define VA_PROV_FORWARD    0x0052AF96u   // provider stream slot 1: forwards to the inner stream (+0x20)
+// GOG has no storage provider: the save open 00AEBEDA builds the reader in place with the
+// CDZipFileReader constructor (see "fast save list reads on GOG" below). Steam's own is used
+// only by its provider stream, so these three are GOG's.
+#define VA_DZIP_READER      0x00A4E42Eu   // CDZipFileReader ctor, (String* path), RET 4; this in EDI (ESI on GOG)
+#define VA_DZIP_READER_CALL 0x00A980BCu   // its call in the save open 00A9805B (GOG 00AEBEDA, after push eax)
+#define VA_DZIP_READER_VT   0x00E8BA80u   // its vtable: slots 1-4 forward to the memory stream at +0x30
 #define LAZY_BLOCK         0x10000u
 #define LAZY_MAX           (256u << 20)
 
@@ -1293,7 +1398,8 @@ static struct {
     unsigned char* region;          // MEM_RESERVE only until a page is read
     size_t         reserved;
     void*          arr[2];          // what the memory stream reads: {data, size}
-    sp_dzip        z;               // borrows the provider stream's compressed buffer
+    sp_dzip        z;               // borrows the compressed bytes: the provider stream's, or own
+    sp_buf         own;             // GOG: the .sav read by the DLL, freed with the region
     LONG           blocks, bad;     // pages unpacked, short or failed blocks
 } g_lazy;
 static LONG     g_lazyOpens, g_lazyFallbacks, g_lazyBlocks, g_lazyBlocksAll, g_lazyBad;
@@ -1308,6 +1414,7 @@ static void lazy_release(void)
     g_lazy.arr[1] = 0;              // a stream that outlived its reader now reads nothing
     VirtualFree(g_lazy.region, 0, MEM_RELEASE);
     sp_dzip_close(&g_lazy.z);
+    sp_free(&g_lazy.own);
     g_lazy.region = NULL;
     g_lazy.reserved = 0;
     g_lazy.blocks = g_lazy.bad = 0;
@@ -1336,13 +1443,37 @@ static LONG CALLBACK lazy_fault(EXCEPTION_POINTERS* ep)
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 
+// The DZIP in `b` behind a reserved region the size of its unpacked entry, in g_lazy. With
+// `own` the buffer is the DLL's: kept until lazy_release, or freed here on failure.
+static int lazy_prepare(sp_buf* b, int own)
+{
+    long long usize;
+    lazy_release();
+    if (!b->p || !sp_dzip_open(b, &g_lazy.z)) goto fail;
+    usize = g_lazy.z.count >= 1 ? g_lazy.z.e[0].usize : 0;
+    if (usize <= 0 || usize > LAZY_MAX) {
+        sp_dzip_close(&g_lazy.z);
+        goto fail;
+    }
+    g_lazy.reserved = ((size_t)usize + LAZY_BLOCK - 1) & ~(size_t)(LAZY_BLOCK - 1);
+    g_lazy.region = (unsigned char*)VirtualAlloc(NULL, g_lazy.reserved, MEM_RESERVE, PAGE_READWRITE);
+    if (!g_lazy.region) { g_lazy.reserved = 0; sp_dzip_close(&g_lazy.z); goto fail; }
+    if (own) { g_lazy.own = *b; b->p = NULL; b->n = 0; }
+    g_lazy.arr[0] = g_lazy.region;
+    g_lazy.arr[1] = (void*)(uintptr_t)usize;
+    g_lazyBlocksAll += (LONG)(g_lazy.reserved / LAZY_BLOCK);
+    return 1;
+fail:
+    if (own) sp_free(b);
+    return 0;
+}
+
 // `outer` is a mode-0 provider stream: inner memory stream over the compressed file.
 static int lazy_attach(void* outer)
 {
     void** o = (void**)outer;
     void** inner;
     sp_buf b;
-    long long usize;
     __try {
         if (o[0] != (void*)ga(VA_STEAM_STREAM)) return 0;
         inner = (void**)o[0x20 / 4];
@@ -1351,19 +1482,7 @@ static int lazy_attach(void* outer)
         b.p = (unsigned char*)o[0x10 / 4];
         b.n = (size_t)o[0x14 / 4];
     } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
-    lazy_release();
-    if (!b.p || !sp_dzip_open(&b, &g_lazy.z)) return 0;
-    usize = g_lazy.z.count >= 1 ? g_lazy.z.e[0].usize : 0;
-    if (usize <= 0 || usize > LAZY_MAX) {
-        sp_dzip_close(&g_lazy.z);
-        return 0;
-    }
-    g_lazy.reserved = ((size_t)usize + LAZY_BLOCK - 1) & ~(size_t)(LAZY_BLOCK - 1);
-    g_lazy.region = (unsigned char*)VirtualAlloc(NULL, g_lazy.reserved, MEM_RESERVE, PAGE_READWRITE);
-    if (!g_lazy.region) { g_lazy.reserved = 0; sp_dzip_close(&g_lazy.z); return 0; }
-    g_lazy.arr[0] = g_lazy.region;
-    g_lazy.arr[1] = (void*)(uintptr_t)usize;
-    g_lazyBlocksAll += (LONG)(g_lazy.reserved / LAZY_BLOCK);
+    if (!lazy_prepare(&b, 0)) return 0;
     inner[0x10 / 4] = (void*)g_lazy.arr;
     return 1;
 }
@@ -1428,6 +1547,121 @@ static int hook_provider_open(void)
     return 1;
 }
 
+// ---- fast save list reads on GOG ---------------------------------------------
+// GOG has no storage provider. Its save open 00AEBEDA (thiscall, ECX = the gamesaves folder)
+// builds the reader in place with the CDZipFileReader ctor 00AA1DFC: ESI = this (a 0x34-byte
+// block the caller allocated and later frees), one stack argument (the full path String),
+// RET 4, EAX = this. It reads the .sav from disk and unpacks it in full into its array at
+// +0x20, with a memory stream at +0x30 over that array; the open then reads only the size
+// (slot 3) and the four header sections. Inside the list builder the DLL reads the file
+// itself, opens it as a DZIP and reserves the region first. Then the ctor runs with an empty
+// path: its open of L"" fails cleanly, so there is no read, no unpack and no buffer. The
+// stream at +0x30 is pointed at the lazy array. The reader's destructor frees +0x20, the
+// stream object and the path, and nothing frees or writes through the stream's +0x10. If
+// anything does not match, the reader is destroyed in place and built from the real path.
+static uintptr_t g_dzipReader;   // this build's ctor, set before its call is redirected
+static int       g_dzipHooked;
+
+#pragma warning(push)
+#pragma warning(disable: 4100)   // the arguments are read by the asm
+__declspec(naked) static void* __stdcall dzip_reader_orig_gog(void* self, void* path)
+{
+    __asm {
+        push esi
+        mov esi, [esp + 8]                ; self
+        push dword ptr [esp + 12]         ; path
+        call dword ptr [g_dzipReader]     ; RET 4, EAX = self
+        pop esi
+        ret 8
+    }
+}
+#pragma warning(pop)
+
+// The empty reader as the ctor leaves it, with its stream pointed at the lazy array.
+static int lazy_attach_reader(void* reader)
+{
+    void** r = (void**)reader;
+    void** inner;
+    __try {
+        if (r[0] != (void*)ga(VA_DZIP_READER_VT)) return 0;
+        inner = (void**)r[0x30 / 4];
+        if (!inner || inner[0] != (void*)ga(VA_MEM_STREAM) || inner[0x10 / 4] != (void*)&r[0x20 / 4] ||
+            r[0x20 / 4] || r[0x24 / 4])   // the empty open allocated nothing
+            return 0;
+        inner[0x10 / 4] = (void*)g_lazy.arr;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    return 1;
+}
+
+static void* __stdcall dzip_reader_gog(void* self, void* path)
+{
+    static const DWORD empty[4] = { 0, 0, 0, 0 };   // String {data, size, capacity, element size}
+    sp_buf file = { NULL, 0 };
+    const wchar_t* text = NULL;
+    LONGLONG t0;
+    void* r;
+    if (!g_listDepth || !is_sav_name(path)) return dzip_reader_orig_gog(self, path);
+    t0 = qpc_us();
+    __try { text = *(const wchar_t* const*)path; } __except (EXCEPTION_EXECUTE_HANDLER) { text = NULL; }
+    if (g_fastBuild && text && sp_read_file(text, &file) && lazy_prepare(&file, 1)) {
+        r = dzip_reader_orig_gog(self, (void*)empty);
+        if (r == self && lazy_attach_reader(r)) {
+            g_lazyOpens++;
+        } else {
+            // Destroy in place (scalar deleting destructor, flag 0: the block stays) and build
+            // the reader from the real path, as the game would have.
+            __try { ((void (__fastcall*)(void*, void*, int))(*(void***)self)[0])(self, NULL, 0); }
+            __except (EXCEPTION_EXECUTE_HANDLER) {}
+            lazy_release();
+            g_lazyFallbacks++;
+            r = dzip_reader_orig_gog(self, path);
+        }
+    } else {
+        if (g_fastBuild) g_lazyFallbacks++;
+        r = dzip_reader_orig_gog(self, path);
+    }
+    g_savOpens++;
+    g_savOpenUs += qpc_us() - t0;
+    return r;
+}
+
+// Replaces `call ctor` at 00AEBF37: ESI = this, [esp+4] = the path String.
+__declspec(naked) static void dzip_reader_hook_gog(void)
+{
+    __asm {
+        push dword ptr [esp + 4]          ; path
+        push esi                          ; this
+        call dzip_reader_gog              ; stdcall, EAX = the reader
+        ret 4
+    }
+}
+
+static int hook_dzip_reader_gog(void)
+{
+    uintptr_t call = ga(VA_DZIP_READER_CALL), ctor = ga(VA_DZIP_READER);
+    void** vt = (void**)ga(VA_DZIP_READER_VT);
+    void** mem = (void**)ga(VA_MEM_STREAM);
+    if (!call || !ctor || !vt || !mem ||
+        !code_matches(ctor, "55 8b ec 51 83 66 0c 00 53 57 ff 75 08 8d 4e 10") ||
+        !code_matches(call - 1, "50 e8") || !range_readable(vt, 5 * sizeof(void*)) ||
+        !code_matches((uintptr_t)read_ptr(&vt[1]), "55 8b ec 8b 49 30 8b 01 5d ff 60 04") ||
+        !code_matches((uintptr_t)read_ptr(&vt[3]), "8b 49 30 8b 01 ff 60 0c") ||
+        read_ptr(&mem[1]) != (void*)ga(VA_MEM_SERIALIZE) || read_ptr(&mem[3]) != (void*)ga(VA_MEM_SIZE) ||
+        !code_matches(ga(VA_MEM_SERIALIZE), "55 8b ec 56 8b f1 8b 4e 14 8b 46 10") ||
+        !code_matches(ga(VA_MEM_SIZE), "8b 41 10 8b 40 04 c3")) {
+        logf_("savelist: save reader not recognised - fast_list off");
+        return 0;
+    }
+    if (!AddVectoredExceptionHandler(1, lazy_fault)) return 0;
+    g_dzipReader = ctor;
+    if (!patch_call(call, ctor, (void*)dzip_reader_hook_gog)) {
+        logf_("savelist: save reader call could not be patched - fast_list off");
+        return 0;
+    }
+    g_dzipHooked = 1;
+    return 1;
+}
+
 typedef struct mem_view { DWORD private_mb, commit_mb, reserve_mb, free_mb, largest_free_mb; } mem_view;
 
 // Private bytes plus a walk of the 32-bit address space: an image that cannot be
@@ -1463,6 +1697,12 @@ static void log_mem(const char* what)
           what, m.private_mb, m.commit_mb, m.reserve_mb, m.free_mb, m.largest_free_mb, g_seenCount);
 }
 
+static void savelist_call(void* panel)
+{
+    if (g_build == BUILD_GOG) ((SaveListGog_t)ga(VA_SAVELIST))(panel, NULL);
+    else ((SaveList_t)ga(VA_SAVELIST))(panel);
+}
+
 static void savelist_run(void* panel, const char* who)
 {
     static int builds;
@@ -1470,10 +1710,10 @@ static void savelist_run(void* panel, const char* who)
     LONGLONG t0;
     builds++;
     // fast_list=2 alternates (odd builds fast) so one session measures both ways.
-    g_fastBuild = g_origProvOpen && (cfg_fast_list == 1 || (cfg_fast_list == 2 && (builds & 1)));
+    g_fastBuild = (g_origProvOpen || g_dzipHooked) && (cfg_fast_list == 1 || (cfg_fast_list == 2 && (builds & 1)));
     if (!cfg_savelist_trace) {
         InterlockedIncrement(&g_listDepth);
-        ((SaveList_t)ga(VA_SAVELIST))(panel);
+        savelist_call(panel);
         InterlockedDecrement(&g_listDepth);
         lazy_release();
         return;
@@ -1486,7 +1726,7 @@ static void savelist_run(void* panel, const char* who)
     g_savOpenUs = g_bmpOpenUs = g_lazyUnpackUs = 0;
     t0 = qpc_us();
     InterlockedIncrement(&g_listDepth);
-    ((SaveList_t)ga(VA_SAVELIST))(panel);
+    savelist_call(panel);
     InterlockedDecrement(&g_listDepth);
     lazy_release();
     t0 = qpc_us() - t0;
@@ -1509,14 +1749,17 @@ static void savelist_run(void* panel, const char* who)
 
 static void __stdcall savelist_startup(void* panel) { savelist_run(panel, "startup"); }
 static void __stdcall savelist_menu(void* panel)    { savelist_run(panel, "menu"); }
+static void __fastcall savelist_startup_gog(void* panel, void* edx) { (void)edx; savelist_run(panel, "startup"); }
+static void __fastcall savelist_menu_gog(void* panel, void* edx)    { (void)edx; savelist_run(panel, "menu"); }
 
 // Swap one verified `call target` for a call to `hook`. The rel32 lies inside one
 // cache line at every site used, so the locked exchange is seen whole by the game thread.
-static int patch_call(uintptr_t at, uintptr_t target, void* hook)
+// The same for a `jmp target` (op 0xE9, a tail call); the opcode is kept.
+static int patch_rel32(uintptr_t at, unsigned char op, uintptr_t target, void* hook)
 {
     LONG want = (LONG)(target - (at + 5)), mine = (LONG)((uintptr_t)hook - (at + 5));
     DWORD old = 0, tmp = 0;
-    if (!range_readable((void*)at, 5) || *(unsigned char*)at != 0xE8) return 0;
+    if (!range_readable((void*)at, 5) || *(unsigned char*)at != op) return 0;
     if (*(LONG*)(at + 1) == mine) return 1;
     if (*(LONG*)(at + 1) != want) return 0;
     if (!VirtualProtect((void*)at, 5, PAGE_EXECUTE_READWRITE, &old)) return 0;
@@ -1526,11 +1769,18 @@ static int patch_call(uintptr_t at, uintptr_t target, void* hook)
     return *(LONG*)(at + 1) == mine;
 }
 
+static int patch_call(uintptr_t at, uintptr_t target, void* hook)
+{
+    return patch_rel32(at, 0xE8, target, hook);
+}
+
 // Needs the image registry hook (g_origAddImage) for the leak fix.
 static void savelist_install(void)
 {
     int a, b;
-    if (!code_matches(ga(VA_SAVELIST), "55 8b ec 83 e4 f8 81 ec ec 01 00 00")) {
+    int gog = g_build == BUILD_GOG;
+    if (!code_matches(ga(VA_SAVELIST), by_build("55 8b ec 83 e4 f8 81 ec ec 01 00 00",
+                                                 "55 8b ec 81 ec 00 02 00 00 53 56 33 db 8b f1"))) {
         logf_("savelist: list builder not recognised - leak fix, fast_list and trace off");
         return;
     }
@@ -1544,9 +1794,10 @@ static void savelist_install(void)
             logf_("savelist: registry lookup or stream destructor not recognised - leak fix off");
     }
     if (!g_leakFixOn && !cfg_savelist_trace && !cfg_fast_list) return;
-    if ((cfg_fast_list || cfg_savelist_trace) && !hook_provider_open()) cfg_fast_list = 0;
-    a = patch_call(ga(VA_SAVELIST_CALL_A), ga(VA_SAVELIST), (void*)savelist_startup);
-    b = patch_call(ga(VA_SAVELIST_CALL_B), ga(VA_SAVELIST), (void*)savelist_menu);
+    if (!gog && (cfg_fast_list || cfg_savelist_trace) && !hook_provider_open()) cfg_fast_list = 0;
+    if (gog && (cfg_fast_list || cfg_savelist_trace) && !hook_dzip_reader_gog()) cfg_fast_list = 0;
+    a = patch_call(ga(VA_SAVELIST_CALL_A), ga(VA_SAVELIST), gog ? (void*)savelist_startup_gog : (void*)savelist_startup);
+    b = patch_call(ga(VA_SAVELIST_CALL_B), ga(VA_SAVELIST), gog ? (void*)savelist_menu_gog : (void*)savelist_menu);
     logf_("savelist: startup call %s, menu call %s; leak fix=%d fast_list=%d trace=%d",
           a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_leakFixOn, cfg_fast_list, cfg_savelist_trace);
     if (cfg_savelist_trace) log_mem("at install");
@@ -2162,6 +2413,8 @@ static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
         err = GetLastError();
     }
     if (cfg_load_trace) lt_note_open(path, h, qpc_us() - t0);
+    if (cfg_save_thumbs && g_build == BUILD_GOG && h != INVALID_HANDLE_VALUE && (access & GENERIC_WRITE))
+        thumb_note_open_w(path);
     if (cfg_save_trace && trace_path(path))
         logf_("save-trace: CreateFileW \"%ls\" access=%08lX disp=%lu -> %s (err %lu)",
               path, access, disp, h == INVALID_HANDLE_VALUE ? "FAILED" : "ok", err);
@@ -3400,6 +3653,7 @@ static DWORD g_kmLoaded, g_kmSkipped, g_kmFreeMin;
 static uintptr_t g_layerLoad;   // this build's FUN_00a5ac6c
 static int g_layerHooked;
 static int g_koMemLow;          // the door in progress was left to the game for memory
+static void* g_koMemLowTask;    // that door's task: fast_doors leaves its timing to the game
 
 // Free user address space of the process, in MB (cheap: no address space walk).
 static DWORD ko_free_mb(void)
@@ -3522,6 +3776,7 @@ static void km_watch(void* const* own[], const LONG ownN[], int buckets, void* c
 #define VA_EMPTY_STRING 0x0160FBA0u   // the game's empty String, its usual loading-screen argument
 
 static volatile DWORD g_koFrameTick;   // last viewport tick (game thread)
+static volatile DWORD g_koOccTick;     // GetTickCount() | 1 when the occluders were requested
 static int   g_koDeferOcc;
 static DWORD g_koDeferSince;
 static float g_koDoorPos[3];
@@ -3591,6 +3846,7 @@ static void ko_frame(void)
     if (!g_partRequest || read_ptr((char*)game + 0xE8) || read_ptr((char*)world + 0x30C)) return;
     logf_("doors: Geralt is %s - loading the occluders (%lu ms after the door)",
           away ? "through the door" : "still near the door, waited long enough", waited);
+    g_koOccTick = GetTickCount() | 1;   // its job's spinner is hidden too (hook_SpinnerExec)
     ko_part_request(game, (char*)world + 0x310, 4, (void*)ga(VA_EMPTY_STRING));
 }
 
@@ -3627,7 +3883,7 @@ static void __stdcall hook_PartRun(void* job)
     void* savedData[5];
     LONG savedN[5];
     LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
-    int on = 0, area = 0, filter, coarseSkip = 0;
+    int on = 0, area = 0, mem = 0, filter, coarseSkip = 0;
     LONGLONG tRun;
     void* world = read_ptr((char*)job);
     void** kmBase = NULL;
@@ -3641,8 +3897,12 @@ static void __stdcall hook_PartRun(void* job)
         // it unloads the outdoors and the other interiors, and its GC runs.
         on = cfg_keep_outdoors && !g_koMemLow && ko_allowed(job);
         area = cfg_preload_interiors && (g_ptMode == 1 || (g_ptMode == 4 && !ko_same_folder(g_ptFrom, g_ptTo)));
+        // Only its occluders wait, as on a kept door, so its picture may come back as soon as
+        // the job is done (fast_door_tick): loaded with the job, they culled the town in front
+        // of Geralt while he was still in the doorway.
+        mem = g_koMemLow && g_ptMode == 4 && g_partRequest && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo);
     }
-    filter = nb >= 0 && (on || (cfg_preload_interiors && !g_koMemLow));
+    filter = nb >= 0 && (on || mem || (cfg_preload_interiors && !g_koMemLow));
     if (area && !g_layerHooked && cfg_preload_memory_mb &&
         ko_free_mb() < (DWORD)(cfg_preload_memory_mb + KM_COARSE_MB))
         coarseSkip = 1;
@@ -3656,7 +3916,7 @@ static void __stdcall hook_PartRun(void* job)
             void* l = unloadData[i];
             int c = ko_class(l);
             int go = on ? (c == LC_FAKE || c == LC_SWAP || c == LC_LOWPOLY)
-                        : !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
+                        : g_koMemLow || !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
             if (go) g_koUnloadOut[unloaded++] = l; else kept++;
         }
         *(void**)((char*)job + 0x0C) = g_koUnloadOut;
@@ -3672,10 +3932,11 @@ static void __stdcall hook_PartRun(void* job)
             if (!bk || n < 0 || n > KO_LIST || (n && !d)) { savedN[b] = -1; continue; }
             for (i = 0; i < n; i++) {
                 int c = ko_class(d[i]);
-                if ((c == LC_FAKE && (cfg_preload_interiors || (on && cfg_keep_interiors))) || (on && c == LC_LOWPOLY))
+                if ((c == LC_FAKE && !g_koMemLow && (cfg_preload_interiors || (on && cfg_keep_interiors))) ||
+                    (on && c == LC_LOWPOLY))
                     skipped++;
-                else if (on && g_ptMode == 4 && g_partRequest && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo) &&
-                         ko_is_occluder(d[i]))
+                else if ((on || mem) && g_ptMode == 4 && g_partRequest && ko_frames_alive() &&
+                         _wcsicmp(g_ptFrom, g_ptTo) && ko_is_occluder(d[i]))
                     deferred++;
                 else
                     g_koLoadOut[b][m++] = d[i];
@@ -3752,6 +4013,8 @@ static void __stdcall hook_PartRun(void* job)
               g_kmFreeMin == 0xFFFFFFFFu ? ko_free_mb() : g_kmFreeMin, cfg_preload_memory_mb);
     }
     g_koMemLow = 0;
+    // Its occluders wait: the memory door's picture may come back early (fast_door_tick).
+    if (mem) g_koMemLowTask = NULL;
     if (filter) {
         *(void**)((char*)job + 0x0C) = unloadData;
         *(LONG*)((char*)job + 0x10) = unloadN;
@@ -3762,13 +4025,13 @@ static void __stdcall hook_PartRun(void* job)
             *(LONG*)((char*)bk + 0x0C) = savedN[b];
         }
     }
-    if (on || area || cfg_load_trace)
+    if (on || area || mem || cfg_load_trace)
         logf_("partition: sync job ran %lu ms (GC %s %lu ms)%s", (DWORD)((qpc_us() - t0) / 1000),
               g_ptGcSkipped ? "skipped," : "", (DWORD)(g_ptGcUs / 1000),
               on ? " - keep_outdoors: outdoor layers left loaded" : "");
     if (filter)
         logf_("partition: %s kept %ld of %ld layers, unloaded %ld; loaded %ld (%ld interiors added), skipped %ld (fake rooms, low-poly)%s",
-              on ? "keep_outdoors" : "preload", kept, unloadN, unloaded, loaded, added, skipped,
+              on ? "keep_outdoors" : mem ? "memory door" : "preload", kept, unloadN, unloaded, loaded, added, skipped,
               deferred ? ", occluders wait until Geralt is through the door" : "");
     if (deferred) ko_defer_occluders();
     if (area) ko_count("after the switch", world);
@@ -3925,6 +4188,11 @@ static void fast_door_tick(void* task)
     DWORD reqs, pending, waited;
 
     if (!task || read_ptr(task) != (void*)ga(VA_DOOR_TELEPORT_VT)) return;
+    // A door left to the game for memory whose occluders could not wait (hook_PartRun clears
+    // g_koMemLowTask when they do): the picture comes back on the game's own `fade_out` event,
+    // once Geralt is out of the building's block. Brought back as soon as such a job was done,
+    // the town showed see-through in front of him (GOG, native D3D9, the inn's harbour door).
+    if (task == g_koMemLowTask) return;
     if (task != s_task) { s_task = task; s_since = 0; s_ready = 0; s_done = 0; }
     if (s_done || *(const LONG*)((const char*)task + 0x14) != 1) return;
     if (!s_since) s_since = GetTickCount();
@@ -4277,7 +4545,10 @@ static int __cdecl env_stab_skip(void)
     return 1;
 }
 
-// Replaces `call FUN_00a74fbf` at 0095DC5E. EAX (the manager) is kept for the original.
+// Replaces `call FUN_00a74fbf` at 0095DC5E. EAX (the manager) is kept for the original. On GOG
+// it replaces the door finish's tail jump to Stabilize 00AC8CDF (thiscall, ECX = the manager,
+// plain RET) at 005AF54B: ECX is kept the same way, and the skip's `ret` returns to the door's
+// caller as Stabilize would; none of the five callers reads EAX.
 __declspec(naked) static void env_stab_stub(void)
 {
     __asm {
@@ -4300,7 +4571,11 @@ static void __fastcall hook_SpinnerExec(void* cmd, void* edx)
 {
     unsigned char show = 1;
     __try { show = *((const unsigned char*)cmd + 8); } __except (EXCEPTION_EXECUTE_HANDLER) {}
-    if (show && !cfg_door_spinner && ko_instant_recent(KO_SPINNER_MS)) {
+    // The occluders' own switch (ko_frame, seconds after the door) is the DLL's, not the game's:
+    // its job shows the spinner as well, which popped up after a door without a fade.
+    DWORD occ = g_koOccTick;
+    if (show && !cfg_door_spinner &&
+        (ko_instant_recent(KO_SPINNER_MS) || (occ && GetTickCount() - occ < KO_SPINNER_MS))) {
         InterlockedIncrement(&g_spinnerDropped);
         return;
     }
@@ -4313,14 +4588,17 @@ static int light_install(void)
     uintptr_t addCall = ga(VA_ENV_ADD_CALL), stabCall = ga(VA_ENV_STAB_CALL);
     int a, b;
     if (g_lightHooked) return 1;
+    // Both from -9: the bytes before hold VA_GAME, relocated on GOG. 80/88 is EAX/ECX = manager.
     if (!addCall || !stabCall ||
-        !code_matches(addCall - 9, "51 8d 8e c0 01 00 00 51 50 e8 44 e8 03 00") ||
-        !code_matches(stabCall - 14, "a1 50 49 40 01 8b 40 40 8b 80 b8 02 00 00 e8 5c 73 11 00"))
+        !code_matches(addCall - 9, by_build("51 8d 8e c0 01 00 00 51 50 e8 44 e8 03 00",
+                                            "51 8d 8e c0 01 00 00 51 50 e8 8f ff 03 00")) ||
+        !code_matches(stabCall - 9, by_build("8b 40 40 8b 80 b8 02 00 00 e8 5c 73 11 00",
+                                             "8b 40 40 8b 88 b8 02 00 00 e9 8f 97 51 00")))
         return 0;
     g_envAdd = ga(VA_ENV_ADD);
     g_envStab = ga(VA_ENV_STAB);
     a = patch_call(addCall, g_envAdd, (void*)env_add_stub);
-    b = a && patch_call(stabCall, g_envStab, (void*)env_stab_stub);
+    b = a && patch_rel32(stabCall, g_build == BUILD_GOG ? 0xE9 : 0xE8, g_envStab, (void*)env_stab_stub);
     g_lightHooked = a && b;
     logf_("doors: environment activation %s, door Stabilize %s - door_light_blend %s (%.2f s)",
           a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_lightHooked ? "on" : "off", cfg_door_light_blend);
@@ -4383,7 +4661,11 @@ static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
                   raised ? ", lighting fades out slowly" : "", g_spinnerDropped ? ", spinner hidden" : "");
         }
     }
-    return ((DoorStart_t)g_doorStart)(door, edx, part);
+    {
+        int r = ((DoorStart_t)g_doorStart)(door, edx, part);
+        g_koMemLowTask = g_koMemLow ? read_ptr((char*)door + OFF_DOOR_TASK) : NULL;
+        return r;
+    }
 }
 
 static void door_start_install(void)
@@ -4806,10 +5088,19 @@ static void save_tick(void)
             logf_("thumbnail: capture import not found - fix disabled");
             cfg_save_thumbs = 0;
         }
-        if (cfg_save_thumbs || cfg_savelist_trace || cfg_list_leak) hook_image_registry();
+        // GOG: the .sav and the game's own preview are seen as CreateFileW opens for writing.
+        if (g_build == BUILD_GOG && cfg_save_thumbs) {
+            if (patch_iat("thumbnail", IMP_CREATEFILEW, (void*)hook_CreateFileW, (void**)&g_origCreateFileW))
+                logf_("saves: local save folder (%s) - thumbnail fix on", build_name());
+            else {
+                logf_("thumbnail: CreateFileW not hooked - fix disabled");
+                cfg_save_thumbs = 0;
+            }
+        }
+        if (g_build != BUILD_GOG && (cfg_save_thumbs || cfg_savelist_trace || cfg_list_leak)) hook_image_registry();
         if (cfg_savelist_trace || cfg_list_leak || cfg_fast_list) { savelist_install(); mem_tick = GetTickCount(); }
     }
-    if (!steam_done && steam_tries < 600) {
+    if (g_imp[IMP_STEAM_RS] && !steam_done && steam_tries < 600) {
         HMODULE api = GetModuleHandleA("steam_api.dll");
         SteamRS_t accessor = api ? (SteamRS_t)GetProcAddress(api, "SteamRemoteStorage") : NULL;
         steam_tries++;
@@ -6286,8 +6577,8 @@ static const ga_row k_gog[] = {
     { EF_RANGE_RVA,          0x0060C120u },   // CRenderProxy_Mesh distance, 00A0BE2B
     { EF_SHADOW_RVA,         0x0060C4F6u },
     { RVA_SETTINGS,          0x021EAEB8u },   // [025EAEB8] -> object 025EAF08, loader 00B40DCD
-    { VA_CAPTURE_PENDING,    0 },
-    { VA_CAPTURE_QUEUED,     0 },
+    { VA_CAPTURE_PENDING,    0x01169160u },   // cleared in the save writer 004E721B; its setter 004E6F80 is unreachable
+    { VA_CAPTURE_QUEUED,     0x01169161u },   // write-only on GOG (no callback reads it)
     { VA_CNAME_FROM_STR,     0x00B5E7ACu },   // __thiscall on GOG (ECX = out), RET 4
     { VA_DOOR_FADE_EVENT,    0x005B0276u },   // CDoorStreamingBlackScreen vtable 00D7A318 slot 2
     { VA_DOOR_FADE_IN,       0x005B02EDu },   // fld dword [00D269BC] on GOG (D9 05)
@@ -6299,11 +6590,14 @@ static const ga_row k_gog[] = {
     { VA_DOOR_TELEPORT_VT,   0x00D7A318u },   // CDoorStreamingBlackScreen
     { VA_DOOR_TIMER,         0x005AF658u },
     { VA_DOOR_TIMER_SLOT,    0x00D7A4CCu },   // CStreamingDoor vtable 00D7A394, slot 78
+    { VA_DZIP_READER,        0x00AA1DFCu },   // ESI = this on GOG; one call, 00AEBF37
+    { VA_DZIP_READER_CALL,   0x00AEBF37u },   // in the save open 00AEBEDA (thiscall, ECX = the gamesaves folder)
+    { VA_DZIP_READER_VT,     0x00F2E990u },
     { VA_EMPTY_STRING,       0x01680110u },   // pushed by the request callers
-    { VA_ENV_ADD,            0 },
-    { VA_ENV_ADD_CALL,       0 },
-    { VA_ENV_STAB,           0 },
-    { VA_ENV_STAB_CALL,      0 },
+    { VA_ENV_ADD,            0x00AC9EEDu },   // stdcall, 9 args, RET 0x24, as on Steam
+    { VA_ENV_ADD_CALL,       0x00A89F59u },   // in the component activate 00A89ED3 (thiscall on GOG)
+    { VA_ENV_STAB,           0x00AC8CDFu },   // thiscall on GOG (ECX = the manager), plain RET
+    { VA_ENV_STAB_CALL,      0x005AF54Bu },   // a JMP: the tail of the door finish 005AF51F
     { VA_FACTS_TIME,         0x0050B0A9u },   // in FactsAdd 0050B044 ("FactsAdd" 00D441D4)
     { VA_FADE_IN_EXEC,       0x00A2D789u },
     { VA_FADE_IN_EXEC_SLOT,  0x00F1F3CCu },   // CRenderCommand_ScreenFadeIn vtable 00F1F3C0 + 0x0C
@@ -6320,9 +6614,9 @@ static const ga_row k_gog[] = {
     { VA_LAYER_LOAD,         0x00AAE95Eu },   // stdcall (info, ctx), RET 8 on GOG
     { VA_LAYER_LOAD_CALL,    0x00AE5D66u },   // in the bucket loader 00AE5C5A ("Loading layer '%s'...")
     { VA_MAP_FIND,           0 },
-    { VA_MEM_SERIALIZE,      0 },
-    { VA_MEM_SIZE,           0 },
-    { VA_MEM_STREAM,         0 },
+    { VA_MEM_SERIALIZE,      0x00B138EAu },
+    { VA_MEM_SIZE,           0x00B138E3u },
+    { VA_MEM_STREAM,         0x00F1A248u },   // CMemoryFileReader (RTTI), ctor 00B1391C
     { VA_PART_GC_CALL,       0x00AE614Du },
     { VA_PART_REQUEST,       0x00AFCFA6u },   // __thiscall on GOG (ECX = game)
     { VA_PART_RUN,           0x00AE5FCAu },   // job in EDI on GOG, plain RET
@@ -6337,16 +6631,16 @@ static const ga_row k_gog[] = {
     { VA_RAY_HIT,            0x0091F110u },   // body identical to Steam's 0084C750
     { VA_RAY_SLOT,           0x00E08740u },   // hkpSimpleWorldRayCaster vtable 00E0873C + 4
     { VA_RENDER_THREAD,      0x0167DE94u },   // set by CRenderThread slot 1, 00A23145
-    { VA_SAVELIST,           0 },
-    { VA_SAVELIST_CALL_A,    0 },
-    { VA_SAVELIST_CALL_B,    0 },
+    { VA_SAVELIST,           0x005072D1u },   // __thiscall on GOG (ECX = panel), plain RET
+    { VA_SAVELIST_CALL_A,    0x00507969u },   // in 00507953 (startup, menu background)
+    { VA_SAVELIST_CALL_B,    0x0050794Au },   // in the RefreshSaveData native 00507941
     { VA_STARTVIDEO_CALL,    0x00509EF7u },   // in the start wrapper 00509EEB (ECX = player)
     { VA_STARTVIDEO_LIST,    0x00509DF5u },   // thiscall on GOG
     { VA_STARTVIDEO_STOP,    0x00509D26u },   // thiscall on GOG
     { VA_STARTVIDEO_TICK,    0x0050A01Eu },
     { VA_STARTVIDEO_VSLOT,   0x00D43FB0u },   // CVideoInstance vtable 00D43F3C + 0x74
-    { VA_SPINNER_EXEC,       0 },
-    { VA_SPINNER_EXEC_SLOT,  0 },
+    { VA_SPINNER_EXEC,       0x00A2D9F9u },
+    { VA_SPINNER_EXEC_SLOT,  0x00F1F0C0u },   // CRenderCommand_ToggleLoadingIndicator vtable 00F1F0B4 + 0x0C
     { VA_STEAM_STREAM,       0 },
     { VA_STREAM_DTOR,        0 },
     { VA_STR_FADE_OUT,       0x00D7A328u },
@@ -6461,11 +6755,18 @@ static void build_gate(void)
     int lod = ga_have(RVA_SETTINGS, 0);
     int distance = lod && ga_have(EF_RANGE_RVA, EF_SHADOW_RVA, 0);
     int registry = ga_have(VA_IMAGES_VTBL_ADD, VA_IMAGES_ADD, VA_IMAGES_REMOVE, VA_IMAGE_KEY, 0);
-    int thumbs = registry && g_imp[IMP_STEAM_RS] && g_imp[IMP_D3DX_SAVEMEM];
+    // GOG saves to local files: no storage provider, and its save list never hands previews to
+    // the image registry. Its preview fix needs only the capture import and CreateFileW.
+    int gog = g_build == BUILD_GOG;
+    int thumbs = gog ? g_imp[IMP_D3DX_SAVEMEM] && g_imp[IMP_CREATEFILEW]
+                     : registry && g_imp[IMP_STEAM_RS] && g_imp[IMP_D3DX_SAVEMEM];
     int savetrace = thumbs && ga_have(VA_GAME, VA_CAPTURE_PENDING, VA_CAPTURE_QUEUED, 0);
-    int savelist = registry && ga_have(VA_SAVELIST, VA_SAVELIST_CALL_A, VA_SAVELIST_CALL_B,
-        VA_MAP_FIND, VA_STEAM_STREAM, VA_STREAM_DTOR, VA_PROV_VTBL_OPEN, VA_PROV_OPEN,
-        VA_PROV_STREAM, VA_PROV_FORWARD, VA_MEM_STREAM, VA_MEM_SERIALIZE, VA_MEM_SIZE, 0);
+    int listcall = ga_have(VA_SAVELIST, VA_SAVELIST_CALL_A, VA_SAVELIST_CALL_B, 0);
+    int savelist = gog ? listcall : registry && listcall && ga_have(VA_MAP_FIND, VA_STEAM_STREAM,
+        VA_STREAM_DTOR, VA_PROV_VTBL_OPEN, VA_PROV_OPEN, VA_PROV_STREAM, VA_PROV_FORWARD,
+        VA_MEM_STREAM, VA_MEM_SERIALIZE, VA_MEM_SIZE, 0);
+    int fastlist = savelist && (!gog || ga_have(VA_DZIP_READER, VA_DZIP_READER_CALL, VA_DZIP_READER_VT,
+        VA_MEM_STREAM, VA_MEM_SERIALIZE, VA_MEM_SIZE, 0));
     int startvideo = ga_have(VA_STARTVIDEO_LIST, VA_STARTVIDEO_CALL, VA_STARTVIDEO_TICK,
         VA_STARTVIDEO_STOP, VA_STARTVIDEO_VSLOT, 0);
     int partitions = ga_have(VA_GAME, VA_PART_SWITCH, VA_PART_SWITCH_A, VA_PART_SWITCH_B,
@@ -6505,9 +6806,17 @@ static void build_gate(void)
         gate_off("diagnostics", "save_trace");
         cfg_save_trace = 0;
     }
+    if (gog && cfg_list_leak) {
+        logf_("saves: fix_list_leak not needed on this build (%s): its save list keeps no previews",
+              build_name());
+        cfg_list_leak = 0;
+    }
     if (!savelist && (cfg_list_leak || cfg_fast_list || cfg_savelist_trace)) {
         gate_off("saves", "fix_list_leak, fast_list and savelist_trace");
         cfg_list_leak = cfg_fast_list = cfg_savelist_trace = 0;
+    } else if (!fastlist && cfg_fast_list) {
+        gate_off("saves", "fast_list");
+        cfg_fast_list = 0;
     }
     if (!startvideo && cfg_skip_intro) {
         gate_off("startup", "skip_intro");

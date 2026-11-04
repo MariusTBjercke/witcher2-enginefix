@@ -560,3 +560,46 @@ Validation: unit test `tools/thumbtest` 13/13 (dedup, game BMP marked, late
 QuickSave marked, ring keeps newest). Confirmed in game 2026-10-28 21:28: owner
 saw the new QuickSave image in the same session; log shows
 `thumbnail: menu reloads QuickSave_640x360.bmp` 7 s after the late write.
+
+## GOG 3.5.0.26g
+
+The race is the same on GOG; only the storage differs. GOG has no storage provider:
+`CGame+0x230` is only zeroed, in the constructor `00AFE080`, and the exe has no
+`ICloudStorage`. So every save and every preview is a local file in
+`<Documents>\Witcher 2\gamesaves\` (the folder is built by `00AEB9B5`).
+
+| | Steam | GOG |
+|---|---|---|
+| Save tick (`CWitcherGame` vtable +0x78) | `009B63DE` | `004EB955` |
+| Capture queue (sets `+0x48`, clears `+0x40`) | `009B6BC5` (EDI = manager) | `004E64CB` (ECX) |
+| Save writer | `009B79AD` (stdcall, `RET 4`) | `004E721B` (ECX, plain `RET`) |
+| BMP writer (writes only when `+0x40` is set) | `009B7149` (stdcall, `RET 8`) | `004E6DF6` (thiscall, `RET 4`) |
+| Capture encode (the one `D3DXSaveSurfaceToFileInMemory` call) | `0053CEF0` | `004DE030` (call at `004DE5F8`) |
+| Capture flags pending / queued | `0160D0ED` / `0160D0EE` | `01169160` / `01169161` (written, never read) |
+
+The order within one tick is the same on both builds: queue the capture, run the world tick,
+then save. The render command is `CRenderCommand_TakeScreenshotNextFrame`, so the capture lands
+on the render thread one frame later, while the game thread may still be in the world tick.
+Whether it beats the BMP step is a matter of timing: 14 of the owner's 118 older GOG saves have
+no preview.
+
+The "stock" 691 254-byte previews come from the same BMP writer on both builds. When the
+screen is black or a fade is running (`00AFBA6A` / `00AFB443`, Steam `00AA7902` / `00AA72DE`),
+no capture is queued. The writer then reads `globals\gui\savescreens\l01..l04.bmp` by world
+and writes that. `009B747E` (GOG `004E6F80`) cannot be reached: the earlier review above
+named it as the stock path, but that was wrong.
+
+**Fix on GOG** (`[saves] fix_thumbnails=1`): no game address is needed.
+- `D3DXSaveSurfaceToFileInMemory` keeps the finished 640x360 BMP, as on Steam.
+- The `CreateFileW` import reports every successful open for writing, with its full path. A
+  `<name>_640x360.bmp` is the game's own preview. The `.sav` is opened when its writer is
+  released, after the BMP step.
+- A `.sav` with no preview of its own gets the capture, written by the worker next to it as
+  `<name>_640x360.bmp`, with the DLL's own `CreateFileW` and `WriteFile`. The time window and
+  the pairing are Steam's.
+- The QuickSave registry refresh is not needed on GOG: the Load menu reads every preview from
+  disk on each opening.
+
+Seen on GOG on 2026-11-04 (`docs/validation/gog-saves-2026-11-04.md`): the game won the race on
+all four saves of the run, and the fix noted its previews and added nothing. The late write is
+tested offline (`tools/buildprobe`, "thumbnail (GOG)"); in game it is still to be seen.

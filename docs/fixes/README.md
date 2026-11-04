@@ -17,7 +17,7 @@ current version; the entry itself has the proof.
 | [interior-preload.md](interior-preload.md) | Seamless interiors, partitions, occluders | Shipped | `[loading] interiors` |
 | [load-times.md](load-times.md) | Measured load times, faster door fades | Shipped | `[loading] fast_doors`, `door_fade` |
 | [interior-maps.md](interior-maps.md) | Black map in interiors (data files) | Shipped | Delete the map files |
-| [door-transitions.md](door-transitions.md) | What a door changes on screen: lighting blend, save inside a house, spinner; ground texture circle | Built, start test pending | `[loading] door_light_blend`, `preload_street`, `door_spinner` |
+| [door-transitions.md](door-transitions.md) | What a door changes on screen: lighting blend, save inside a house, spinner; ground texture circle | In 0.10.0, seen on Steam (DXVK and native D3D9) and GOG | `[loading] door_light_blend`, `preload_street`, `door_spinner` |
 
 ## Distance and graphics
 
@@ -51,4 +51,4 @@ current version; the entry itself has the proof.
 | [crash-raycast-stale-body.md](crash-raycast-stale-body.md) | Crash leaving the Flotsam inn | Shipped | `[stability] raycast_guard` |
 | [quit-crash.md](quit-crash.md) | Crash while quitting with an area loaded (`FactsAdd`) | In 0.9.0 | `[stability] quit_guard` |
 | [cpu32-hang.md](cpu32-hang.md) | No window on 32 or more threads | In 0.9.0, not run on such a CPU | `[stability] cpu32_guard` |
-| [gog-build.md](gog-build.md) | How GOG differs, build detection, porting an address | Detection and gate in 0.10.0, engine fixes not ported yet | |
+| [gog-build.md](gog-build.md) | How GOG differs, build detection, porting an address | In 0.10.0: every feature ported and seen on GOG (2026-11-04) | |

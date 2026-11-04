@@ -382,9 +382,22 @@ Owner tests that afternoon, Steam, 4K, extreme preset, `TextureMemoryBudget=1024
 * **Doors go back to the game's own at `[loading] door_memory_mb` (1024).** A door that starts
   with less free than that runs the game's job (`g_koMemLow`): the outdoors and the other
   interiors unload and the GC runs, behind the 0.25 s area fade. Log: `doors: ... with only N
-  MB of address space free - the game's door`.
-* **Without the per-layer hook** (GOG until `VA_LAYER_LOAD_CALL` is ported) nothing is preloaded
-  when less than 1280 + 1024 MB is free before the load.
+  MB of address space free - the game's door`. Its occluder layers wait, as on a kept door,
+  until Geralt is through (`partition: memory door kept ...`, then `doors: Geralt is through the
+  door - loading the occluders`). So `fast_doors` brings its picture back as soon as the job is
+  done, behind the 0.25 s fades.
+
+  Why: in the first build, such a job loaded the town's occluders at once. With the picture back
+  after 172 ms, the town showed see-through in front of Geralt until he was out of the
+  building's occluder block. This is the 0.8.1 bug at the inn's harbour door (GOG, native D3D9,
+  4K, 2026-11-04: 930 MB free at the exit).
+
+  When the occluders cannot wait (no viewport tick, or the request function not recognised), the
+  door keeps the game's timing instead (`g_koMemLowTask`): the picture comes back on the door
+  animation's `fade_out` event.
+* **Without the per-layer hook** (a build it is not ported to) nothing is preloaded when less
+  than 1280 + 1024 MB is free before the load. On GOG the per-layer load is `00AAE95E`
+  (stdcall `(info, ctx)`, `RET 8`), called once at `00AE5D66`; it has its own stub.
 * 0 turns either guard off. With DXVK there is room to spare, so neither triggers.
 * Not handled: with fewer interiors preloaded, the open doors of houses that were skipped show
   nothing behind them, because the area's `fake` rooms are still dropped. The texture budget
@@ -471,12 +484,12 @@ was changed. Format notes for the next reader (W2 CR2W version 115):
   interiors 0.3/0.3, `04_city` 5 at the class default (1 s, see above). Outdoor areas mostly
   blend over 0.5-30 s (forest 4 s, `podejcie` 10 s, rain 20/30 s).
 
-## Built 2026-11-04 (Steam only, not yet run in game)
+## Built 2026-11-04 (Steam; ported to GOG the same day, see the end of this section)
 
 `src/enginefix.c`, section "door lighting and the loading spinner", plus `ks_*` after the
 partition tree code. All of it acts only on doors that go without a fade (`instant_doors`, with
-`keep_outdoors` and `keep_interiors` or `preload_interiors`); GOG has no rows for these addresses
-yet, so `build_gate` keeps them off there.
+`keep_outdoors` and `keep_interiors` or `preload_interiors`). `build_gate` turns a part off on a
+build whose addresses for it are not all known.
 
 | Switch | Default | What it does | Hook |
 |---|---|---|---|
@@ -484,12 +497,12 @@ yet, so `build_gate` keeps them off there.
 | `[loading] preload_street` | 1 | A load (mode 1) into a house also loads its street's own layers, without `fake`, sound, occluder, interior-environment and low-poly layers | `hook_PartRun`, last bucket, `ks_street` + `ks_walk` |
 | (no switch) | | Before a door goes without a fade, the target partition's own groups are checked; more than 16 layers still to load -> `area_fade` (0.25 s) | `hook_DoorStart`, `ks_missing` |
 | (no switch) | | A pair marked slow (>= 50 ms) goes without a fade again after a fast run | `hook_PartRun` |
-| `[loading] door_spinner` | 0 | 0 drops the spinner's "show" commands for 2 s after an instant door starts; 1 = the game's spinner | slot `00E7C088` (`009DC3F1`) -> `hook_SpinnerExec` |
+| `[loading] door_spinner` | 0 | 0 drops the spinner's "show" commands for 2 s after an instant door starts, and for 2 s after the DLL's own occluder switch (`ko_frame`, seconds after a kept door), whose job showed it too (GOG, 2026-11-04); 1 = the game's spinner | slot `00E7C088` (`009DC3F1`) -> `hook_SpinnerExec` |
 
 Fingerprints checked before patching (after the SteamStub has decrypted `.text`):
 `00A367C2: 51 8D 8E C0 01 00 00 51 50 E8 44 E8 03 00` and
-`0095DC50: A1 50 49 40 01 8B 40 40 8B 80 B8 02 00 00 E8 5C 73 11 00`; `patch_call` also checks
-each rel32 against its target. The street groups are matched the way the game loads them
+`0095DC55: 8B 40 40 8B 80 B8 02 00 00 E8 5C 73 11 00` (from -9; the bytes before hold `VA_GAME`,
+relocated on GOG); `patch_call` / `patch_rel32` also check each rel32 against its target. The street groups are matched the way the game loads them
 (`FUN_00a83097` -> `FUN_00b0582e` with "recursive" 0: only layers directly in a group's folder),
 not with the recursive match the interior preload uses. A layer listed twice in one job is loaded
 once (`FUN_00a91600` skips infos whose `+0x38` is set; the per-layer load `FUN_00a5ac6c` is
@@ -501,13 +514,35 @@ load, lighting fades out slowly, spinner hidden)` and `doors: lighting blends ov
 of switching at once - 'house_01_inn' 15 at 0.10 (+1.00/s)`; on a save inside a house
 `preload: '...inn_interior' is inside 'Flotsam' - its N layers load now too`.
 
-GOG (from the GOG port session, static, not run): the door finish function is rewritten there.
-GOG `005AF51F` (Steam `0095DB81`) does not walk the area environment components itself; it calls
-a manager function (`00ACA3B4(world+0x2E0, 1, 0)`) and tail-jumps to what is probably Stabilize
-(`00AC8CDF`). There is no 1:1 site for `VA_ENV_STAB_CALL`, so its GOG row stays 0 and
-`door_light_blend` stays off on GOG until a GOG-specific hook is designed.
+GOG 3.5.0.26g (ported 2026-11-04; seen on GOG the same day: `lighting blends over 1.00 s` at
+`taves_craftsmen` and `house_01_inn`, `spinner hidden`; see `gog-build.md`):
 
-Checked offline: build clean at /W4, `tools/buildprobe` (both exes, GOG doors stay off),
+- **The environment code is the same.** The activation, Stabilize, the manager tick and its
+  blend advance have the same bodies, entry offsets and constants.
+- **Area activation.** `VA_ENV_ADD` is `00AC9EED` (stdcall, 9 arguments, `RET 0x24`), called
+  once at `00A89F59` in the component's activate `00A89ED3`. That function is `__thiscall` on
+  GOG (Steam passes the component in ESI). The argument order is unchanged, so
+  `env_add_stub` works as it is.
+- **The door's Stabilize.** The door finish `005AF51F` (Steam `0095DB81`) is rewritten:
+  - it calls the manager's shared re-evaluation `00ACA3B4(world+0x2E0, 1, 0)`, `__thiscall`,
+    `RET 0xC`, which is also used by cutscenes, so it is not hooked;
+  - it then **tail-jumps** to Stabilize `00AC8CDF`, which is `__thiscall` (ECX = the manager)
+    with a plain `RET`.
+
+  So `VA_ENV_STAB_CALL` is the `JMP` at `005AF54B`. It is patched with `patch_rel32(..., 0xE9,
+  ...)`, which keeps the opcode. `env_stab_stub` keeps ECX for Stabilize. Its skip `ret`
+  returns to the door's caller, as Stabilize would. None of the five callers reads EAX.
+- **Fingerprints.** Both builds are checked from -9, because the bytes before that hold
+  `VA_GAME`, which is relocated on GOG.
+  - Steam `0095DC55: 8B 40 40 8B 80 B8 02 00 00 E8 5C 73 11 00`
+  - GOG `005AF542: 8B 40 40 8B 88 B8 02 00 00 E9 8F 97 51 00` (`88`: ECX)
+  - GOG add site `00A89F50: 51 8D 8E C0 01 00 00 51 50 E8 8F FF 03 00`
+- **The spinner** (`CRenderCommand_ToggleLoadingIndicator`) is GOG's vtable `00F1F0B4`, slot 3
+  `00F1F0C0` -> `00A2D9F9`, with the show byte at +0x08. It is created by the same door task
+  and partition job code.
+
+Checked offline: build clean at /W4, `tools/buildprobe` (both exes; since the GOG port it also
+checks GOG's add call, the Stabilize jump and the spinner slot),
 `tools/check-repo.ps1 -Game` (Steam). To check in game: the inn and the clerk's house both ways
 (the change should take about a second, with no jump), Einar Gausel's door (no change, no
 spinner), a save made inside the inn then out (no freeze, no fade), and `door_light_blend=0`
