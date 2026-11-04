@@ -34,7 +34,8 @@ branch only for an experiment that may be thrown away.
 - Every runtime patch gets a `docs/fixes/` entry: symptom, addresses, original
   bytes or calls, how it was verified, how to turn it off.
 - In-game results and probe output go to `docs/validation/`.
-- Plans and status: `docs/plans/progress.json`.
+- Plans, status and handoffs are personal notes in `docs/plans/` and `docs/local/`, both
+  git-ignored. Tracked files must not point at them.
 
 ## Language
 

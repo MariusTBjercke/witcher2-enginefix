@@ -1,6 +1,6 @@
 # Script patches applied by the DLL
 
-Status: Tasks 1-7 of `docs/plans/2026-10-31-dll-script-patches.md` implemented 2026-10-31 on
+Status: Tasks 1-7 of the plan for this work implemented 2026-10-31 on
 branch `dll-script-patches`. Task 1 traced file access passively; Task 5 added the offline script
 edit engine; Task 6 builds the patched files into a cache folder and proves the result equal to
 `ScriptPatches.ps1`; Task 7 hooks the game's file opens and serves the cache. The owner's start
@@ -18,7 +18,7 @@ Up to 0.5.1 the optional script patches (BookMarker, Continue, PauseQuit) are ap
 `tools/script-patches/ScriptPatches.ps1`, started from `Install.bat` with
 `-ExecutionPolicy Bypass`; the script compiles ~380 lines of C# at run time, writes the game's
 files and keeps a backup. Nexus quarantined 0.5.0/0.5.1: BitDefender's script heuristic
-`Heur.BZC.PZQ.Boxter` on the PowerShell patcher (see `docs/local/nexus.md`).
+`Heur.BZC.PZQ.Boxter` on the PowerShell patcher.
 
 The plan moves the work into `dinput8.dll`: it builds the patched archives once into
 `bin\witcher2_enginefix_cache\` and redirects the game's file opens to the cached copies. No

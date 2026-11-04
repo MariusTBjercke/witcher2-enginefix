@@ -1667,8 +1667,8 @@ static DWORD WINAPI cpu32_thread(LPVOID param)
 }
 
 // ---- file trace (research for the DLL script patches) -------------------
-// [diagnostics] file_trace=1 answers how the game opens its data - questions Q1-Q6 of
-// docs/plans/2026-10-31-dll-script-patches.md; results in docs/fixes/dll-script-patches.md.
+// [diagnostics] file_trace=1 answers how the game opens its data - questions Q1-Q6, with
+// the results in docs/fixes/dll-script-patches.md.
 // Passive: every hook calls the real function first and changes nothing. The slots are
 // the unpacked 3.5.0.26 kernel32 imports, re-checked against the import table of
 // witcher2.exe.unpacked.exe:

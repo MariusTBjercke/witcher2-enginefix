@@ -12,7 +12,8 @@ Sibling project with the same architecture:
 2. `docs/research.md` - binary, packing, config system, settings object, pitfalls.
 3. The `docs/fixes/*.md` entry for the area you touch (`save-previews.md`,
    `graphics-presets.md`, `render-distance-experiment.md`, ...).
-4. `docs/plans/progress.json` for open and deferred items.
+4. If they exist on this machine (git-ignored, see "Personal notes" below): the newest
+   `docs/local/handoff-*.md`, then `docs/plans/progress.json` for open and deferred items.
 
 ## Project at a glance
 
@@ -104,6 +105,10 @@ Only needed for reverse engineering, not for building.
 * No live software breakpoints in the game process (see below). Prefer passive
   in-process logging (`[diagnostics] save_trace` is the pattern).
 * Keep machine paths and Steam IDs out of tracked files (`%USERPROFILE%`, `<steamid>`, `<game>`).
+* **Personal notes stay out of git.** Plans, status, handoffs, Nexus drafts and replies to players
+  are personal notes: they go in `docs/local/` or `docs/plans/`, both git-ignored, and tracked
+  files must not depend on them. Findings others can use go to `docs/fixes/`,
+  `docs/research.md` or `docs/validation/`.
 
 ## Verified facts (Steam 3.5.0.26, unpacked; re-verify before contradicting)
 

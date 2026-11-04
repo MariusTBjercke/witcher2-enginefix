@@ -17,7 +17,7 @@
 ## Installation evidence
 
 Game process was absent. Copied built DLL and distributed ini into
-`D:/SteamLibrary/steamapps/common/the witcher 2/bin` with previous files backed up
+`<game>/bin` with previous files backed up
 under `build/before-presets/`. Hashes of installed and repo files matched:
 
 | Artifact | SHA256 |

@@ -26,8 +26,10 @@ tools/steamless/
 Thumbs.db
 desktop.ini
 
-# Local notes
+# Personal notes: plans, status, handoffs, Nexus drafts. What others can use goes to
+# docs/fixes, docs/research.md or docs/validation instead.
 docs/local/
+docs/plans/
 
 # Python bytecode
 __pycache__/

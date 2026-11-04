@@ -21,7 +21,7 @@ only; restarting restores the ini values. Step indices start at -1, so the first
 press selects 1.0, even if the initial scale is 4.0 or 2.0. The keyboard filter
 suppresses F9/F10 while Ctrl or Alt is held.
 
-The latest Ctrl-hotkey build still needs the human check in progress.json.
+The latest Ctrl-hotkey build still needed a human check at this point.
 There was no `bin/witcher2_enginefix.log` at inspection; the latest DXVK log ended
 before the installed DLL's 12:56 build time. This does not prove a load failure.
 

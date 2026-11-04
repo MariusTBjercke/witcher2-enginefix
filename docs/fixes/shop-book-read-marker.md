@@ -78,8 +78,7 @@ Two changes; the DLL cannot do it alone:
 Costs:
 
 * Shipping a modified `base_scripts.dzip` collides with any other script mod. On the
-  owner's machine Project Mersey Fix Pack already replaces it
-  (`docs/plans/00-context.md`), so a patch would have to be built on top of that
+  owner's machine Project Mersey Fix Pack already replaces it, so a patch would have to be built on top of that
   pack's scripts.
 * Shipping modified `ui_trade.swf`/`ui_storage.swf` overrides whichever copy is active.
   On the owner's machine that is not the `abetterui.dzip` one (part of the Steam

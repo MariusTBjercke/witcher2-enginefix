@@ -1,6 +1,6 @@
 # File access trace - 2026-10-31
 
-Evidence for Task 1 of `docs/plans/2026-10-31-dll-script-patches.md`; analysis in
+Evidence for Task 1 of the plan for the DLL script patches; analysis in
 `docs/fixes/dll-script-patches.md`. Game: Steam Enhanced Edition 3.5.0.26 with the owner's
 Project Mersey + HD UI install, `bin\dinput8.dll` built from `dll-script-patches` and
 `[diagnostics] file_trace=1`. Owner session: start, load a save, open the inventory, open a

@@ -43,7 +43,7 @@ Response                         Time (ms)     Location
 OK                                             <repo>\build
 Symbol search path is: <repo>\build
 Executable search path is: 
-ModLoad: 00400000 029b0000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\witcher2.EXE
+ModLoad: 00400000 029b0000   <game>\bin\witcher2.EXE
 ModLoad: 777f0000 779b0000   C:\windows\SYSTEM32\ntdll.dll
 ModLoad: 770f0000 771e0000   C:\windows\System32\KERNEL32.DLL
 ModLoad: 76730000 76a09000   C:\windows\System32\KERNELBASE.dll
@@ -62,27 +62,27 @@ ModLoad: 77570000 775f5000   C:\windows\System32\ADVAPI32.dll
 ModLoad: 754e0000 75565000   C:\windows\System32\sechost.dll
 ModLoad: 75720000 75d8b000   C:\windows\System32\SHELL32.dll
 ModLoad: 77280000 773d7000   C:\windows\System32\ole32.dll
-ModLoad: 10000000 10113000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\fmodex.dll
+ModLoad: 10000000 10113000   <game>\bin\fmodex.dll
 ModLoad: 75f20000 761b8000   C:\windows\System32\combase.dll
-ModLoad: 6fba0000 6fbca000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\DINPUT8.dll
+ModLoad: 6fba0000 6fbca000   <game>\bin\DINPUT8.dll
 ModLoad: 5f4e0000 5f8a8000   C:\windows\SYSTEM32\d3dx9_39.dll
 ModLoad: 6fb70000 6fb96000   C:\windows\SYSTEM32\XINPUT1_3.dll
 ModLoad: 6fb40000 6fb5c000   C:\windows\SYSTEM32\AVIFIL32.dll
-ModLoad: 6faf0000 6fb3d000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\w1import.dll
+ModLoad: 6faf0000 6fb3d000   <game>\bin\w1import.dll
 ModLoad: 62f60000 62f94000   C:\windows\SYSTEM32\WINMM.dll
-ModLoad: 3b400000 3b41f000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\steam_api.dll
+ModLoad: 3b400000 3b41f000   <game>\bin\steam_api.dll
 ModLoad: 75170000 75178000   C:\windows\SYSTEM32\WSOCK32.dll
 ModLoad: 6f900000 6fae8000   C:\windows\SYSTEM32\dbghelp.dll
 ModLoad: 77470000 774da000   C:\windows\System32\WS2_32.dll
 ModLoad: 75430000 754d0000   C:\windows\System32\OLEAUT32.dll
 ModLoad: 72200000 7221a000   C:\windows\SYSTEM32\MSACM32.dll
-ModLoad: 5d220000 5d9a0000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\d3d9.dll
+ModLoad: 5d220000 5d9a0000   <game>\bin\d3d9.dll
 ModLoad: 6f8d0000 6f8f4000   C:\windows\SYSTEM32\MSVFW32.dll
 ModLoad: 761c0000 76611000   C:\windows\System32\SETUPAPI.dll
 ModLoad: 6f830000 6f8c1000   C:\windows\WinSxS\x86_microsoft.windows.common-controls_6595b64144ccf1df_5.82.26100.8521_none_cf9e08b68ea73d80\COMCTL32.dll
 ModLoad: 72a60000 72a96000   C:\windows\SYSTEM32\dxcore.dll
-ModLoad: 03420000 03474000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\fmod_event_net.dll
-ModLoad: 04ba0000 04beb000   D:\SteamLibrary\steamapps\common\the witcher 2\bin\fmod_event.dll
+ModLoad: 03420000 03474000   <game>\bin\fmod_event_net.dll
+ModLoad: 04ba0000 04beb000   <game>\bin\fmod_event.dll
 ModLoad: 77270000 77276000   C:\windows\System32\psapi.dll
 ModLoad: 750b0000 750b8000   C:\windows\SYSTEM32\version.dll
 ModLoad: 73dc0000 73e14000   C:\windows\SYSTEM32\MSWSOCK.dll
@@ -202,8 +202,8 @@ W2PREVIEW READY - load a save and create a NEW manual save, then exit the game.
 0:050> g
 Canceling textures streaming 
 Texture streaming canceled in 0.00s
-Error: GFxLoader failed to open 'D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\globals\gui\loadingscreens\01_mgla.swf'
-GFxLoader failed to open "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\globals\gui\loadingscreens\01_mgla.swf"
+Error: GFxLoader failed to open '<game>\CookedPC\globals\gui\loadingscreens\01_mgla.swf'
+GFxLoader failed to open "<game>\CookedPC\globals\gui\loadingscreens\01_mgla.swf"
 Flushing texture streaming
 TextureFlush: 0 not used textures evicted in 0.00s
 TextureFlush: 81 textures to stream

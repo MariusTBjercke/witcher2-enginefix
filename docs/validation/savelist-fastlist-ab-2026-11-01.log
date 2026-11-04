@@ -12,12 +12,12 @@
 23:36:15.634 script-patcher: hooked kernel32.dll!FindNextFileW
 23:36:15.635 script patches: hooks installed after 0 ms (3/3 slots)
 23:36:15.749 startup: movie list and tick hooked after 125 ms
-23:36:15.864 script overlay: cache D:\SteamLibrary\steamapps\common\the witcher 2\bin\witcher2_enginefix_cache
+23:36:15.864 script overlay: cache <game>\bin\witcher2_enginefix_cache
 23:36:16.107 script overlay: cache: reused (4 redirects)
 23:36:16.108 script patches: book_marker=on continue=on pause_quit=on cache=reused
-23:36:16.482 script patches: CreateFileW "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\base_scripts.dzip" -> cached copy
-23:36:16.490 script patches: CreateFileW "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\dlc_finishers.dzip" -> cached copy
-23:36:16.826 script patches: CreateFileW "D:\SteamLibrary\steamapps\common\the witcher 2\CookedPC\base_scripts.dzip" -> cached copy
+23:36:16.482 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+23:36:16.490 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+23:36:16.826 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
 23:36:17.143 crash: filter armed, chaining to 0x714F2571 (CSERHelper.dll+0x12571)
 23:36:17.149 osd: window ready (font 34 px)
 23:36:17.150 settings object 0x02580E78 found: mesh=4.000 foliage=2.000
