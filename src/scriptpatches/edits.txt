@@ -7,7 +7,7 @@
 #         of whitespace in the script, so tab-aligned lines and ")\r\n{" forms are covered.
 # code: the text to insert, or @<fragment>.ws for a file in this folder.
 BookMarker	game\gui\guiutils.ws	After	1	theHud.SetString( "DescFull", GetLocStringByKeyExt( "Tooltip" + itemName ) + descFull + "<br>" + fullDescTootlip, AS_item );	W2EF_MarkItem( inventory, itemId, AS_item, custom );
-BookMarker	game\gui\guiutils.ws	End	0		@book_helpers.ws
+BookMarker	game\gui\w2ef_books.ws	End	0		@book_helpers.ws
 BookMarker	game\gui\guishop.ws	Replace	1	theHud.m_utils.FillItemObject( m_merchantInventory, m_playerStats, itemId, i, AS_item, slotItems ); // TODO: slotItems?	theHud.m_utils.FillItemObject( m_merchantInventory, m_playerStats, itemId, i, AS_item, slotItems, 'merchant' ); // TODO: slotItems?
 BookMarker	game\gameplay\container_class.ws	Replace	2	args.PushBack( FlashValueFromString( GetLocStringByKeyExt( itemName ) ) );	args.PushBack( FlashValueFromString( W2EF_LootName( inventory, itemId, GetLocStringByKeyExt( itemName ) ) ) );
 BookMarker	game\gameplay\container_class.ws	Replace	2	args.PushBack( FlashValueFromString( "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) ;	args.PushBack( FlashValueFromString( W2EF_ReadIcon( inventory, itemId, "<img src='img://globals/gui/icons/items/" + StrReplaceAll( StrReplaceAll( itemName , " ", ""), "'", "" ) + "_64x64.dds' width='30' height='30'>" ) ) );

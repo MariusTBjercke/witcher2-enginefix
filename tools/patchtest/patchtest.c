@@ -1477,20 +1477,21 @@ done:
 // the live files may already carry the 0.5 patches), producing the expected block counts.
 static const char* test_script_real(void)
 {
-    static const char* const entries[7] = {
+    static const char* const entries[8] = {
         "game\\gui\\guiutils.ws",
         "game\\gui\\guishop.ws",
         "game\\gui\\guimainmenu.ws",
         "game\\gameplay\\container_class.ws",
         "game\\gui\\guiinventory.ws",
         "game\\player\\player.ws",
-        "game\\player\\states\\extendedmovable.ws"
+        "game\\player\\states\\extendedmovable.ws",
+        "game\\gui\\w2ef_books.ws"                  // ours: not in the game's archive
     };
-    static const int want[7] = { 2, 1, 10, 6, 2, 1, 1 };
+    static const int want[8] = { 1, 1, 10, 6, 2, 1, 1, 1 };
     static const char* books[2] = { "Book of Nekkers", "Book of Drowners" };
     const char* why = NULL;
     wchar_t zip[MAX_PATH], backup[MAX_PATH], cc[MAX_PATH];
-    sp_text texts[7];
+    sp_text texts[8];
     sp_buf body = { NULL, 0 };
     sp_ctx ctx;
     char whytxt[512];
@@ -1504,6 +1505,7 @@ static const char* test_script_real(void)
     if (GetFileAttributesW(backup) != INVALID_FILE_ATTRIBUTES) {
         wcscpy_s(zip, MAX_PATH, backup);            // the unpatched originals
     }
+    texts[7].name = entries[7];
     for (i = 0; i < 7; i++) {
         const char* err = read_dzip_entry(zip, entries[i], &texts[i].text);
 
@@ -1523,12 +1525,12 @@ static const char* test_script_real(void)
     ctx.collect_body = (const char*)body.p;
     ctx.books = books;
     ctx.nbooks = 2;
-    CHECK(sp_script_apply("BookMarker", texts, 7, &ctx, whytxt, sizeof whytxt));
-    CHECK(sp_script_apply("Continue", texts, 7, &ctx, whytxt, sizeof whytxt));
-    CHECK(sp_script_apply("PauseQuit", texts, 7, &ctx, whytxt, sizeof whytxt));
-    CHECK(sp_script_apply("WindowMode", texts, 7, &ctx, whytxt, sizeof whytxt));
-    CHECK(sp_script_apply("Medallion", texts, 7, &ctx, whytxt, sizeof whytxt));
-    for (i = 0; i < 7; i++) {
+    CHECK(sp_script_apply("BookMarker", texts, 8, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("Continue", texts, 8, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("PauseQuit", texts, 8, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("WindowMode", texts, 8, &ctx, whytxt, sizeof whytxt));
+    CHECK(sp_script_apply("Medallion", texts, 8, &ctx, whytxt, sizeof whytxt));
+    for (i = 0; i < 8; i++) {
         int got = count_in_text(&texts[i].text, "//===witcher2-enginefix=== BEGIN");
 
         if (got != want[i]) {
@@ -1538,11 +1540,26 @@ static const char* test_script_real(void)
             goto done;
         }
     }
-    printf("  markers 2 1 10 6 2 1 1, %d bytes of scripts\n",
+    // A mod's guiutils.ws may win over ours: what other scripts call must not live there.
+    CHECK(count_in_text(&texts[0].text, "function W2EF_") == 0);
+    CHECK(count_in_text(&texts[7].text, "function W2EF_LootName") == 1);
+    CHECK(count_in_text(&texts[7].text, "function W2EF_ReadIcon") == 1);
+    CHECK(count_in_text(&texts[7].text, "function W2EF_MarkItem") == 1);
+    {   // The game's scripts are all CRLF; a bare LF made it compile this file to nothing.
+        size_t k;
+
+        for (k = 0; k < texts[7].text.n; k++) {
+            unsigned char c = texts[7].text.p[k];
+
+            CHECK(c != '\n' || (k > 0 && texts[7].text.p[k - 1] == '\r'));
+            CHECK(c != '\r' || (k + 1 < texts[7].text.n && texts[7].text.p[k + 1] == '\n'));
+        }
+    }
+    printf("  markers 1 1 10 6 2 1 1 1, %d bytes of scripts\n",
            (int)(texts[0].text.n + texts[1].text.n + texts[2].text.n + texts[3].text.n +
-                 texts[4].text.n + texts[5].text.n + texts[6].text.n));
+                 texts[4].text.n + texts[5].text.n + texts[6].text.n + texts[7].text.n));
 done:
-    for (i = 0; i < 7; i++) sp_free(&texts[i].text);
+    for (i = 0; i < 8; i++) sp_free(&texts[i].text);
     sp_free(&body);
     return why;
 }

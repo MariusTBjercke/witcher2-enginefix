@@ -21,7 +21,10 @@ static const char* const k_swf_entries[2] = {
     "globals\\gui\\ui_trade.swf", "globals\\gui\\ui_storage.swf"
 };
 
-#define SP_NTEXTS 7
+// The last entry is ours: it is not in the game's archive and starts empty. The book helpers
+// live there, so container_class.ws still finds them when another mod's guiutils.ws wins.
+#define SP_NTEXTS 8
+#define SP_NEW_ENTRY (SP_NTEXTS - 1)
 static const char* const k_script_entries[SP_NTEXTS] = {
     "game\\gui\\guiutils.ws",
     "game\\gui\\guishop.ws",
@@ -29,7 +32,8 @@ static const char* const k_script_entries[SP_NTEXTS] = {
     "game\\gameplay\\container_class.ws",
     "game\\gui\\guiinventory.ws",
     "game\\player\\player.ws",
-    "game\\player\\states\\extendedmovable.ws"
+    "game\\player\\states\\extendedmovable.ws",
+    "game\\gui\\w2ef_books.ws"
 };
 
 static const char* const k_icon_folder = "globals\\gui\\icons\\items\\w2ef_read\\";
@@ -47,8 +51,9 @@ static const wchar_t* const k_carriers[] = {
 // Part of the cache key: bump it whenever the cache's contents or layout change, so an older
 // cache built by the same ENGINEFIX_VERSION is never served. 2 = icons in a carrier archive;
 // 3 = the WindowMode rows in guimainmenu.ws; 4 = one Display mode selector instead of two rows;
-// 5 = the Draw distance selector; 6 = the Medallion rows in player.ws and extendedmovable.ws.
-#define OV_CACHE_LAYOUT 6
+// 5 = the Draw distance selector; 6 = the Medallion rows in player.ws and extendedmovable.ws;
+// 7 = the book helpers in their own entry, game\\gui\\w2ef_books.ws; 8 = that entry in CRLF.
+#define OV_CACHE_LAYOUT 8
 
 // ---- logging -----------------------------------------------------------
 
@@ -1148,11 +1153,11 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     for (i = 0; i < SP_NTEXTS; i++) {
         int idx = sp_dzip_find(&scripts, k_script_entries[i]);
 
-        if (idx < 0) {
+        if (idx < 0 && i != SP_NEW_ENTRY) {
             vlogf(log, "script overlay: %s not in base_scripts.dzip", k_script_entries[i]);
             goto done;
         }
-        if (!sp_dzip_extract(&scripts, idx, &orig[i])) {
+        if (idx >= 0 && !sp_dzip_extract(&scripts, idx, &orig[i])) {
             vlogf(log, "script overlay: cannot extract %s", k_script_entries[i]);
             goto done;
         }

@@ -664,3 +664,31 @@ else (BR and KR ship only English placeholder texts in this install) gets Englis
 swf files from `abetterui.dzip` into a scratch folder. A throwaway AS2 disassembler
 (DoAction/DoInitAction plus constant pools) dumped the swf code. Nothing was written to
 the game folder.
+
+## 0.9.0: helpers in their own script
+
+A player got `I dont know any 'W2EF_LootName'` and `'W2EF_ReadIcon'`, six lines, all in
+`container_class.ws`. The edits of a feature are all or nothing, so one archive cannot give a
+patched `container_class.ws` and an unpatched `guiutils.ws`: the `guiutils.ws` the game compiled
+came from somewhere else. `container_class.ws` was the only file calling helpers that lived in
+another file, which is why nothing else was reported.
+
+The game can compile scripts from more places than `base_scripts.dzip`. `FUN_00aa69a0` gathers
+script folders from the data path and from every user content package; `FUN_00abf177` mounts
+those from `[UserContent] Packages`, `Mount=` (`FUN_00407854`), and `FUN_00abed95` adds each
+package's folder. The exact place this player's file came from is still unknown.
+
+The helpers now go into a new entry, `game\gui\w2ef_books.ws`, which no other mod ships, so the
+calls always resolve. The game compiles every entry of the archive. `guiutils.ws` keeps only the
+call to `W2EF_MarkItem`.
+
+The first build wrote that file with bare LF, and the game reported the helpers as unknown
+with no parse error, although the entry was in the archive. All 460 scripts of the game are
+CRLF. With CRLF the file compiles (owner, 2026-11-04: game starts, read status shows in the
+inventory and the storage chest). So a new script must be CRLF; the likely reason is that a
+`//` comment only ends at `\r`, which would make the whole file one comment. The lexer itself
+was not read. `sptest` now fails on any bare LF or CR in this entry.
+
+Left open: `W2EF_UseMedallion` has to stay in `player.ws` (it uses private members), and
+`extendedmovable.ws` calls it, so a mod replacing `player.ws` the same way would stop the
+game until `[scriptpatches] medallion=0`.

@@ -136,6 +136,7 @@ static int cfg_wf_borderless;   // [window] borderless: start borderless until t
 static int cfg_wf_dpi = 1;      // [window] dpi_aware: DPI awareness when borderless starts on
 static int cfg_crash_dump = 1;  // [diagnostics] crash_dump: 0 off, 1 log + minidump, 2 full dump
 static int cfg_ray_guard = 1;   // [stability] raycast_guard: a ray cast that hits freed physics misses it
+static int cfg_cpu32_guard = 1; // [stability] cpu32_guard: no endless CPU count on 32+ logical processors
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
 
@@ -368,6 +369,7 @@ static void load_config(void)
     cfg_wf_dpi = ini_int("window", "dpi_aware", 1);
     cfg_crash_dump = ini_int("diagnostics", "crash_dump", 1);
     cfg_ray_guard = ini_int("stability", "raycast_guard", 1);
+    cfg_cpu32_guard = ini_int("stability", "cpu32_guard", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -1608,6 +1610,60 @@ static int patch_iat(const char* tag, uintptr_t slot, const char* dll, const cha
     VirtualProtect((void*)slot, sizeof(void*), old, &tmp);
     logf_("%s: hooked %s!%s", tag, dll, fn);
     return 1;
+}
+
+// ---- 32 logical processors ---------------------------------------------
+// [stability] cpu32_guard=1. The game's CPU topology count FUN_00930a6e (called once from
+// FUN_00aa6e94) only runs when the process and system affinity masks are equal, and walks them
+// with `mask = 1 << i` until `mask > system mask` or `mask == 0` (SHL EDI,CL / TEST / JNZ at
+// 00930BBD). x86 masks a shift to 5 bits, so mask is never 0, and a system mask of 0xFFFFFFFF
+// (32 or more logical processors; a 32-bit process sees at most 32) is never exceeded: the
+// loop never ends and the game sits in the background without a window. Taking one core away
+// in Task Manager makes the masks differ, which skips the count. The hook reports that same
+// case without giving up the core. The only other caller, FUN_006b9a30, overwrites the value
+// with 0xFFFFFFFF on success, so it is not affected. See docs/fixes/cpu32-hang.md.
+#define IAT_GETPROCAFFINITY 0x00CAD20Cu
+
+typedef BOOL (WINAPI *GetProcessAffinityMask_t)(HANDLE, PDWORD_PTR, PDWORD_PTR);
+static GetProcessAffinityMask_t g_realGetProcAffinity;
+
+static BOOL WINAPI hook_GetProcessAffinityMask(HANDLE process, PDWORD_PTR proc_mask, PDWORD_PTR sys_mask)
+{
+    static LONG logged;
+    BOOL ok = g_realGetProcAffinity(process, proc_mask, sys_mask);
+
+    if (ok && proc_mask && sys_mask && *proc_mask == 0xFFFFFFFFu && *sys_mask == 0xFFFFFFFFu) {
+        *proc_mask = 0x7FFFFFFFu;
+        if (!InterlockedExchange(&logged, 1)) {
+            logf_("cpu32: 32 logical processors seen, the game's CPU count is skipped");
+        }
+    }
+    return ok;
+}
+
+// 1 = hooked or nothing more to try, 0 = the slot does not hold the export yet.
+static int cpu32_try(void)
+{
+    HMODULE k32 = GetModuleHandleA("kernel32.dll");
+    void* want = k32 ? (void*)GetProcAddress(k32, "GetProcessAffinityMask") : NULL;
+    void* have = range_readable((void*)(uintptr_t)IAT_GETPROCAFFINITY, sizeof(void*))
+                     ? read_ptr((void*)(uintptr_t)IAT_GETPROCAFFINITY) : NULL;
+
+    if (!want || have != want) return 0;
+    patch_iat("cpu32", IAT_GETPROCAFFINITY, "kernel32.dll", "GetProcessAffinityMask",
+              (void*)hook_GetProcessAffinityMask, (void**)&g_realGetProcAffinity);
+    return 1;
+}
+
+static DWORD WINAPI cpu32_thread(LPVOID param)
+{
+    (void)param;
+    for (int i = 0; i < 3000; i++) {
+        if (cpu32_try()) return 0;
+        Sleep(1);
+    }
+    logf_("cpu32: GetProcessAffinityMask slot never held the kernel32 export - off");
+    return 0;
 }
 
 // ---- file trace (research for the DLL script patches) -------------------
@@ -5173,6 +5229,11 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         if (cfg_preset_mode)
             logf_("presets: default=%s, cycle modifiers=%d VK=%02X (Options > Graphics remembers the level)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
+        // Before the game's own start-up can reach the CPU count.
+        if (cfg_enabled && cfg_cpu32_guard && !cpu32_try()) {
+            HANDLE h = CreateThread(NULL, 0, cpu32_thread, NULL, 0, NULL);
+            if (h) CloseHandle(h); else logf_("cpu32: CreateThread failed - off");
+        }
         if (cfg_enabled || cfg_file_trace || cfg_load_trace) {
             g_running = 1;
             if (cfg_enabled) {

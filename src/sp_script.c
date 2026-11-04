@@ -191,8 +191,11 @@ static void detect_eol(const char* t, size_t n, const char** eol, size_t* eollen
             return;
         }
     }
-    *eol = "\n";
-    *eollen = 1;
+    // Every script of the game is CRLF, so a new, empty one is too: with bare LF the game
+    // compiled w2ef_books.ws to nothing, without an error (seen in game), its opening // comment probably
+    // running to the end of the file.
+    *eol = n ? "\n" : "\r\n";
+    *eollen = n ? 1 : 2;
 }
 
 static int name_eq(const char* a, const char* b)
