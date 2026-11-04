@@ -503,3 +503,141 @@ already restored, a changed file, a leaf outside the table, no manifest, SHA-256
 the reference's own backup: the three files equal the originals byte for byte, the 152 icons and
 their folder are gone, the backup is renamed - `GOLDEN OK`. The owner check on the real install
 (plan Task 8 Step 5) is pending.
+
+## User content packages (0.9.0)
+
+A player got "Script compilation error" naming `W2EF_LootName` and `W2EF_ReadIcon` in our patched
+`container_class.ws`: the `guiutils.ws` the game compiled was not ours. The overlay only looked at
+`CookedPC`, so this section maps every place the game takes a script from. Read statically from
+the Steam 3.5.0.26 unpacked exe (GOG not checked); names below are the ones given in the Ghidra
+program.
+
+### Where scripts come from
+
+`CompileScriptsFromSources` (`00AA69A0`) takes the release branch (`DAT_01608613 == 0`, never
+written, and `DAT_01608659 == 1`, set at `00AC8B72` by the game's main before engine init):
+
+1. `<game>\CookedPC\base_scripts.dzip`, by exact name (`00AA69E4`). No other `CookedPC` archive
+   and no loose `.ws` is a script source.
+2. Then, for each mounted user content package in mount order, `<package>\scripts.dzip` if
+   `GetFileAttributesW` finds it (`GetUserPackageScriptsSource`, `00ABED95`; the string at
+   `00E5BAF8`).
+
+`ListScriptSourcesFiles` (`00414C6E`) lists every name once (lowercased A-Z, add-unique), and
+`ReadScriptFromLastSource` (`00414CC9`) reads it from the **last** source that has it: it walks
+the list backwards (`MOV ESI,[EDI+8]` ... `CALL [EAX+0xC]` ... `DEC ESI; JNZ`). So the last
+package in mount order wins, then earlier packages, then `base_scripts.dzip`. Inside one archive
+the name map keeps the **last** duplicate (`0041495C`, `004149E7: MOV ECX,[EBP+8]; MOV
+[EAX+0x10],ECX` overwrites the stored index). A package entry with another prefix or `/`
+separators is a different name, so both copies would compile.
+
+### Which packages are mounted
+
+`MountUserContentPackages` (`00ABF177`) runs at "Initializing user content manager...", before
+the depot scan:
+
+* The folder is `<Documents>\Witcher 2\UserContent\` (`SHGetFolderPathW(CSIDL_PERSONAL)` at
+  `00932589`, `\UserContent\` at `00E5BBA4`); the game's string has a doubled backslash,
+  `...\Witcher 2\\UserContent\<name>\`.
+* The list is `<Documents>\Witcher 2\Config\UserContent.ini`, section `[Packages]`, every
+  `Mount=` value in file order (`ReadUserContentMountList`, `00407854`). The launcher's
+  `bin\userContentManager.exe` writes it (`_wfopen(..., L"w")`, text mode, so ANSI).
+* How the game reads that ini, which decides what is mounted:
+  * Decoding (`00AC6AAE`): UTF-16LE only when the file is at least 3 bytes and starts with
+    `FF FE`; anything else through `setlocale(LC_CTYPE, "")` and `mbstowcs`, i.e. the ANSI code
+    page, up to the first NUL (so UTF-16 without a BOM reads as `[`).
+  * Parsing (`00AC1D74`): between entries every character outside 0x21..0x7F is skipped (blanks,
+    line ends of any kind, a UTF-8 BOM read as ANSI). `[` starts a section that ends at `]`; a
+    character below 0x21 inside it, or an empty name, is a parse error. Otherwise a key runs to
+    the first `=` and the value to the first character below 0x20 (a tab ends it); nothing is
+    trimmed, so `Mount = x` is the key `Mount ` and `Mount= x` the value ` x`. A line without
+    `=` is a key with an empty value (so `;` lines are keys, not comments). An empty key or a
+    key before any section is a parse error.
+  * A parse error stops reading, and what was read before it stays (`FUN_00ac2020` ignores the
+    result). Section and key names compare with a plain `wcscmp` (`0040190C`): `[packages]` or
+    `mount=` do not count.
+  * `FUN_00ac2020` first reads a "base" copy of the same file from a path with a `base` part
+    added; neither install has such a folder. Not followed further.
+* A listed package mounts only when `<folder>\pack0.dzip` exists (`FileExistsW`, `00AC0F87`). A
+  folder that is not listed is never looked at: the game does not list `UserContent`.
+* Files of a package: `pack0.dzip` (required; resources, scanned for a `.w2w` level),
+  `scripts.dzip` (optional), `config.ini` (`[Configuration]` `Name=`/`Description=`),
+  `screen.png`.
+
+A package's `pack0.dzip` is mounted after every `CookedPC` archive with the override flag
+(`MountDepotArchives`, `00B1B1B9`; `AddDepotDirFile`, `00B1A1FC` replaces an entry only with flag
+1), so its resources also win over `CookedPC`, and between `CookedPC` archives the later mounted
+one wins. That answers Q5's archive-vs-archive question.
+
+The dialog text "Maybe some selected user packages are incompatible?" (`00E45F98`, shown at
+`00AA6B81`) is fixed: it appears on every script compile failure, with or without packages.
+
+### File I/O
+
+Both archives are opened with CRT `_wopen` (`OpenDzipHandle`, `0068E5B0`), which ends in
+`CreateFileW` through the exe's IAT slot `00CAD320`, and read with `_read` on that handle. No
+`FindFirstFile*` on package folders and no file mapping, so the existing `CreateFileW` redirect
+covers a package's `scripts.dzip`. It is opened at compile time (~+1 s), after the overlay
+build (triggered by the `CookedPC\*.dzip` listing at ~+235 ms).
+
+### What the overlay does
+
+* `read_packages` reads the same ini with the game's rules above (`sp_user_content_mounts`,
+  tested case by case in `sptest`'s `usercontent_ini`) and keeps each `Mount=` whose
+  `pack0.dzip` exists, in order. A more lenient reader would patch a copy the game does not
+  compile, which brings back exactly the compile error this fixes. `sp_user_root` gets the
+  Documents folder the way the game does.
+* A mounted package the overlay cannot check (more than 16, or a path too long) may hold the
+  copy that wins, so the script patches are off for that start instead of guessing.
+* For each script entry it patches, the text is taken from the copy the game compiles: the last
+  package whose `scripts.dzip` holds the name, else `base_scripts.dzip`; inside an archive the
+  last entry of that name (`sp_dzip_find_last`). The edits are applied to that text, so a feature
+  still applies all or nothing across the copies actually compiled.
+* A patched entry from a package goes into a cached copy of that package's `scripts.dzip`
+  (`user<k>_scripts.dzip`, k = position among mounted packages), redirected like
+  `base_scripts.dzip`. `sp_dzip_write` now writes a replaced entry into every entry of that
+  name, so a duplicate the game would use is patched too.
+* The cache key lists each mounted package with its `scripts.dzip` size and time, so adding,
+  removing or changing one rebuilds the cache (`OV_CACHE_LAYOUT` 9).
+* A package `scripts.dzip` that cannot be read as DZIP v2 turns all script features off for that
+  start, because what it replaces is unknown.
+* When a package's `pack0.dzip` holds `ui_trade.swf` or `ui_storage.swf`, its copy is the one
+  shown and the log says so; the scripts still work.
+* The DLL's `CreateFileW` hook also passes absolute paths containing `\UserContent\` to the
+  redirect, and the redirect compares paths with repeated backslashes collapsed
+  (`sp_normalize_path`).
+* The cached archives belong together: a patched `extendedmovable.ws` in `base_scripts.dzip`
+  calls into a patched `player.ws` that may sit in a package's copy. If a cached copy does not
+  open, the hook retries four times 50 ms apart (a scanner reading the new file) before it
+  serves the original; that one fallback could still mix patched and unpatched files.
+
+Log lines with a package mounted:
+
+```
+script overlay: user content 'w2ef_test': mounted, has scripts.dzip
+script overlay: game\gui\guiutils.ws: the game compiles the copy in user content 'w2ef_test' - patching that one
+script overlay: user content 'w2ef_test': scripts.dzip served as user0_scripts.dzip
+```
+
+Without an ini: `script overlay: user content: no Config\UserContent.ini, none mounted`.
+
+### Verification
+
+Offline (2026-11-04, Steam and GOG installs): `sptest` tests `dzip_duplicates` (last duplicate
+found, every duplicate replaced), `normalize_path`, `usercontent_ini` (21 inputs against the
+game's reader: spaces around `=`, case, CR-only lines, tab, text after `]`, parse errors, UTF-8
+and UTF-16 with and without BOM), and `user_content`: a fake Documents folder whose ini mounts
+two packages holding `guiutils.ws` (the second also `player.ws`), one without `pack0.dzip`, and
+names a complete package as ` Mount = w2ef_unlisted `, which the game does not mount. Only the
+last package's copies are patched and redirected, the spaced one is ignored, a second build
+reuses the cache, the second package's `player.ws` without the Medallion anchor drops the whole
+Medallion feature (no `W2EF_UseMedallion` call left in `extendedmovable.ws`), with the ini gone
+`guiutils.ws` is patched in `base_scripts.dzip` again, and 17 mounted packages switch the script
+patches off with nothing redirected.
+
+In game: `tools\usercontent-test.ps1 -Game "<game>"` adds a package `w2ef_test` with the install's
+own `guiutils.ws` and `player.ws` (one comment line added) and mounts it; `-Remove` takes it away.
+`sptest pack` and `sptest extract` build it. Result (2026-11-04, owner): the build from before the
+change stops at "Script compilation error" naming `W2EF_UseMedallion` in `extendedmovable.ws`
+(the package's `player.ws` won); the new build starts, patches and serves the package's copies,
+and the read status and the medallion work. See `docs/validation/usercontent-2026-11-04.md`.

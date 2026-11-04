@@ -1884,8 +1884,9 @@ static HANDLE WINAPI hook_CreateFileA(LPCSTR path, DWORD access, DWORD share,
     return h;
 }
 
-// Absolute form of a path the script redirect might own: only CookedPC paths matter, and the
-// game opens its data with absolute paths (docs/fixes/dll-script-patches.md, Q1).
+// Absolute form of a path the script redirect might own: CookedPC paths and the scripts.dzip
+// of user content packages (Documents\Witcher 2\UserContent), and the game opens its data with
+// absolute paths (docs/fixes/dll-script-patches.md, Q1).
 static int script_full_path(const wchar_t* path, wchar_t* full)
 {
     DWORD n;
@@ -1893,7 +1894,7 @@ static int script_full_path(const wchar_t* path, wchar_t* full)
     full[0] = 0;
     if (!path || !*path) return 0;
     if (path[0] == L'\\' || (path[0] && path[1] == L':')) {
-        if (!wcsistr(path, L"cookedpc")) return 0;
+        if (!wcsistr(path, L"cookedpc") && !wcsistr(path, L"\\usercontent\\")) return 0;
         wcscpy_s(full, MAX_PATH, path);
         return 1;
     }
@@ -1927,6 +1928,14 @@ static HANDLE WINAPI hook_CreateFileW(LPCWSTR path, DWORD access, DWORD share,
     }
     h = g_origCreateFileW(use, access, share, sa, disp, flags, tmpl);
     err = GetLastError();
+    // The cached archives belong together (a package's scripts.dzip and base_scripts.dzip call
+    // into each other), so a passing lock on a new cache file, such as a virus scanner reading
+    // it, gets a few retries before this one falls back to the original.
+    for (int retry = 0; use != path && h == INVALID_HANDLE_VALUE && retry < 4; retry++) {
+        Sleep(50);
+        h = g_origCreateFileW(use, access, share, sa, disp, flags, tmpl);
+        err = GetLastError();
+    }
     if (use != path && h == INVALID_HANDLE_VALUE) {
         logf_("script patches: cached copy for \"%ls\" did not open (err %lu) - using the original",
               path, err);

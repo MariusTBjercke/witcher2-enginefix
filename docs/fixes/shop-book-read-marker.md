@@ -672,10 +672,12 @@ patched `container_class.ws` and an unpatched `guiutils.ws`: the `guiutils.ws` t
 came from somewhere else. `container_class.ws` was the only file calling helpers that lived in
 another file, which is why nothing else was reported.
 
-The game can compile scripts from more places than `base_scripts.dzip`. `FUN_00aa69a0` gathers
-script folders from the data path and from every user content package; `FUN_00abf177` mounts
-those from `[UserContent] Packages`, `Mount=` (`FUN_00407854`), and `FUN_00abed95` adds each
-package's folder. The exact place this player's file came from is still unknown.
+The game compiles scripts from `base_scripts.dzip` and from the `scripts.dzip` of every mounted
+user content package, and takes each name from the last of those that holds it. Inside one
+archive it takes the last of duplicate names. See "User content packages" in
+`docs/fixes/dll-script-patches.md`. Either explains this player's error: a package with its own
+`guiutils.ws`, or a modded `base_scripts.dzip` holding `guiutils.ws` twice, where 0.8.1 patched
+the first copy and the game compiled the second. Which one it was is not known.
 
 The helpers now go into a new entry, `game\gui\w2ef_books.ws`, which no other mod ships, so the
 calls always resolve. The game compiles every entry of the archive. `guiutils.ws` keeps only the
@@ -688,6 +690,6 @@ inventory and the storage chest). So a new script must be CRLF; the likely reaso
 `//` comment only ends at `\r`, which would make the whole file one comment. The lexer itself
 was not read. `sptest` now fails on any bare LF or CR in this entry.
 
-Left open: `W2EF_UseMedallion` has to stay in `player.ws` (it uses private members), and
-`extendedmovable.ws` calls it, so a mod replacing `player.ws` the same way would stop the
-game until `[scriptpatches] medallion=0`.
+Both causes are handled since: the overlay patches the copy the game compiles, in a package or
+the last duplicate (see the section named above). The helpers stay in their own entry anyway, so
+a copy the overlay cannot see still leaves the game starting.

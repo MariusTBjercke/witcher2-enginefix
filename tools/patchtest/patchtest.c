@@ -5,6 +5,8 @@
 //   patchtest test [--game "<game>"]     run the unit tests
 //   patchtest build <game> <out>         build the overlay (Task 6)
 //   patchtest migrate <game> <backup>    restore old on-disk patches from <backup> (Task 8)
+//   patchtest pack <out.dzip> [<entry>=<file> ...]   write a DZIP v2 (in-game test packages)
+//   patchtest extract <in.dzip> <entry> <file>       one entry to a file
 //
 // One PASS/FAIL/SKIP line per test; the exit code is the number of failures.
 
@@ -149,6 +151,76 @@ static int make_dzip2(sp_buf* out)
     sp_dzip_close(&z);
     sp_free(&a);
     sp_free(&b);
+    return ok;
+}
+
+// A DZIP v2 holding `n` entries with distinct names, built from the same empty template;
+// n == 0 gives an archive with no entries.
+static int make_dzip_n(int n, const char* const* names, const sp_buf* datas, sp_buf* out)
+{
+    unsigned char head[32];
+    sp_buf empty = { head, sizeof head };
+    sp_dzip z;
+    int ok;
+
+    memset(head, 0, sizeof head);
+    wr32(head + 0, DZIP_MAGIC);
+    wr32(head + 4, 2);
+    wr64(head + 16, 32);
+    wr64(head + 24, 0x00000000FFFFFFFFull);
+    memset(&z, 0, sizeof z);
+    ok = sp_dzip_open(&empty, &z) && sp_dzip_write(&z, n, names, datas, 1234567890LL, out);
+    sp_dzip_close(&z);
+    return ok;
+}
+
+// `zip` with one more table entry: a copy of entry `from` under `name`, so the archive holds
+// a name twice (both entries point at the same bytes). sp_dzip_write cannot make one: it
+// replaces every entry of a name it is given.
+static int add_dup_entry(const sp_buf* zip, int from, const char* name, sp_buf* out)
+{
+    sp_dzip z;
+    sp_dzip_entry* e = NULL;
+    size_t cap, p;
+    int i, n, ok = 0;
+
+    memset(out, 0, sizeof *out);
+    memset(&z, 0, sizeof z);
+    if (!sp_dzip_open(zip, &z) || from < 0 || from >= z.count) goto done;
+    n = z.count + 1;
+    e = (sp_dzip_entry*)malloc((size_t)n * sizeof *e);
+    if (!e) goto done;
+    memcpy(e, z.e, (size_t)z.count * sizeof *e);
+    e[z.count] = z.e[from];
+    if (strcpy_s(e[z.count].name, sizeof e[0].name, name) != 0) goto done;
+    cap = (size_t)z.table;
+    for (i = 0; i < n; i++) cap += 2 + strlen(e[i].name) + 1 + 32;
+    out->p = (unsigned char*)malloc(cap);
+    if (!out->p) goto done;
+    memcpy(out->p, zip->p, (size_t)z.table);
+    p = (size_t)z.table;
+    for (i = 0; i < n; i++) {
+        size_t len = strlen(e[i].name) + 1;
+
+        out->p[p++] = (unsigned char)(len & 0xFF);
+        out->p[p++] = (unsigned char)(len >> 8);
+        memcpy(out->p + p, e[i].name, len - 1);
+        p += len - 1;
+        out->p[p++] = 0;
+        wr64(out->p + p, (unsigned long long)e[i].time);
+        wr64(out->p + p + 8, (unsigned long long)e[i].usize);
+        wr64(out->p + p + 16, (unsigned long long)e[i].offset);
+        wr64(out->p + p + 24, (unsigned long long)e[i].csize);
+        p += 32;
+    }
+    out->n = p;
+    wr32(out->p + 8, (unsigned int)n);
+    wr64(out->p + 24, sp_dzip_hash(e, n));
+    ok = 1;
+done:
+    if (!ok) sp_free(out);
+    free(e);
+    sp_dzip_close(&z);
     return ok;
 }
 
@@ -1564,6 +1636,369 @@ done:
     return why;
 }
 
+// A name held twice, the second time in other case: the last entry is the one the game
+// compiles (0041495C keeps the later index), and a write replaces every entry of the name.
+static const char* test_dzip_duplicates(void)
+{
+    const char* why = NULL;
+    const char* names[2] = { "a\\x.ws", "b\\y.ws" };
+    const char* repl[1] = { "a\\x.ws" };
+    sp_buf datas[2], bye, zip = { NULL, 0 }, dup = { NULL, 0 }, out = { NULL, 0 };
+    sp_buf txt = { NULL, 0 };
+    sp_dzip z, z2;
+
+    memset(&z, 0, sizeof z);
+    memset(&z2, 0, sizeof z2);
+    datas[0] = buf_from_str("hello");
+    datas[1] = buf_from_str("world!");
+    bye = buf_from_str("bye");
+    CHECK(datas[0].p && datas[1].p && bye.p);
+    CHECK(make_dzip_n(2, names, datas, &zip));
+    CHECK(add_dup_entry(&zip, 1, "A\\X.WS", &dup));
+    CHECK(sp_dzip_open(&dup, &z));
+    CHECK(z.count == 3);
+    CHECK(sp_dzip_find(&z, "a\\x.ws") == 0);
+    CHECK(sp_dzip_find_last(&z, "a\\x.ws") == 2);
+    CHECK(sp_dzip_find_last(&z, "b\\y.ws") == 1);
+    CHECK(sp_dzip_find_last(&z, "nope") == -1);
+    CHECK(sp_dzip_count_name(&z, "A\\x.ws") == 2);
+    CHECK(sp_dzip_extract(&z, 2, &txt) && text_is_str(&txt, "world!"));
+    sp_free(&txt);
+    CHECK(sp_dzip_write(&z, 1, repl, &bye, 99, &out));
+    CHECK(sp_dzip_open(&out, &z2));
+    CHECK(z2.count == 3);
+    CHECK(sp_dzip_extract(&z2, 0, &txt) && text_is_str(&txt, "bye"));
+    sp_free(&txt);
+    CHECK(sp_dzip_extract(&z2, 1, &txt) && text_is_str(&txt, "world!"));
+    sp_free(&txt);
+    CHECK(sp_dzip_extract(&z2, 2, &txt) && text_is_str(&txt, "bye"));
+    CHECK(z2.e[0].time == 99 && z2.e[2].time == 99);
+done:
+    sp_free(&txt);
+    sp_dzip_close(&z2);
+    sp_dzip_close(&z);
+    sp_free(&out);
+    sp_free(&dup);
+    sp_free(&zip);
+    sp_free(&bye);
+    sp_free(&datas[0]);
+    sp_free(&datas[1]);
+    return why;
+}
+
+// ---- user content packages -------------------------------------------------
+
+static int uc_put_dzip(const wchar_t* path, int n, const char* const* names, const sp_buf* datas)
+{
+    sp_buf z = { NULL, 0 };
+    wchar_t dir[MAX_PATH], *slash;
+    int ok;
+
+    if (wcscpy_s(dir, MAX_PATH, path) != 0 || (slash = wcsrchr(dir, L'\\')) == NULL) return 0;
+    *slash = 0;
+    if (!mg_mkdirs(dir)) return 0;
+    ok = make_dzip_n(n, names, datas, &z) && sp_write_file_atomic(path, &z);
+    sp_free(&z);
+    return ok;
+}
+
+static const wchar_t* uc_redirect(const sp_redirect* r, int nr, const wchar_t* target)
+{
+    int i;
+
+    for (i = 0; i < nr; i++) {
+        if (!_wcsicmp(r[i].target, target)) return r[i].cached;
+    }
+    return NULL;
+}
+
+// `b` with `from` replaced by `to` once (an empty buffer when `from` is missing).
+static sp_buf uc_replace(const sp_buf* b, const char* from, const char* to)
+{
+    sp_buf out = { NULL, 0 };
+    size_t lf = strlen(from), lt = strlen(to), off;
+
+    for (off = 0; off + lf <= b->n; off++) {
+        if (memcmp(b->p + off, from, lf) != 0) continue;
+        out.n = b->n - lf + lt;
+        out.p = (unsigned char*)malloc(out.n ? out.n : 1);
+        if (!out.p) {
+            out.n = 0;
+            return out;
+        }
+        memcpy(out.p, b->p, off);
+        memcpy(out.p + off, to, lt);
+        memcpy(out.p + off + lt, b->p + off + lf, b->n - off - lf);
+        return out;
+    }
+    return out;
+}
+
+// How many times `s` occurs in entry `name` of archive `dzip`; -1 when it cannot be read.
+static int uc_count(const wchar_t* dzip, const char* name, const char* s)
+{
+    sp_buf txt;
+    int n;
+
+    if (read_dzip_entry(dzip, name, &txt) != NULL) return -1;
+    n = count_in_text(&txt, s);
+    sp_free(&txt);
+    return n;
+}
+
+// A fake Documents\Witcher 2 next to the real game. UserContent.ini (UTF-16 with BOM) mounts
+// w2ef_a, w2ef_missing (no folder) and w2ef_b in that order; a and b hold guiutils.ws, b also
+// player.ws, and w2ef_unlisted is a complete package whose line, " Mount = w2ef_unlisted ", the
+// game reads as the key "Mount " (no trimming), so it is not mounted. The game
+// compiles b's copies (the last mount wins, 00414CC9), so those must be the patched ones; a,
+// the unlisted folder and base_scripts.dzip's guiutils.ws stay as they are. Then: a cache hit,
+// b's player.ws without the Medallion anchor (the whole feature, extendedmovable.ws included,
+// must drop), and the ini removed (back to base_scripts.dzip only).
+static const char* test_user_content(void)
+{
+    static const char* const gu = "game\\gui\\guiutils.ws";
+    static const char* const pl = "game\\player\\player.ws";
+    static const char* const em = "game\\player\\states\\extendedmovable.ws";
+    static const char* const cc = "game\\gameplay\\container_class.ws";
+    static const char* const mark = "//===witcher2-enginefix=== BEGIN";
+    static const wchar_t ini_text[] =
+        L"\xFEFF[General]\r\nFoo=1\r\n\r\n[Packages]\r\nMount=w2ef_a\r\nMount=w2ef_missing\r\n"
+        L" Mount = w2ef_unlisted \r\nMount=w2ef_b\r\n";
+    const char* why = NULL;
+    const char* one[1];
+    const char* two[2];
+    wchar_t tmp[MAX_PATH], base[MAX_PATH], root[MAX_PATH], cache[MAX_PATH], zip[MAX_PATH];
+    wchar_t pa[MAX_PATH], pb[MAX_PATH], pu[MAX_PATH], path[MAX_PATH], ini[MAX_PATH];
+    sp_buf vgu = { NULL, 0 }, vpl = { NULL, 0 }, agu = { NULL, 0 }, bgu = { NULL, 0 };
+    sp_buf bpl = { NULL, 0 }, junk = { NULL, 0 }, datas[2], inib;
+    sp_redirect r[24];
+    sp_features f;
+    const wchar_t *cb, *cbase;
+    int nr = 0;
+
+    base[0] = 0;
+    f.book_marker = f.cont = f.pause_quit = f.window_mode = f.medallion = 1;
+    CHECK(path_join(zip, MAX_PATH, g_game, L"CookedPC\\base_scripts.dzip"));
+    CHECK(read_dzip_entry(zip, gu, &vgu) == NULL);
+    CHECK(read_dzip_entry(zip, pl, &vpl) == NULL);
+    if (sp_script_marked(&vgu) || sp_script_marked(&vpl)) {
+        printf("  (base_scripts.dzip already carries witcher2-enginefix changes - skipped)\n");
+        goto done;
+    }
+    if (GetTempPathW(MAX_PATH, tmp) == 0) return "GetTempPathW failed";
+    CHECK(_snwprintf_s(base, MAX_PATH, _TRUNCATE, L"%spatchtest-uc-%lu", tmp,
+                       GetCurrentProcessId()) >= 0);
+    mg_rmtree(base);
+    CHECK(path_join(root, MAX_PATH, base, L"Witcher 2"));
+    CHECK(path_join(cache, MAX_PATH, base, L"cache"));
+    CHECK(path_join(pa, MAX_PATH, root, L"UserContent\\w2ef_a\\scripts.dzip"));
+    CHECK(path_join(pb, MAX_PATH, root, L"UserContent\\w2ef_b\\scripts.dzip"));
+    CHECK(path_join(pu, MAX_PATH, root, L"UserContent\\w2ef_unlisted\\scripts.dzip"));
+    CHECK(path_join(ini, MAX_PATH, root, L"Config\\UserContent.ini"));
+
+    agu = uc_replace(&vgu, "", "// package a\r\n");     // "" matches at 0: a prefix
+    bgu = uc_replace(&vgu, "", "// package b\r\n");
+    junk = buf_from_str("this is not WitcherScript");
+    CHECK(agu.p && bgu.p && junk.p);
+    one[0] = gu;
+    CHECK(uc_put_dzip(pa, 1, one, &agu));
+    two[0] = gu;
+    two[1] = pl;
+    datas[0] = bgu;
+    datas[1] = vpl;
+    CHECK(uc_put_dzip(pb, 2, two, datas));
+    one[0] = cc;
+    CHECK(uc_put_dzip(pu, 1, one, &junk));
+    CHECK(path_join(path, MAX_PATH, root, L"UserContent\\w2ef_a\\pack0.dzip") &&
+          uc_put_dzip(path, 0, NULL, NULL));
+    CHECK(path_join(path, MAX_PATH, root, L"UserContent\\w2ef_b\\pack0.dzip") &&
+          uc_put_dzip(path, 0, NULL, NULL));
+    CHECK(path_join(path, MAX_PATH, root, L"UserContent\\w2ef_unlisted\\pack0.dzip") &&
+          uc_put_dzip(path, 0, NULL, NULL));
+    CHECK(path_join(path, MAX_PATH, root, L"Config") && mg_mkdirs(path));
+    inib.p = (unsigned char*)ini_text;
+    inib.n = sizeof ini_text - sizeof ini_text[0];
+    CHECK(sp_write_file_atomic(ini, &inib));
+
+    // 1: b's copies are patched and served; base_scripts.dzip gets the rest.
+    CHECK(sp_overlay_build(g_game, cache, f, 1234, r, &nr, 24, root, mg_quiet));
+    CHECK(strstr(sp_overlay_status(), "book_marker=on") != NULL);
+    CHECK(strstr(sp_overlay_status(), "medallion=on") != NULL);
+    CHECK((cb = uc_redirect(r, nr, pb)) != NULL);
+    CHECK(uc_redirect(r, nr, pa) == NULL);
+    CHECK(uc_redirect(r, nr, pu) == NULL);
+    CHECK((cbase = uc_redirect(r, nr, zip)) != NULL);
+    CHECK(uc_count(cb, gu, "// package b\r\n") == 1);
+    CHECK(uc_count(cb, gu, mark) == 1);
+    CHECK(uc_count(cb, pl, "function W2EF_UseMedallion") == 1);
+    CHECK(uc_count(cbase, gu, mark) == 0);
+    CHECK(uc_count(cbase, pl, mark) == 0);
+    CHECK(uc_count(cbase, em, "W2EF_UseMedallion") == 1);
+    CHECK(uc_count(cbase, cc, mark) == 6);
+    CHECK(uc_count(cbase, "game\\gui\\w2ef_books.ws", "function W2EF_LootName") == 1);
+
+    // 2: same inputs, the cache is reused and still redirects b.
+    nr = 0;
+    CHECK(sp_overlay_build(g_game, cache, f, 1234, r, &nr, 24, root, mg_quiet));
+    CHECK(strstr(sp_overlay_status(), "cache=reused") != NULL);
+    CHECK(uc_redirect(r, nr, pb) != NULL && uc_redirect(r, nr, zip) != NULL);
+
+    // 3: b's player.ws without the anchor: Medallion drops everywhere, the books stay.
+    bpl = uc_replace(&vpl, "final function TriggerMedallion()",
+                     "final function TriggerMedallionAsBefore()");
+    CHECK(bpl.p != NULL);
+    datas[1] = bpl;
+    CHECK(uc_put_dzip(pb, 2, two, datas));
+    nr = 0;
+    CHECK(sp_overlay_build(g_game, cache, f, 1234, r, &nr, 24, root, mg_quiet));
+    CHECK(strstr(sp_overlay_status(), "medallion=skipped") != NULL);
+    CHECK(strstr(sp_overlay_status(), "book_marker=on") != NULL);
+    CHECK((cb = uc_redirect(r, nr, pb)) != NULL);
+    CHECK((cbase = uc_redirect(r, nr, zip)) != NULL);
+    CHECK(uc_count(cb, gu, mark) == 1);
+    CHECK(uc_count(cb, pl, "W2EF_") == 0);
+    CHECK(uc_count(cbase, em, "W2EF_UseMedallion") == 0);
+
+    // 4: no ini, nothing mounted: guiutils.ws is patched in base_scripts.dzip again.
+    CHECK(DeleteFileW(ini));
+    nr = 0;
+    CHECK(sp_overlay_build(g_game, cache, f, 1234, r, &nr, 24, root, mg_quiet));
+    CHECK(strstr(sp_overlay_status(), "medallion=on") != NULL);
+    CHECK(uc_redirect(r, nr, pb) == NULL);
+    CHECK((cbase = uc_redirect(r, nr, zip)) != NULL);
+    CHECK(uc_count(cbase, gu, mark) == 1);
+    CHECK(uc_count(cbase, pl, "function W2EF_UseMedallion") == 1);
+
+    // 5: 17 mounted packages, one more than the overlay checks: the last may hold the copy the
+    // game compiles, so the script patches are off and nothing is redirected.
+    {
+        char many[1024] = "[Packages]\r\n";
+        sp_buf mb;
+        int k;
+
+        for (k = 0; k < 17; k++) {
+            wchar_t rel[64];
+
+            CHECK(_snwprintf_s(rel, 64, _TRUNCATE, L"UserContent\\w2ef_p%02d\\pack0.dzip", k) >= 0);
+            CHECK(path_join(path, MAX_PATH, root, rel) && uc_put_dzip(path, 0, NULL, NULL));
+            _snprintf_s(many + strlen(many), sizeof many - strlen(many), _TRUNCATE,
+                        "Mount=w2ef_p%02d\r\n", k);
+        }
+        mb.p = (unsigned char*)many;
+        mb.n = strlen(many);
+        CHECK(sp_write_file_atomic(ini, &mb));
+        nr = 0;
+        CHECK(sp_overlay_build(g_game, cache, f, 1234, r, &nr, 24, root, mg_quiet));
+        CHECK(strstr(sp_overlay_status(), "medallion=skipped: user content that cannot be checked") != NULL);
+        CHECK(nr == 0);
+    }
+done:
+    if (base[0]) mg_rmtree(base);
+    sp_free(&vgu);
+    sp_free(&vpl);
+    sp_free(&agu);
+    sp_free(&bgu);
+    sp_free(&bpl);
+    sp_free(&junk);
+    return why;
+}
+
+// sp_user_content_mounts against the game's reader (00AC6AAE, 00AC1D74): Mount= values joined
+// with '|', and whether the whole file parsed.
+typedef struct { char out[256]; int n; } uc_join;
+
+static void uc_join_cb(void* ctx, const wchar_t* v, size_t len)
+{
+    uc_join* j = (uc_join*)ctx;
+    size_t k, w = strlen(j->out);
+
+    if (j->n++ && w + 1 < sizeof j->out) j->out[w++] = '|';
+    for (k = 0; k < len && w + 1 < sizeof j->out; k++) j->out[w++] = (char)v[k];
+    j->out[w] = 0;
+}
+
+static const char* uc_case(int index, const sp_buf* in, const char* want, int whole)
+{
+    uc_join j;
+    int got;
+
+    memset(&j, 0, sizeof j);
+    got = sp_user_content_mounts(in, uc_join_cb, &j);
+    if (got != whole || strcmp(j.out, want) != 0) {
+        _snprintf_s(g_why, sizeof g_why, _TRUNCATE, "case %d: got '%s' (%d), expected '%s' (%d)",
+                    index, j.out, got, want, whole);
+        return g_why;
+    }
+    return NULL;
+}
+
+static const char* test_usercontent_ini(void)
+{
+    static const struct { const char* in; const char* want; int whole; } k_cases[] = {
+        { "[Packages]\r\nMount=a\r\nMount=b\r\n", "a|b", 1 },
+        { "[Packages]\r\nMount = a\r\n", "", 1 },                    // key "Mount "
+        { "[Packages]\r\nMount= a\r\n", " a", 1 },                   // value kept as is
+        { "[packages]\r\nMount=a\r\n", "", 1 },                      // case-sensitive
+        { "[Packages]\r\nmount=a\r\n", "", 1 },
+        { "  [Packages]\r\n\tMount=a\r\n", "a", 1 },                 // blanks between entries
+        { "[Packages] ;note\r\nMount=a\r\n", "a", 1 },
+        { "[Packages]\rMount=a\rMount=b", "a|b", 1 },                // CR only
+        { "[Packages]\nMount=a\tcomment\n", "a", 1 },                // a tab ends the value
+        { "Mount=x\r\n[Packages]\r\nMount=a\r\n", "", 0 },          // key before any section
+        { "[Packages]\r\nMount=a\r\n=bad\r\nMount=b\r\n", "a", 0 },  // empty key stops
+        { "[Pack ages]\r\nMount=a\r\n", "", 0 },                     // blank inside [...]
+        { "[]\r\n[Packages]\r\nMount=a\r\n", "", 0 },
+        { "[Other]\r\nMount=x\r\n[Packages]\r\nMount=a\r\n[Other2]\r\nMount=y\r\n"
+          "[Packages]\r\nMount=b\r\n", "a|b", 1 },
+        { "\xEF\xBB\xBF[Packages]\r\nMount=a\r\n", "a", 1 },         // UTF-8 BOM skipped as ANSI
+        { "[Packages]\r\nMount=a=b\r\n", "a=b", 1 },
+        { "[Packages]\r\nMount=\r\nMount=c", "|c", 1 },
+        { "[Packages]\r\n; comment\r\nMount=a", "a", 1 },            // a key, not a comment
+        { "", "", 1 },
+    };
+    static const char* const utf16 = "[Packages]\r\nMount=a\r\nMount=b\r\n";
+    const char* why = NULL;
+    unsigned char wide[128];
+    sp_buf in;
+    size_t k, n = strlen(utf16);
+    int i;
+
+    for (i = 0; i < (int)(sizeof k_cases / sizeof k_cases[0]); i++) {
+        in.p = (unsigned char*)k_cases[i].in;
+        in.n = strlen(k_cases[i].in);
+        if ((why = uc_case(i, &in, k_cases[i].want, k_cases[i].whole)) != NULL) return why;
+    }
+    // UTF-16LE with the FF FE start, and without it (read as ANSI up to the first NUL: "[").
+    wide[0] = 0xFF;
+    wide[1] = 0xFE;
+    for (k = 0; k < n; k++) {
+        wide[2 + 2 * k] = (unsigned char)utf16[k];
+        wide[3 + 2 * k] = 0;
+    }
+    in.p = wide;
+    in.n = 2 + 2 * n;
+    if ((why = uc_case(100, &in, "a|b", 1)) != NULL) return why;
+    in.p = wide + 2;
+    in.n = 2 * n;
+    if ((why = uc_case(101, &in, "", 0)) != NULL) return why;
+    return why;
+}
+
+// sp_normalize_path: the game's "Witcher 2\\UserContent" form must equal the joined one.
+static const char* test_normalize_path(void)
+{
+    const char* why = NULL;
+    wchar_t a[MAX_PATH] = L"C:\\Users\\x\\Documents\\Witcher 2\\\\UserContent\\pkg\\\\scripts.dzip";
+    wchar_t b[MAX_PATH] = L"\\\\server\\share\\\\dir/file";
+
+    sp_normalize_path(a);
+    sp_normalize_path(b);
+    CHECK(!wcscmp(a, L"C:\\Users\\x\\Documents\\Witcher 2\\UserContent\\pkg\\scripts.dzip"));
+    CHECK(!wcscmp(b, L"\\\\server\\share\\dir\\file"));
+done:
+    return why;
+}
+
 // One archive through the file-backed reader: every entry must equal the in-memory path's
 // bytes. Archives over 4 MB (pack0.dzip is ~10 GB) only get their first entry, so the test
 // never loads a huge file.
@@ -1668,6 +2103,9 @@ typedef struct {
 static const test_case k_tests[] = {
     { "dzip_roundtrip",    test_dzip_roundtrip,    0 },
     { "dzip_replace",      test_dzip_replace,      0 },
+    { "dzip_duplicates",   test_dzip_duplicates,   0 },
+    { "normalize_path",    test_normalize_path,    0 },
+    { "usercontent_ini",   test_usercontent_ini,   0 },
     { "lzf_backrefs",      test_lzf_backrefs,      0 },
     { "common_io",         test_common_io,         0 },
     { "migrate",           test_migrate,           0 },
@@ -1689,6 +2127,7 @@ static const test_case k_tests[] = {
     { "swf_real",          test_swf_real,          1 },
     { "dds_real_overlay",  test_dds_real_overlay,  1 },
     { "script_real",       test_script_real,       1 },
+    { "user_content",      test_user_content,      1 },
 };
 
 static int run_tests(void)
@@ -1717,8 +2156,76 @@ static int usage(void)
     fprintf(stderr,
             "usage: patchtest test [--game \"<game>\"]\n"
             "       patchtest build <game> <out>\n"
-            "       patchtest migrate <game> <backup>\n");
+            "       patchtest migrate <game> <backup>\n"
+            "       patchtest pack <out.dzip> [<entry>=<file> ...]\n"
+            "       patchtest extract <in.dzip> <entry> <file>\n");
     return 2;
+}
+
+// extract <in.dzip> <entry> <file>: one entry (the first of that name) to a file.
+static int run_extract(int argc, char** argv)
+{
+    wchar_t in[MAX_PATH], out[MAX_PATH];
+    sp_buf txt = { NULL, 0 };
+    const char* err;
+    int ok;
+
+    if (argc != 5 || MultiByteToWideChar(CP_ACP, 0, argv[2], -1, in, MAX_PATH) <= 0 ||
+        MultiByteToWideChar(CP_ACP, 0, argv[4], -1, out, MAX_PATH) <= 0) {
+        return usage();
+    }
+    err = read_dzip_entry(in, argv[3], &txt);
+    if (err) {
+        fprintf(stderr, "extract: %s: %s\n", argv[3], err);
+        return 1;
+    }
+    ok = sp_write_file_atomic(out, &txt);
+    if (!ok) fprintf(stderr, "extract: cannot write %ls\n", out);
+    else printf("extract: %s, %d bytes\n", argv[3], (int)txt.n);
+    sp_free(&txt);
+    return ok ? 0 : 1;
+}
+
+// pack <out.dzip> [<entry>=<file> ...]: a DZIP v2 with those entries (none gives an empty
+// archive), e.g. a user content package for an in-game test.
+static int run_pack(int argc, char** argv)
+{
+    const char* names[32];
+    sp_buf datas[32];
+    wchar_t out[MAX_PATH], file[MAX_PATH];
+    sp_buf zip = { NULL, 0 };
+    int n = 0, i, ok = 0;
+
+    memset(datas, 0, sizeof datas);
+    if (argc < 3 || argc - 3 > 32 ||
+        MultiByteToWideChar(CP_ACP, 0, argv[2], -1, out, MAX_PATH) <= 0) {
+        return usage();
+    }
+    for (i = 3; i < argc; i++) {
+        char* eq = strchr(argv[i], '=');
+
+        if (!eq || eq == argv[i] ||
+            MultiByteToWideChar(CP_ACP, 0, eq + 1, -1, file, MAX_PATH) <= 0) {
+            fprintf(stderr, "pack: expected <entry>=<file>, got %s\n", argv[i]);
+            goto done;
+        }
+        *eq = 0;
+        if (!sp_read_file(file, &datas[n])) {
+            fprintf(stderr, "pack: cannot read %ls\n", file);
+            goto done;
+        }
+        names[n++] = argv[i];
+    }
+    if (!make_dzip_n(n, names, datas, &zip) || !sp_write_file_atomic(out, &zip)) {
+        fprintf(stderr, "pack: cannot write %ls\n", out);
+        goto done;
+    }
+    printf("pack: %ls, %d entr%s\n", out, n, n == 1 ? "y" : "ies");
+    ok = 1;
+done:
+    for (i = 0; i < n; i++) sp_free(&datas[i]);
+    sp_free(&zip);
+    return ok ? 0 : 1;
 }
 
 // The overlay's log sink: one line per message, like the DLL's logf_.
@@ -1733,12 +2240,13 @@ static void log_line(const char* fmt, ...)
     fflush(stdout);
 }
 
-// build <game> <out>: the overlay for all four features, as the golden test runs it.
+// build <game> <out>: the overlay for every feature, as the golden test runs it, with this
+// user's Documents\Witcher 2 for user content.
 static int run_build(const char* game_arg, const char* out_arg)
 {
-    static const int k_redirects = 8;
-    wchar_t game[MAX_PATH], out[MAX_PATH];
-    sp_redirect redirects[8];
+    static const int k_redirects = 24;
+    wchar_t game[MAX_PATH], out[MAX_PATH], root[MAX_PATH];
+    sp_redirect redirects[24];
     sp_features f;
     FILETIME ft;
     ULARGE_INTEGER now;
@@ -1760,7 +2268,7 @@ static int run_build(const char* game_arg, const char* out_arg)
     now.HighPart = ft.dwHighDateTime;
     started = GetTickCount();
     ok = sp_overlay_build(game, out, f, (long long)now.QuadPart, redirects, &nr, k_redirects,
-                          log_line);
+                          sp_user_root(root, MAX_PATH) ? root : NULL, log_line);
     for (i = 0; i < nr; i++) {
         printf("  redirect: %ls -> %ls\n", redirects[i].target, redirects[i].cached);
     }
@@ -1773,6 +2281,8 @@ static int run_build(const char* game_arg, const char* out_arg)
 int main(int argc, char** argv)
 {
     if (argc < 2) return usage();
+    if (strcmp(argv[1], "pack") == 0) return run_pack(argc, argv);
+    if (strcmp(argv[1], "extract") == 0) return run_extract(argc, argv);
     if (strcmp(argv[1], "test") == 0) {
         for (int i = 2; i < argc; i++) {
             if (strcmp(argv[i], "--game") == 0 && i + 1 < argc) {

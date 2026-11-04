@@ -103,6 +103,24 @@ int sp_dzip_find(const sp_dzip* z, const char* name)
     return -1;
 }
 
+int sp_dzip_find_last(const sp_dzip* z, const char* name)
+{
+    if (!z || !name) return -1;
+    for (int i = z->count - 1; i >= 0; i--)
+        if (_stricmp(z->e[i].name, name) == 0) return i;
+    return -1;
+}
+
+int sp_dzip_count_name(const sp_dzip* z, const char* name)
+{
+    int n = 0;
+
+    if (!z || !name) return 0;
+    for (int i = 0; i < z->count; i++)
+        if (_stricmp(z->e[i].name, name) == 0) n++;
+    return n;
+}
+
 unsigned long long sp_dzip_hash(const sp_dzip_entry* e, int count)
 {
     const unsigned long long P = 0x00000100000001B3ULL;
@@ -332,20 +350,29 @@ int sp_dzip_write(const sp_dzip* z, int n, const char* const* names, const sp_bu
     if (!wbuf_put(&w, z->data.p, (size_t)z->table)) goto done;
     for (i = 0; i < n; i++) {
         sp_buf packed;
-        int idx = -1;
+        int hits = 0;
         if (!names[i] || !*names[i] || strlen(names[i]) >= sizeof e[0].name) goto done;
-        for (k = 0; k < used; k++)
-            if (_stricmp(e[k].name, names[i]) == 0) { idx = k; break; }
-        if (idx < 0) {                  // new entry: appended to the table (Branch B)
-            idx = used++;
-            memset(&e[idx], 0, sizeof e[idx]);
-            strcpy_s(e[idx].name, sizeof e[idx].name, names[i]);
-        }
         if (!pack_entry(&datas[i], &packed)) goto done;
-        e[idx].time = filetime;
-        e[idx].usize = (long long)datas[i].n;
-        e[idx].offset = (long long)w.b.n;
-        e[idx].csize = (long long)packed.n;
+        // Every entry of that name gets the new bytes: the game compiles the last of
+        // duplicate names (0041495C keeps the later index), so a first-match-only write
+        // would leave the copy it uses unpatched.
+        for (k = 0; k < used; k++) {
+            if (_stricmp(e[k].name, names[i]) != 0) continue;
+            e[k].time = filetime;
+            e[k].usize = (long long)datas[i].n;
+            e[k].offset = (long long)w.b.n;
+            e[k].csize = (long long)packed.n;
+            hits++;
+        }
+        if (!hits) {                    // new entry: appended to the table (Branch B)
+            k = used++;
+            memset(&e[k], 0, sizeof e[k]);
+            strcpy_s(e[k].name, sizeof e[k].name, names[i]);
+            e[k].time = filetime;
+            e[k].usize = (long long)datas[i].n;
+            e[k].offset = (long long)w.b.n;
+            e[k].csize = (long long)packed.n;
+        }
         if (!wbuf_put(&w, packed.p, packed.n)) {
             sp_free(&packed);
             goto done;

@@ -8,7 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SP_MAX_REDIRECTS 8
+// base_scripts.dzip, the icon carrier, two movies, and one scripts.dzip per user content
+// package (at most 16, OV_MAX_PACKAGES).
+#define SP_MAX_REDIRECTS 24
 
 // The two movies BookMarker redirects when the game has them loose.
 static const wchar_t* const k_swf_paths[2] = {
@@ -46,13 +48,17 @@ static int wide_copy(wchar_t* dst, size_t cap, const wchar_t* src)
     return 1;
 }
 
-// The cached copy for an absolute game path, or NULL.
+// The cached copy for an absolute game path, or NULL. Targets are stored normalized; the game
+// opens user content as "...\Witcher 2\\UserContent\..." (00ABF1A3), so the path is too.
 static const wchar_t* lookup(const wchar_t* full)
 {
+    wchar_t norm[MAX_PATH];
     int i;
 
+    if (!wide_copy(norm, MAX_PATH, full)) return NULL;
+    sp_normalize_path(norm);
     for (i = 0; i < g_nredirects; i++) {
-        if (!_wcsicmp(g_redirects[i].target, full)) return g_redirects[i].cached;
+        if (!_wcsicmp(g_redirects[i].target, norm)) return g_redirects[i].cached;
     }
     return NULL;
 }
@@ -118,11 +124,19 @@ static int build_once(void)
                             "lines); the next start tries again");
             }
         } else {
+            wchar_t root[MAX_PATH];
+            int have_root = sp_user_root(root, MAX_PATH), i;
+
+            if (!have_root && g_log) {
+                g_log("script patches: no Documents folder - user content is not checked");
+            }
             GetSystemTimeAsFileTime(&ft);
             now.LowPart = ft.dwLowDateTime;
             now.HighPart = ft.dwHighDateTime;
             ok = sp_overlay_build(g_game, g_cache, g_features, (long long)now.QuadPart,
-                                  g_redirects, &g_nredirects, SP_MAX_REDIRECTS, g_log);
+                                  g_redirects, &g_nredirects, SP_MAX_REDIRECTS,
+                                  have_root ? root : NULL, g_log);
+            for (i = 0; i < g_nredirects; i++) sp_normalize_path(g_redirects[i].target);
             g_build = ok ? 1 : -1;
             if (g_log) {
                 char line[900];

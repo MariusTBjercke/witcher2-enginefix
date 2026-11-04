@@ -39,6 +39,14 @@ Feature `Medallion` in `src/scriptpatches/edits.txt`, fragment `medallion_use.ws
 `TriggerMedalionFX` keeps its `m_canUseMedallion` guard, so the key is harmless during the cooldown.
 Quest input blocks (`IgnoreGameInput( 'GI_Medallion' )`) act before the handler and still apply.
 
+The two rows depend on each other across files: `extendedmovable.ws` calls a function that only
+the patched `player.ws` has. `W2EF_UseMedallion` cannot move to a file of its own because it uses
+private members (`m_canUseMedallion`, `UseTalismanGuide`). A `player.ws` from a user content
+package would win over ours and leave the call unresolved, so the overlay patches whichever copy
+the game compiles (see "User content packages" in `docs/fixes/dll-script-patches.md`). If that
+copy lacks the anchor, the whole feature drops, `extendedmovable.ws` included, and the game
+starts with the vanilla medallion.
+
 ## Why 1 s
 
 `witcher_medalion.w2ent`: `beginRadius` 0.1, `endRadius` 12, `distPerSec` 12, `sustainTime` 10. The

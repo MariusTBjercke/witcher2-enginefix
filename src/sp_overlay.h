@@ -20,10 +20,31 @@ typedef struct { int book_marker, cont, pause_quit, window_mode, medallion; } sp
 // the same files. `filetime` is the FILETIME written into the replaced/added archive entries
 // (the build time; the reference uses DateTime.UtcNow). `r` gets at most maxr entries and is
 // owned by the caller. Each skipped part is logged through `log` (may be NULL).
+// `user_root` is the game's user folder, `<Documents>\Witcher 2` (sp_user_root), or NULL to
+// ignore user content. The game compiles a script from the last mounted user content package
+// whose scripts.dzip holds it before base_scripts.dzip, so each patched script is taken from,
+// and written back to, whichever copy the game compiles.
 // 1 = ok (parts may have been skipped), 0 = the build failed and the caller should serve the
 // original files.
 int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features f,
-                     long long filetime, sp_redirect* r, int* nr, int maxr, sp_log_fn log);
+                     long long filetime, sp_redirect* r, int* nr, int maxr,
+                     const wchar_t* user_root, sp_log_fn log);
+
+// `<Documents>\Witcher 2`, from SHGetFolderPathW(CSIDL_PERSONAL) as the game builds it
+// (00932589). 0 when the shell has no Documents folder.
+int sp_user_root(wchar_t* out, size_t cap);
+
+// Calls `fn` with every Mount= value of section [Packages] of a UserContent.ini, in file order,
+// read the way the game reads it (00AC6AAE, 00AC1D74): UTF-16LE only with an FF FE start, else
+// ANSI; no trimming; case-sensitive names; reading stops at the first line the game cannot
+// parse, keeping what came before. The value is not NUL-terminated. Returns 1 when the whole
+// file parsed, 0 when it stopped early, -1 when out of memory.
+typedef void (*sp_mount_fn)(void* ctx, const wchar_t* value, size_t len);
+int sp_user_content_mounts(const sp_buf* ini, sp_mount_fn fn, void* ctx);
+
+// Collapses repeated backslashes after the first two characters (a UNC or \\?\ prefix stays):
+// the game opens user content as "...\Witcher 2\\UserContent\...".
+void sp_normalize_path(wchar_t* p);
 
 // One line describing the last build for the DLL's single log line, e.g.
 // "book_marker=on continue=on pause_quit=on cache=built 110 ms" (or "cache=reused",

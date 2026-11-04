@@ -27,6 +27,13 @@ int sp_dzip_open(const sp_buf* data, sp_dzip* out);
 // Index of the entry, case-insensitive, -1 when there is none.
 int sp_dzip_find(const sp_dzip* z, const char* name);
 
+// Like sp_dzip_find, but the last entry of that name: the one the game's script compiler
+// uses when an archive holds a name twice (0041495C keeps the later index).
+int sp_dzip_find_last(const sp_dzip* z, const char* name);
+
+// How many entries carry that name, case-insensitive.
+int sp_dzip_count_name(const sp_dzip* z, const char* name);
+
 // 1 = ok. LZF, 64 KiB blocks; fails on a corrupt stream or an entry outside `data`.
 int sp_dzip_extract(const sp_dzip* z, int i, sp_buf* out);
 
@@ -38,8 +45,9 @@ long long sp_dzip_block(const sp_dzip* z, int i, long long k, unsigned char* dst
 unsigned long long sp_dzip_hash(const sp_dzip_entry* e, int count);
 
 // Replaces the entries named in `names` and adds the ones that do not exist yet (the new
-// entries get `filetime` and go to the end of the table). Every other entry keeps its
-// compressed bytes and its place. The new table goes where the old one started.
+// entries get `filetime` and go to the end of the table). A name held more than once is
+// replaced in every entry that carries it. Every other entry keeps its compressed bytes and
+// its place. The new table goes where the old one started.
 int sp_dzip_write(const sp_dzip* z, int n, const char* const* names, const sp_buf* datas,
                   long long filetime, sp_buf* out);
 

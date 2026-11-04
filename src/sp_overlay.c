@@ -7,12 +7,16 @@
 #include "sp_script.h"
 #include "sp_swf.h"
 #include "version.h"
+#include <shlobj.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#pragma comment(lib, "shell32.lib")
+
 #define OV_MAX_ARCHIVES 64
+#define OV_MAX_PACKAGES 16
 #define OV_NAME          128
 
 // The two movies BookMarker patches; the only feature with Swf = true.
@@ -52,8 +56,9 @@ static const wchar_t* const k_carriers[] = {
 // cache built by the same ENGINEFIX_VERSION is never served. 2 = icons in a carrier archive;
 // 3 = the WindowMode rows in guimainmenu.ws; 4 = one Display mode selector instead of two rows;
 // 5 = the Draw distance selector; 6 = the Medallion rows in player.ws and extendedmovable.ws;
-// 7 = the book helpers in their own entry, game\\gui\\w2ef_books.ws; 8 = that entry in CRLF.
-#define OV_CACHE_LAYOUT 8
+// 7 = the book helpers in their own entry, game\\gui\\w2ef_books.ws; 8 = that entry in CRLF;
+// 9 = scripts taken from user content packages and from the last of duplicate entries.
+#define OV_CACHE_LAYOUT 9
 
 // ---- logging -----------------------------------------------------------
 
@@ -354,10 +359,24 @@ typedef struct {
 
 typedef struct { wchar_t name[OV_NAME]; } ov_sort_name;
 
+// A mounted user content package (see read_packages).
+typedef struct {
+    wchar_t    mount[OV_NAME];      // the Mount= value as written in UserContent.ini
+    wchar_t    pack0[MAX_PATH];     // <root>\UserContent\<mount>\pack0.dzip
+    wchar_t    scripts[MAX_PATH];   // <root>\UserContent\<mount>\scripts.dzip, "" when absent
+    sp_buf     raw;                 // scripts.dzip, loaded on first use
+    sp_dzip    z;
+    int        loaded;              // 1 = z is open, -1 = not readable
+    entry_list out;                 // patched entries its cached copy gets
+} ov_package;
+
 typedef struct {
     wchar_t    cooked[MAX_PATH];
     ov_archive arch[OV_MAX_ARCHIVES];
     int        narch;
+    ov_package pkg[OV_MAX_PACKAGES];  // in Mount= order: the last one wins
+    int        npkg;
+    int        unchecked;               // Mount= values that could not be checked (add_package)
     sp_log_fn  log;
 } ov_ctx;
 
@@ -430,6 +449,260 @@ static int find_archive(const ov_ctx* c, const wchar_t* name)
     return -1;
 }
 
+// ---- user content packages ---------------------------------------------
+// MountUserContentPackages (00ABF177) reads <root>\config\UserContent.ini, section [Packages],
+// every Mount= value in file order (ReadUserContentMountList, 00407854), and mounts a package
+// only when <root>\UserContent\<value>\pack0.dzip exists. Its scripts are <same folder>\
+// scripts.dzip (GetUserPackageScriptsSource, 00ABED95). The compiler lists each script name
+// once and reads it from the last source that has it (ReadScriptFromLastSource, 00414CC9):
+// the last package in Mount= order, then earlier packages, then base_scripts.dzip. The game
+// never lists UserContent, so a folder that is not in the ini is not used.
+
+int sp_user_root(wchar_t* out, size_t cap)
+{
+    wchar_t docs[MAX_PATH];
+
+    if (!out || cap == 0) return 0;
+    out[0] = 0;
+    docs[0] = 0;
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docs)) || !docs[0]) return 0;
+    return path_join(out, cap, docs, L"Witcher 2");
+}
+
+void sp_normalize_path(wchar_t* p)
+{
+    wchar_t* w;
+    const wchar_t* r;
+
+    if (!p || !p[0] || !p[1]) return;
+    w = p + 2;
+    for (r = p + 2; *r; r++) {
+        wchar_t ch = *r == L'/' ? L'\\' : *r;
+
+        if (ch == L'\\' && w[-1] == L'\\') continue;
+        *w++ = ch;
+    }
+    *w = 0;
+}
+
+// UserContent.ini as the game decodes it (00AC6AAE): UTF-16LE only when the file is at least 3
+// bytes and starts with FF FE; anything else goes through setlocale(LC_CTYPE, "") and mbstowcs,
+// i.e. the ANSI code page, up to the first NUL. NULL when out of memory.
+static wchar_t* uc_ini_text(const sp_buf* b)
+{
+    const unsigned char* p = b->p;
+    size_t n = b->n, i;
+    wchar_t* w;
+
+    if (n >= 3 && p[0] == 0xFF && p[1] == 0xFE) {
+        size_t max = (n - 2) / 2;
+
+        w = (wchar_t*)malloc((max + 1) * sizeof *w);
+        if (!w) return NULL;
+        for (i = 0; i < max; i++) {
+            w[i] = (wchar_t)(p[2 + 2 * i] | (p[3 + 2 * i] << 8));
+            if (!w[i]) break;
+        }
+        w[i] = 0;
+        return w;
+    } else {
+        size_t len = p ? strnlen((const char*)p, n) : 0;
+        int wl;
+
+        if (len > 0x1000000) return NULL;
+        wl = len ? MultiByteToWideChar(CP_ACP, 0, (const char*)p, (int)len, NULL, 0) : 0;
+        if (wl < 0) wl = 0;
+        w = (wchar_t*)malloc(((size_t)wl + 1) * sizeof *w);
+        if (!w) return NULL;
+        if (wl) MultiByteToWideChar(CP_ACP, 0, (const char*)p, (int)len, w, wl);
+        w[wl] = 0;
+        return w;
+    }
+}
+
+int sp_user_content_mounts(const sp_buf* ini, sp_mount_fn fn, void* ctx)
+{
+    wchar_t* t;
+    size_t i = 0;
+    int have_section = 0, in_packages = 0, whole = 1;
+
+    if (!ini || !fn) return -1;
+    t = uc_ini_text(ini);
+    if (!t) return -1;
+    while (t[i]) {
+        wchar_t c = t[i];
+
+        // Between entries everything outside 0x21..0x7F is skipped: blanks, line ends, and
+        // non-ASCII bytes such as a UTF-8 BOM decoded as ANSI.
+        if (c < 0x21 || c > 0x7F) {
+            i++;
+            continue;
+        }
+        if (c == L'[') {
+            size_t s = i + 1, j = s;
+
+            while (t[j] && t[j] != L']') {
+                if (t[j] < 0x21) {           // a blank or line end inside [...]: parse error
+                    whole = 0;
+                    goto out;
+                }
+                j++;
+            }
+            if (j == s) {                    // "[]": no such section, parse error
+                whole = 0;
+                goto out;
+            }
+            have_section = 1;
+            in_packages = j - s == 8 && wcsncmp(t + s, L"Packages", 8) == 0;
+            i = t[j] ? j + 1 : j;            // what follows "]" is read as the next entry
+            continue;
+        } else {
+            // A key runs to the first '=', the value to the first character below 0x20 (line
+            // end or tab); nothing is trimmed and names are case-sensitive (0040190C).
+            size_t ks = i, ke = 0, vs = 0, ve;
+            int eq = 0;
+
+            while (t[i] >= 0x20) {
+                if (t[i] == L'=' && !eq) {
+                    eq = 1;
+                    ke = i;
+                    vs = i + 1;
+                }
+                i++;
+            }
+            if (!eq) ke = vs = i;
+            ve = i;
+            if (ke == ks || !have_section) { // empty key, or a key before any section
+                whole = 0;
+                goto out;
+            }
+            if (in_packages && ke - ks == 5 && wcsncmp(t + ks, L"Mount", 5) == 0) {
+                fn(ctx, t + vs, ve - vs);
+            }
+        }
+    }
+out:
+    free(t);
+    return whole;
+}
+
+typedef struct { ov_ctx* c; const wchar_t* root; } uc_add_ctx;
+
+// One Mount= value, in file order. A package the overlay cannot check (more than
+// OV_MAX_PACKAGES, or a path too long) may be the one whose scripts win, so it marks the whole
+// list unchecked and the build switches the script patches off.
+static void add_package(void* ctx, const wchar_t* value, size_t len)
+{
+    ov_ctx* c = ((uc_add_ctx*)ctx)->c;
+    const wchar_t* root = ((uc_add_ctx*)ctx)->root;
+    ov_package* p;
+    wchar_t mount[MAX_PATH], rel[MAX_PATH], dir[MAX_PATH], pack0[MAX_PATH], scripts[MAX_PATH];
+
+    if (len >= MAX_PATH) {
+        vlogf(c->log, "script overlay: user content: a Mount= value of %u characters is too long "
+                      "to check", (unsigned)len);
+        c->unchecked++;
+        return;
+    }
+    memcpy(mount, value, len * sizeof *mount);
+    mount[len] = 0;
+    if (_snwprintf_s(rel, MAX_PATH, _TRUNCATE, L"UserContent\\%s", mount) < 0 ||
+        !path_join(dir, MAX_PATH, root, rel) ||
+        !path_join(pack0, MAX_PATH, dir, L"pack0.dzip") ||
+        !path_join(scripts, MAX_PATH, dir, L"scripts.dzip")) {
+        vlogf(c->log, "script overlay: user content: path too long for '%ls' - not checked",
+              mount);
+        c->unchecked++;
+        return;
+    }
+    sp_normalize_path(pack0);
+    sp_normalize_path(scripts);
+    if (!file_exists(pack0)) {
+        vlogf(c->log, "script overlay: user content '%ls': no pack0.dzip, so the game does not "
+                      "mount it", mount);
+        return;
+    }
+    if (c->npkg >= OV_MAX_PACKAGES) {
+        vlogf(c->log, "script overlay: user content: more than %d packages - '%ls' is not checked",
+              OV_MAX_PACKAGES, mount);
+        c->unchecked++;
+        return;
+    }
+    p = &c->pkg[c->npkg];
+    memset(p, 0, sizeof *p);
+    wcsncpy_s(p->mount, OV_NAME, mount, _TRUNCATE);   // for the log and the cache key
+    wcscpy_s(p->pack0, MAX_PATH, pack0);
+    wcscpy_s(p->scripts, MAX_PATH, file_exists(scripts) ? scripts : L"");
+    c->npkg++;
+    vlogf(c->log, "script overlay: user content '%ls': mounted, %s", mount,
+          p->scripts[0] ? "has scripts.dzip" : "no scripts.dzip");
+}
+
+// Fills c->pkg from <root>\Config\UserContent.ini. 0 only when out of memory.
+static int read_packages(ov_ctx* c, const wchar_t* root)
+{
+    wchar_t ini[MAX_PATH];
+    sp_buf raw;
+    uc_add_ctx a;
+    int whole;
+
+    c->npkg = 0;
+    c->unchecked = 0;
+    if (!root || !root[0]) return 1;
+    if (!path_join(ini, MAX_PATH, root, L"Config\\UserContent.ini")) return 1;
+    if (!sp_read_file(ini, &raw)) {             // no ini: nothing is mounted
+        vlogf(c->log, "script overlay: user content: no Config\\UserContent.ini, none mounted");
+        return 1;
+    }
+    a.c = c;
+    a.root = root;
+    whole = sp_user_content_mounts(&raw, add_package, &a);
+    sp_free(&raw);
+    if (whole < 0) {
+        vlogf(c->log, "script overlay: out of memory");
+        return 0;
+    }
+    if (!whole) {
+        vlogf(c->log, "script overlay: user content: the game stops reading Config\\UserContent.ini "
+                      "at a line it cannot parse; the lines after it are ignored here too");
+    }
+    if (c->npkg == 0 && !c->unchecked) vlogf(c->log, "script overlay: user content: none mounted");
+    return 1;
+}
+
+// The package's scripts.dzip, opened on first use; NULL when it has none or it cannot be read.
+static sp_dzip* package_scripts(ov_ctx* c, int k)
+{
+    ov_package* p = &c->pkg[k];
+
+    if (!p->scripts[0] || p->loaded < 0) return NULL;
+    if (p->loaded > 0) return &p->z;
+    if (!sp_read_file(p->scripts, &p->raw) || !sp_dzip_open(&p->raw, &p->z)) {
+        sp_free(&p->raw);
+        p->loaded = -1;
+        return NULL;
+    }
+    p->loaded = 1;
+    return &p->z;
+}
+
+static void close_packages(ov_ctx* c)
+{
+    int i;
+
+    for (i = 0; i < c->npkg; i++) {
+        sp_dzip_close(&c->pkg[i].z);
+        sp_free(&c->pkg[i].raw);
+        entry_list_free(&c->pkg[i].out);
+    }
+    c->npkg = 0;
+}
+
+static void package_leaf(int k, wchar_t* out, size_t cap)
+{
+    _snwprintf_s(out, cap, _TRUNCATE, L"user%d_scripts.dzip", k);
+}
+
 // Get-ReadIcons' $find: a loose file under CookedPC wins, then the last archive in name
 // order that holds the entry.
 static int find_file(ov_ctx* c, const char* name, sp_buf* out)
@@ -492,6 +765,25 @@ static int build_key(ov_ctx* c, sp_features f, obuf* key)
         if (!file_size_time(path, &size, &time)) {
             if (!ob_printf(key, "swf\t%s\tmissing\n", k_swf_names[i])) return 0;
         } else if (!ob_printf(key, "swf\t%s\t%llu\t%llu\n", k_swf_names[i], size, time)) {
+            return 0;
+        }
+    }
+    // Mounted packages in order: their index names the cached copy (package_leaf).
+    if (c->unchecked && !ob_printf(key, "user\tunchecked\t%d\n", c->unchecked)) return 0;
+    for (i = 0; i < c->npkg; i++) {
+        const ov_package* p = &c->pkg[i];
+        char mount[OV_NAME * 3];
+        unsigned long long size = 0, time = 0;
+
+        if (!WideCharToMultiByte(CP_UTF8, 0, p->mount, -1, mount, (int)sizeof mount, NULL,
+                                 NULL)) {
+            return 0;
+        }
+        if (!p->scripts[0]) {
+            if (!ob_printf(key, "user\t%s\tno scripts\n", mount)) return 0;
+        } else if (!file_size_time(p->scripts, &size, &time)) {
+            if (!ob_printf(key, "user\t%s\tmissing\n", mount)) return 0;
+        } else if (!ob_printf(key, "user\t%s\t%llu\t%llu\n", mount, size, time)) {
             return 0;
         }
     }
@@ -957,6 +1249,12 @@ static void remove_cache_outputs(const wchar_t* cache_dir)
 
         if (path_join(path, MAX_PATH, cache_dir, k_carriers[i])) DeleteFileW(path);
     }
+    for (i = 0; i < OV_MAX_PACKAGES; i++) {
+        wchar_t path[MAX_PATH], leaf[64];
+
+        package_leaf(i, leaf, 64);
+        if (path_join(path, MAX_PATH, cache_dir, leaf)) DeleteFileW(path);
+    }
 }
 
 // The carrier for this install (index into ctx->arch), or -1 when none is present.
@@ -972,15 +1270,15 @@ static int find_carrier(const ov_ctx* c)
 }
 
 // Writes `src` with `l`'s entries replaced or added to cache_dir\<leaf> and redirects
-// CookedPC\<leaf> there.
+// `target` (the game's own path of that archive) there.
 static int write_archive(const sp_dzip* src, const entry_list* l, long long filetime,
-                         const wchar_t* cache_dir, const wchar_t* cooked, const wchar_t* leaf,
+                         const wchar_t* cache_dir, const wchar_t* leaf, const wchar_t* target,
                          sp_redirect* r, int* nr, int maxr, sp_log_fn log)
 {
     const char** names = (const char**)malloc((size_t)l->count * sizeof *names);
     sp_buf* datas = (sp_buf*)malloc((size_t)l->count * sizeof *datas);
     sp_buf archive = { NULL, 0 };
-    wchar_t cached[MAX_PATH], target[MAX_PATH];
+    wchar_t cached[MAX_PATH];
     int i, ok = 0;
 
     if (!names || !datas) {
@@ -999,8 +1297,8 @@ static int write_archive(const sp_dzip* src, const entry_list* l, long long file
         vlogf(log, "script overlay: cannot write %ls\\%ls", cache_dir, leaf);
         goto out;
     }
-    if (!path_join(target, MAX_PATH, cooked, leaf) || !add_redirect(r, nr, maxr, target, cached)) {
-        vlogf(log, "script overlay: game path too long");
+    if (!add_redirect(r, nr, maxr, target, cached)) {
+        vlogf(log, "script overlay: too many redirects for %ls", leaf);
         goto out;
     }
     vlogf(log, "script overlay: %ls: %d entries replaced or added", leaf, l->count);
@@ -1037,6 +1335,15 @@ static void reuse_redirects(ov_ctx* c, const wchar_t* cache_dir, sp_features f,
     } else {
         vlogf(log, "script overlay: cache: no base_scripts.dzip in it - serving the originals");
     }
+    for (i = 0; i < c->npkg; i++) {
+        wchar_t leaf[64];
+
+        if (!c->pkg[i].scripts[0]) continue;
+        package_leaf(i, leaf, 64);
+        if (path_join(cached, MAX_PATH, cache_dir, leaf) && file_exists(cached)) {
+            add_redirect(r, nr, maxr, c->pkg[i].scripts, cached);
+        }
+    }
     if (!f.book_marker) return;
     for (i = 0; i < OV_NCARRIERS; i++) {
         if (!path_join(cached, MAX_PATH, cache_dir, k_carriers[i]) || !file_exists(cached)) continue;
@@ -1057,7 +1364,8 @@ static void reuse_redirects(ov_ctx* c, const wchar_t* cache_dir, sp_features f,
 // ---- the overlay -------------------------------------------------------
 
 int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features f,
-                     long long filetime, sp_redirect* r, int* nr, int maxr, sp_log_fn log)
+                     long long filetime, sp_redirect* r, int* nr, int maxr,
+                     const wchar_t* user_root, sp_log_fn log)
 {
     ov_ctx ctx;
     ov_icons icons;
@@ -1076,6 +1384,8 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     char st_book[240] = "off", st_cont[240] = "off", st_quit[240] = "off";
     char st_window[240] = "off", st_medal[240] = "off";
     char status_feats[900] = "";
+    const char* skip_why = "scripts already patched";
+    int src_pkg[SP_NTEXTS];   // the package each text came from, -1 = base_scripts.dzip
     int i, ok = 0, skip_scripts = 0, have_collect = 0, book_ok = 0, any, from_cache = 0;
     DWORD started = GetTickCount();
 
@@ -1113,6 +1423,7 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         vlogf(log, "script overlay: no readable archive under %ls", cooked);
         return 0;
     }
+    if (!read_packages(&ctx, user_root)) goto done;
     if (!build_key(&ctx, f, &key)) {
         vlogf(log, "script overlay: cannot build the cache key");
         goto done;
@@ -1150,14 +1461,59 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         vlogf(log, "script overlay: base_scripts.dzip is not a DZIP v2 archive");
         goto done;
     }
-    for (i = 0; i < SP_NTEXTS; i++) {
-        int idx = sp_dzip_find(&scripts, k_script_entries[i]);
+    // A package the overlay could not check may hold the copy the game compiles.
+    if (ctx.unchecked) {
+        vlogf(log, "script overlay: %d user content package(s) could not be checked, so what the "
+                   "game compiles is unknown; script patches off", ctx.unchecked);
+        skip_why = "user content that cannot be checked";
+        skip_scripts = 1;
+    }
+    // Each text comes from the copy the game compiles: the last mounted package that holds
+    // the name, else base_scripts.dzip; within an archive, the last entry of that name.
+    for (i = 0; i < SP_NTEXTS && !skip_scripts; i++) {
+        const sp_dzip* from = &scripts;
+        int idx = sp_dzip_find_last(&scripts, k_script_entries[i]);
+        int k, dup;
 
+        src_pkg[i] = -1;
+        for (k = ctx.npkg - 1; k >= 0; k--) {
+            sp_dzip* pz;
+            int pi;
+
+            if (!ctx.pkg[k].scripts[0]) continue;
+            pz = package_scripts(&ctx, k);
+            if (!pz) {
+                vlogf(log, "script overlay: user content '%ls': scripts.dzip is not readable "
+                           "as DZIP v2, so what it replaces is unknown; script patches off",
+                      ctx.pkg[k].mount);
+                skip_why = "a user content scripts.dzip is not readable";
+                skip_scripts = 1;
+                break;
+            }
+            pi = sp_dzip_find_last(pz, k_script_entries[i]);
+            if (pi >= 0) {
+                src_pkg[i] = k;
+                from = pz;
+                idx = pi;
+                break;
+            }
+        }
+        if (skip_scripts) break;
         if (idx < 0 && i != SP_NEW_ENTRY) {
             vlogf(log, "script overlay: %s not in base_scripts.dzip", k_script_entries[i]);
             goto done;
         }
-        if (idx >= 0 && !sp_dzip_extract(&scripts, idx, &orig[i])) {
+        if (src_pkg[i] >= 0) {
+            vlogf(log, "script overlay: %s: the game compiles the copy in user content '%ls' - "
+                       "patching that one", k_script_entries[i], ctx.pkg[src_pkg[i]].mount);
+        }
+        dup = sp_dzip_count_name(from, k_script_entries[i]);
+        if (dup > 1) {
+            vlogf(log, "script overlay: %s is in %ls %d times; the game compiles the last one, "
+                       "which is the one patched", k_script_entries[i],
+                  src_pkg[i] >= 0 ? L"scripts.dzip" : L"base_scripts.dzip", dup);
+        }
+        if (idx >= 0 && !sp_dzip_extract(from, idx, &orig[i])) {
             vlogf(log, "script overlay: cannot extract %s", k_script_entries[i]);
             goto done;
         }
@@ -1178,11 +1534,11 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         }
     }
     if (skip_scripts) {
-        if (f.book_marker) _snprintf_s(st_book, sizeof st_book, _TRUNCATE, "skipped: scripts already patched");
-        if (f.cont) _snprintf_s(st_cont, sizeof st_cont, _TRUNCATE, "skipped: scripts already patched");
-        if (f.pause_quit) _snprintf_s(st_quit, sizeof st_quit, _TRUNCATE, "skipped: scripts already patched");
-        if (f.window_mode) _snprintf_s(st_window, sizeof st_window, _TRUNCATE, "skipped: scripts already patched");
-        if (f.medallion) _snprintf_s(st_medal, sizeof st_medal, _TRUNCATE, "skipped: scripts already patched");
+        if (f.book_marker) _snprintf_s(st_book, sizeof st_book, _TRUNCATE, "skipped: %s", skip_why);
+        if (f.cont) _snprintf_s(st_cont, sizeof st_cont, _TRUNCATE, "skipped: %s", skip_why);
+        if (f.pause_quit) _snprintf_s(st_quit, sizeof st_quit, _TRUNCATE, "skipped: %s", skip_why);
+        if (f.window_mode) _snprintf_s(st_window, sizeof st_window, _TRUNCATE, "skipped: %s", skip_why);
+        if (f.medallion) _snprintf_s(st_medal, sizeof st_medal, _TRUNCATE, "skipped: %s", skip_why);
         _snprintf_s(status_feats, sizeof status_feats, _TRUNCATE,
                     "book_marker=%s continue=%s pause_quit=%s window_mode=%s medallion=%s", st_book,
                     st_cont, st_quit, st_window, st_medal);
@@ -1301,13 +1657,37 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
         }
     }
 
+    // A package's pack0.dzip is mounted after CookedPC with the override flag (MountDepotArchives,
+    // 00B1B1B9; AddDepotDirFile, 00B1A1FC), so its copy of a movie is the one shown. Nothing
+    // breaks; only that window misses what the patched movie adds. Logged so it is explained.
+    if (book_ok && (swf_kind[0] || swf_kind[1])) {
+        int k;
+
+        for (k = 0; k < ctx.npkg; k++) {
+            sp_dzip_file pf;
+
+            memset(&pf, 0, sizeof pf);
+            if (!sp_dzip_file_open(ctx.pkg[k].pack0, &pf)) continue;
+            for (i = 0; i < 2; i++) {
+                if (swf_kind[i] && sp_dzip_find(&pf.z, k_swf_entries[i]) >= 0) {
+                    vlogf(log, "script overlay: %s: user content '%ls' has its own copy, which "
+                               "the game shows instead of the patched one", k_swf_names[i],
+                          ctx.pkg[k].mount);
+                }
+            }
+            sp_dzip_file_close(&pf);
+        }
+    }
+
     // What the cached archives get. base_scripts.dzip: only the changed script entries, because
     // the game compiles every entry in it. The carrier: the read icons and any patched movie
     // that only exists inside abetterui.dzip.
     for (i = 0; i < SP_NTEXTS; i++) {
         if (texts[i].text.n != orig[i].n ||
             (orig[i].n && memcmp(texts[i].text.p, orig[i].p, orig[i].n) != 0)) {
-            if (!entry_list_add(&entries, k_script_entries[i], &texts[i].text)) {
+            entry_list* l = src_pkg[i] >= 0 ? &ctx.pkg[src_pkg[i]].out : &entries;
+
+            if (!entry_list_add(l, k_script_entries[i], &texts[i].text)) {
                 vlogf(log, "script overlay: out of memory");
                 goto done;
             }
@@ -1328,9 +1708,21 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
     }
 
     if (entries.count > 0 &&
-        !write_archive(&scripts, &entries, filetime, cache_dir, cooked, L"base_scripts.dzip", r,
-                       nr, maxr, log)) {
+        !write_archive(&scripts, &entries, filetime, cache_dir, L"base_scripts.dzip",
+                       scripts_path, r, nr, maxr, log)) {
         goto done;
+    }
+    for (i = 0; i < ctx.npkg; i++) {
+        wchar_t leaf[64];
+
+        if (ctx.pkg[i].out.count == 0) continue;
+        package_leaf(i, leaf, 64);
+        if (!write_archive(&ctx.pkg[i].z, &ctx.pkg[i].out, filetime, cache_dir, leaf,
+                           ctx.pkg[i].scripts, r, nr, maxr, log)) {
+            goto done;
+        }
+        vlogf(log, "script overlay: user content '%ls': scripts.dzip served as %ls",
+              ctx.pkg[i].mount, leaf);
     }
     if (carried.count > 0) {
         const ov_archive* a = &ctx.arch[carrier];
@@ -1339,7 +1731,7 @@ int sp_overlay_build(const wchar_t* game, const wchar_t* cache_dir, sp_features 
             vlogf(log, "script overlay: cannot read %ls", a->path);
             goto done;
         }
-        if (!write_archive(&carrier_z, &carried, filetime, cache_dir, cooked, a->name, r, nr,
+        if (!write_archive(&carrier_z, &carried, filetime, cache_dir, a->name, a->path, r, nr,
                            maxr, log)) {
             goto done;
         }
@@ -1399,6 +1791,7 @@ done:
     sp_free(&collect);
     icons_free(&icons);
     ob_free(&key);
+    close_packages(&ctx);
     close_archives(&ctx);
     if (!ok) {
         *nr = 0;

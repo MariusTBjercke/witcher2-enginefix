@@ -68,6 +68,10 @@ Mersey's; the trade and storage screens, also Witcher 2 HD UI AI Upscale's;
 the read-book icons) into bin\witcher2_enginefix_cache\ and the game reads
 those instead. Later starts reuse them until a game file changes. A screen
 another UI mod changed in a way the patch does not recognize is left alone.
+Mods installed as user content (Documents\Witcher 2\UserContent) can bring
+their own copies of scripts, which the game uses instead; the patches go
+into those copies too. If a copy is too different for a patch, that feature
+stays off and the game starts without it.
 
 Upgrading from 0.4 or 0.5 with the old script patches installed: just
 extract this version over it. The first start puts the original files back
