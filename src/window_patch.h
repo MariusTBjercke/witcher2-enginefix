@@ -21,7 +21,8 @@
 #include "patch_barrier.h"
 
 #define WF_STYLE_SITE   0x009D45CAu   // mov edi, 0x00C80000 (windowed branch of FUN_009d44e1)
-#define WF_WRITER_SITE  0x0041F4B7u   // config writer, __stdcall (RET 0x10)
+#define WF_WRITER_SITE  0x0041F4B7u   // config writer, __stdcall (RET 0x10); __thiscall on GOG
+#define WF_CONFIG       0x01608650u   // the config manager the writer works on (its ECX on GOG)
 // Live full screen switch (enginefix.c, wf_vp_tick_hook). The engine keeps one copy of the
 // D3DPRESENT_PARAMETERS it created the device with (FUN_0052ccb0) and passes that copy to every
 // Reset (FUN_0052d3c0, copy at WF_RESET_COPY); the viewport's per-frame tick drives the lost-device
@@ -88,8 +89,27 @@ typedef char (__stdcall *wf_write_fn)(const wchar_t* category, const wchar_t* se
                                       const wchar_t* key, const float* value);
 static wf_write_fn wf_real_write;   // the trampoline, set by the installer
 
+// GOG 3.5.0.26g compiled the same writer (00420D54) as __thiscall: ECX is the config manager
+// ([WF_CONFIG], which Steam's writer reads itself), then the same four stack arguments, RET 0x10
+// and the same 6-byte prologue. __fastcall with EDX unused matches it, and the hook passes ECX on.
+typedef char (__fastcall *wf_write_gog_fn)(void* config, void* edx, const wchar_t* category,
+                                           const wchar_t* section, const wchar_t* key,
+                                           const float* value);
+static wf_write_gog_fn wf_real_write_gog;   // GOG's trampoline, set by the installer
+
+// Tell enginefix.c about a write of one of our keys. Strings are borrowed for the duration of
+// the call, so they are only compared here.
+static void wf_note_write(const wchar_t* category, const wchar_t* section, const wchar_t* key,
+                          const float* value)
+{
+    if (category && section && key && value && _wcsicmp(category, L"User") == 0 &&
+        _wcsicmp(section, L"Rendering") == 0 &&
+        (_wcsicmp(key, L"EngineFixBorderless") == 0 || _wcsicmp(key, L"Fullscreen") == 0 ||
+         _wcsicmp(key, L"EngineFixDrawDistance") == 0))
+        wf_on_config_write(section, key, *value);
+}
+
 // Entry replacement: observe the write (the engine stores it as usual) and tell enginefix.c.
-// Strings are borrowed for the duration of this call, so they are only compared here.
 static char __stdcall wf_write_hook(const wchar_t* category, const wchar_t* section,
                                     const wchar_t* key, const float* value)
 {
@@ -97,11 +117,19 @@ static char __stdcall wf_write_hook(const wchar_t* category, const wchar_t* sect
 
     if (!wf_real_write) return 0;
     r = wf_real_write(category, section, key, value);
-    if (category && section && key && value && _wcsicmp(category, L"User") == 0 &&
-        _wcsicmp(section, L"Rendering") == 0 &&
-        (_wcsicmp(key, L"EngineFixBorderless") == 0 || _wcsicmp(key, L"Fullscreen") == 0 ||
-         _wcsicmp(key, L"EngineFixDrawDistance") == 0))
-        wf_on_config_write(section, key, *value);
+    wf_note_write(category, section, key, value);
+    return r;
+}
+
+static char __fastcall wf_write_hook_gog(void* config, void* edx, const wchar_t* category,
+                                         const wchar_t* section, const wchar_t* key,
+                                         const float* value)
+{
+    char r;
+
+    if (!wf_real_write_gog) return 0;
+    r = wf_real_write_gog(config, edx, category, section, key, value);
+    wf_note_write(category, section, key, value);
     return r;
 }
 

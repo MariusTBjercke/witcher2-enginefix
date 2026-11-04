@@ -256,6 +256,32 @@ leaving anything behind, and after a Reset into windowed mode. After a Reset int
 DXVK's hook is left in place. NVIDIA's subclass is dropped at a switch; nothing in the game needs
 it.
 
+## GOG 3.5.0.26g (0.10.0)
+
+The same code, compiled again; proven statically on 2026-11-04 (the `k_gog` rows in
+`src/enginefix.c`):
+
+| | Steam | GOG |
+|---|---|---|
+| window creation (`L"W2ViewportClass"`) | `009D44E1` | `00A257D7`, the same function instruction for instruction, `RET 0x18` |
+| windowed style site `bf 00 00 c8 00` | `009D45CA` | `00A258C0` |
+| class procedure | `009D237E` | `00A2362D` (stored at `00A2592D`) |
+| render interface (RTTI `CRenderInterface`), tick slot +0x0C | `00EC60EC` -> `009E146E` | `00F68B2C` -> `00A32999` (pushes "Flushing all pending loading") |
+| Reset copy `mov ecx,0Eh; mov esi,WF_PP` | `0052D4FE` | `004CE64E`, the operand relocated |
+| device / stored present parameters | `01626788` / `016267A0` | `01690818` / `01690830`, stored in device creation `004CDE00` |
+| config writer (`WriteConfigParamFloat`) | `0041F4B7`, `__stdcall` | `00420D54`, **`__thiscall`** |
+| config manager | `01608650` (the writer reads it) | `01679440` (callers load it into ECX) |
+
+The lost-device state at +0xB0 means the same on GOG (0 render, 1 flush and release, 2 Sleep(200),
+3 Reset; TestCooperativeLevel moves it the same way). The one difference that matters is the
+writer: it keeps its bytes (`55 8b ec 83 e4 f8`, the trampoline's prologue) but takes the config
+manager in ECX, which Steam's writer reads from the global itself. A `__stdcall` hook would lose
+ECX before the trampoline runs, so GOG gets `wf_write_hook_gog` (`__fastcall`: ECX passed on, 16
+bytes of stack arguments, `RET 0x10`), and the Draw distance sync calls GOG's trampoline with
+`ECX = [01679440]`. `tools/windowprobe` runs both detours against synthetic targets; the GOG one
+checks that ECX survives the hook and the trampoline. The Reset copy is checked as
+`b9 0e 00 00 00 be` plus `ga(WF_PP)`, since the operand is relocated under ASLR.
+
 ## Behaviour and limits
 
 * Borderless only makes sense with **Full screen off**; the Display mode row sets both keys. A

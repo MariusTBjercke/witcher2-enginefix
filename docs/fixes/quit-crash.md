@@ -71,6 +71,15 @@ read `[[01404950]+0x90]+8` without a NULL check (among them `004BA18B`, `009613D
 in-game run below reached `unloaded`, so none did there. The fallback is the one
 `menu-buttons.md` already names: Quit goes to the main menu first and quits from there.
 
+### GOG 3.5.0.26g
+
+FactsAdd is `FUN_0050b044` (registered with the same five other facts natives in `FUN_0050b0ff`;
+name `L"FactsAdd"` at `00D441D4`). The site is `0050B0A9`, after `mov eax,[01475740]` (GOG's game
+global): `8B 80 90 00 00 00 8B 40 08 89 45 FC`, the same two instructions with the same offsets,
+storing to `[ebp-4]` instead of `[ebp-8]`, so the 12-byte check is per build
+(`quit_site_bytes()`). The code after the 9 replaced bytes reads no flags; no relocation falls
+inside the checked bytes. Since the guard is in on GOG, `pause_quit` is on there too.
+
 ## Turning it off
 
 `[stability] quit_guard=0`.

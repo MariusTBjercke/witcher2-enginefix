@@ -114,8 +114,10 @@ delta from `0x00400000` and how many import slots were found.
 What runs on GOG with 0.10.0: the script patches `book_marker`, `continue` and `medallion` (they
 only hook file APIs; `build\sptest.exe test --game "<gog>"` passes), the F9/F10 keyboard filter
 (DirectInput objects, no game address), `cpu32_guard` (an import; GOG's own CPU count code is
-not re-checked), crash capture and the interior map files. Since the first port (below) also
-LOD, the presets with Ctrl+F10 and the distance hooks.
+not re-checked), crash capture and the interior map files. Ported since (below): LOD, the presets
+with Ctrl+F10 and the distance hooks; then `quit_guard` (and with it `pause_quit`),
+`raycast_guard`, `skip_intro`, the window patches with the Options rows (`window_mode`) and the
+Windows keys.
 
 ## Ported addresses
 
@@ -124,6 +126,17 @@ LOD, the presets with Ctrl+F10 and the distance hooks.
 | `RVA_SETTINGS` `02180E28` | `021EAEB8` | getter `004024EF` (`A1 B8 AE 5E 02`), creator `00402517` stores the static object `025EAF08`, exit handler clears it at `004025EB`; loader `00B40DCD` registers the same 50 keys at the same offsets (`graphics-presets.md`, `research.md` §6) |
 | `EF_RANGE_RVA` `005BB09F` | `0060C120` | same function and bytes, distance in XMM7 (`render-distance-experiment.md`) |
 | `EF_SHADOW_RVA` `005BB465` | `0060C4F6` | same, compare with XMM7 |
+| `VA_GAME` `01404950` | `01475740` | written at `00AFB1DC` after `L"Initializing Game..."`; `activeWorld` registered at +0x40 and `player` at +0x250 as on Steam |
+| `VA_FACTS_TIME` `0099871E` | `0050B0A9` | in FactsAdd `0050B044` (string `00D441D4`, registration `0050B0FF`); bytes per build (`quit-crash.md`) |
+| `VA_RAY_SLOT` `00D41A38` | `00E08740` | `hkpSimpleWorldRayCaster` RTTI, vtable `00E0873C` slot 1 |
+| `VA_RAY_HIT` `0084C750` | `0091F110` | identical 0x1A5-byte body (`crash-raycast-stale-body.md`) |
+| `VA_STARTVIDEO_LIST` `009A2190` | `00509DF5` | `video_start.csv` handle, `Release` column; thiscall (`skip-intro.md`) |
+| `VA_STARTVIDEO_CALL` `009B588F` | `00509EF7` | the only call to the builder, in the start wrapper `00509EEB` |
+| `VA_STARTVIDEO_TICK` `009A211D` | `0050A01E` | `CVideoInstance` vtable `00D43F3C` + 0x74 |
+| `VA_STARTVIDEO_STOP` `009A1F2E` | `00509D26` | pushes `StopVideo`; thiscall |
+| `VA_STARTVIDEO_VSLOT` `00ECAF78` | `00D43FB0` | the vtable slot above |
+| `WF_*` (8) and `WF_CONFIG` | see `borderless-window.md`, "GOG 3.5.0.26g" | the window creation, the render interface and the device code are the same functions; the config writer is `__thiscall` on GOG |
+| `WK_WNDPROC_SLOT` `00EC6560` / `WK_WNDPROC` `009D4BD9` | `00F68FA0` / `00A25ED3` | `CViewportWindow` RTTI, the same procedure (`windows-keys.md`) |
 
 Seen in game on GOG on 2026-11-04 (`docs/validation/gog-presets-2026-11-04.md`): the settings
 object found at its static address plus the delta, LOD enforced, both distance hooks installed,
@@ -131,10 +144,13 @@ non-zero `baseline_reject`/`admitted`, Ctrl+F10 through all four levels.
 
 ## Open
 
-* After a play session on GOG the log ends at the CRT's shutdown filter change without
-  `unloaded`, even with the detach only trying the log lock. The menu-only GOG run and every
-  Steam run end with `unloaded`. The game closes normally (Galaxy logs a normal close, no dump,
-  no error event); whether the DLL's detach runs at all there is not known yet.
+* On GOG the log usually ends at the CRT's shutdown filter change without `unloaded`, even with
+  the detach only trying the log lock: three of four GOG runs on 2026-11-04, with and without a
+  save loaded; the first, with only the phase-0 features, did write it. Every Steam run ends with
+  `unloaded`. The game closes normally (Galaxy logs a normal close, no dump, no error event);
+  whether the DLL's detach runs at all there is not known yet. Next step: log the exe's
+  `ExitProcess` call (its import slot by name) and, when the log lock is busy at detach, write a
+  marker through the raw file handle.
 
 Start tests on 2026-11-04 (owner, the same 0.10.0 build on both):
 
@@ -164,15 +180,19 @@ non-zero delta, and which switches the gate turns off on each build.
 3. Make the byte checks hold on GOG. They are Steam's: most will differ on the recompiled code,
    and some embed absolute addresses that the loader relocates under ASLR, so a fixed pattern
    cannot match there: `VA_STREAM_DTOR` (`c7 06 2c 2c f0 00`, the stream vtable),
-   `WF_RESET_COPY` (`be a0 67 62 01`, `WF_PP`), `WF_WRITER_SITE` (`a1 50 86 60 01`, a global).
-   Build such bytes at run time from `ga()`, as `door_fade_site` does for `VA_DOOR_FADE_LEN`.
-4. Re-check struct offsets the feature reads.
+   `WF_RESET_COPY` (`be a0 67 62 01`, `WF_PP`), `WF_WRITER_SITE` (`a1 50 86 60 01`, a global),
+   GOG's `VA_STARTVIDEO_STOP` (`68 18 3e d4`, a string). Build such bytes at run time from
+   `ga()`, as `door_fade_site` does for `VA_DOOR_FADE_LEN`, or check only their low 16 bits,
+   which survive the 64 KB load steps. Bytes that differ per build go through `by_build()`.
+4. Re-check struct offsets the feature reads, and the calling convention: the builds were
+   compiled apart, and a function can keep its bytes and still take `this` in another register
+   (the config writer, the skip-intro builder and stop).
 5. When a feature group has all its addresses, `build_gate` lets it run; test it in game on GOG.
 
 ## Still to do
 
-* The engine fixes, by area: presets/LOD/distance (`RVA_SETTINGS`, `EF_RANGE_RVA`, `EF_SHADOW_RVA`), then
-  window mode, quit and raycast guards, skip intro, then doors and interiors.
+* Doors and interiors (`[loading]`: the partition switch, the door timer and start, the fades,
+  the indoor draw check), the largest set; a player saw `interiors=2` crash on their own port.
 * Saves: the thumbnail fix and the fast save list go through `ISteamRemoteStorage`; GOG has its
   own save path, which needs its own research.
 

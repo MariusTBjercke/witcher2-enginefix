@@ -72,6 +72,25 @@ list built (K entries), skip armed`, one `startup: stopping startup movie i of K
 `startup: K startup movie(s) stopped, main menu reached`. Any fingerprint mismatch logs and
 leaves the game unchanged.
 
+## GOG 3.5.0.26g
+
+Found from `globals\video_start.csv` (`00D43DAC`), `Release`, `StopVideo` and `MovieStopped`, and
+the player's class `CVideoInstance` (vtable `00D43F3C`, the same layout). Same offsets (+0x9C list,
++0xA0 count, +0xAC done, +0xAD playing, +0xB0 index). Differences the DLL handles per build:
+
+* The list builder `00509DF5` and the stop `00509D26` are thiscall: the player is in ECX, not
+  EAX/ESI. `startvideo_build_hook_gog` and `startvideo_stop_gog` pass it there.
+* The builder is called from a wrapper, `00509EEB` (thiscall(bool), `RET 4`; at game start from
+  `004E8BD7` with 1). Its `call 00509DF5` at `00509EF7` is the only call to the builder and runs
+  only then. The check is `74 05 E8 F9 FE FF FF` at call-2. The wrapper keeps the player in ESI
+  and writes `[ESI+0xAC]` after the call, so the hook leaves ESI alone.
+* The tick `0050A01E` has a 4-byte shorter prologue: its fingerprint is at +0x1B, not +0x1F.
+* The stop's check ends in a push of `StopVideo`'s address, which is relocated; only its low 16
+  bits (`68 18 3E`) are checked, as they survive 64 KB load steps.
+
+The startup list's column (`Release`) was not checked against GOG's csv, which also has a GOG
+column (`bumpers_GOG`); the log's `movie list built (N entries)` shows what GOG plays.
+
 ## In-game test
 
 Start the game: the main menu appears without the CD PROJEKT RED logo (or, without the intro

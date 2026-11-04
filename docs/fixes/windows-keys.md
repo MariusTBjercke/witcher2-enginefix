@@ -53,6 +53,14 @@ This hooks the object's vtable, not the window's `GWLP_WNDPROC`, so the DXVK rep
 procedure chain (`borderless-window.md`) does not touch it. `[hotkeys] windows_keys=0` leaves the
 game's flags alone.
 
+## GOG 3.5.0.26g (0.10.0)
+
+The window object is `CViewportWindow` by RTTI on both builds: GOG's vtable slot 0 (`00F68FA0`)
+holds the procedure `00A25ED3` (Steam `00EC6560` -> `009D4BD9`), `__thiscall (msg, wparam,
+lparam)`, `RET 0xC`, the same checks (`55 8b ec 83 e4 f8 83 ec 64`, `c2 0c 00` at +0x2F2). The
+input mode switch is `00A237A7`, the mode at +0x834, and the keyboard's `SetCooperativeLevel(hwnd,
+5)` at `00A238A4`, as on Steam.
+
 ## Verification
 
 Offline (2026-11-02): `build.bat` clean. `tools\inputprobe\probe.exe` copied into `<game>\bin`:

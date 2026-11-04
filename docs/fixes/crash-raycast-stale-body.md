@@ -25,7 +25,7 @@ crash: eax=17CDFDE0 ebx=5947BE03 ecx=00000000 edx=3E196900 esi=67091E3C edi=17CD
   = `67091E6C` is not 16-byte aligned.
 * `FUN_0084c750` is slot 1 of a ray-cast collector (vtable `00D41A34`, `[edi]` at the crash is
   `00D41A34`), thiscall `(handle, index)`, `RET 8`, returns the hit fraction in ST0. It is called
-  per broadphase object from the world ray cast `FUN_00625400` (`call [edx+4]` at `006258DB`).
+  per broadphase object from the world ray cast `FUN_00625400` (`mov edx,[edx+4]; ... call edx` at `006258DB`).
 * It computes the object as `handle + (signed char)handle[5]` (owner offset), reads the shape at
   `owner+0` and the transform pointer at `owner+8`. At the crash `ebx = owner = 5947BE03`: an **odd**
   address, inside a block of floats (`00 00 80 3F` = 1.0 seen three bytes off). `esi = [owner+8] =
@@ -53,6 +53,15 @@ Limits: it removes this crash, not the race. Other code that reads the same free
 still fail elsewhere; a later crash at a different address would be a separate entry.
 
 Turn off: `raycast_guard=0`.
+
+### GOG 3.5.0.26g
+
+The collector class is `hkpSimpleWorldRayCaster` by RTTI on both builds (vtable Steam `00D41A34`,
+GOG `00E0873C`). GOG's slot 1 (`00E08740`) holds `0091F110`, whose 0x1A5-byte body is identical to
+Steam's `0084C750`: thiscall `(handle, index)`, `RET 8`, the hit fraction in ST0, the "no hit"
+exits returning `*(float*)(*(this+0xC)+0x10)`, and the same faulting `movaps xmm1,[esi+30h]` at
+`0091F16F`. The caller is `hkp3AxisSweep` slot 22, `FUN_006f6290`, call at `006F676B`. The guard
+only compares the slot with `ga(VA_RAY_HIT)`; the loader relocates both alike.
 
 ## Verification
 

@@ -38,7 +38,8 @@ distance stats: mesh=1129222 shadow=402728 baseline_reject=294684 admitted=21797
 As in run 2 of `gog-phase0-2026-11-04.md`, the log ends right after the CRT's filter change
 during shutdown (`crash: filter armed, chaining to 0x01077DE4 (witcher2.EXE+0x347DE4)`), with no
 `unloaded` line, although this build only tries the log lock at process exit. Both GOG runs with
-a save loaded ended like this; the GOG run that stayed in the menu and every Steam run wrote
-`unloaded`. No dump, no Windows error event, and Galaxy logged a normal close. So the game
-exits as asked, but either the DLL's detach is not reached after a play session on GOG or the
-log lock is held at that moment. Not explained yet.
+a save loaded ended like this; the first GOG run, which stayed in the menu, and every Steam run
+wrote `unloaded`. (A later GOG run without a save ended the same way; see
+`gog-phase1b-2026-11-04.md`.) No dump, no Windows error event, and Galaxy logged a normal close.
+So the game exits as asked, but either the DLL's detach is not reached on GOG or the log lock is
+held at that moment. Not explained yet.

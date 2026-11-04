@@ -998,6 +998,7 @@ static int code_matches(uintptr_t at, const char* hex)
 {
     unsigned char want[16];
     size_t n = 0;
+    if (!hex) return 0;
     for (const char* p = hex; *p && n < sizeof want; ) {
         unsigned v;
         if (sscanf_s(p, "%2x", &v) != 1) return 0;
@@ -1006,6 +1007,13 @@ static int code_matches(uintptr_t at, const char* hex)
         while (*p == ' ') p++;
     }
     return range_readable((void*)at, n) && memcmp((void*)at, want, n) == 0;
+}
+
+// The bytes one check expects on the running build: the builds were compiled apart, so a site's
+// bytes are proven per build. NULL (never matches) on a build without its own.
+static const char* by_build(const char* steam, const char* gog)
+{
+    return g_build == BUILD_STEAM ? steam : g_build == BUILD_GOG ? gog : NULL;
 }
 
 static void hook_image_registry(void)
@@ -1551,6 +1559,30 @@ __declspec(naked) static void __stdcall startvideo_stop(void* player)
         ret 4
     }
 }
+
+// GOG 3.5.0.26g compiled the list builder (00509DF5) and the stop (00509D26) as thiscall: the
+// player comes in ECX, not EAX/ESI. The builder is called from the start wrapper 00509EEB, which
+// keeps the player in ESI and writes [ESI+0xAC] after the call; only ECX/EAX/EDX change here.
+__declspec(naked) static void startvideo_build_hook_gog(void)
+{
+    __asm {
+        push ecx                       ; player object, also the argument below
+        mov eax, dword ptr [g_startvideoList]
+        call eax                       ; ECX = player, as the wrapper passed it
+        call startvideo_after          ; stdcall, pops the object
+        ret
+    }
+}
+
+__declspec(naked) static void __stdcall startvideo_stop_gog(void* player)
+{
+    __asm {
+        mov ecx, [esp + 4]
+        mov eax, dword ptr [g_startvideoStop]
+        call eax
+        ret 4
+    }
+}
 #pragma warning(pop)
 
 static void __fastcall startvideo_tick(void* self, void* edx, float dt)
@@ -1569,7 +1601,26 @@ static void __fastcall startvideo_tick(void* self, void* edx, float dt)
     g_skipPlayAt = 0;
     InterlockedIncrement(&g_skipStops);
     logf_("startup: stopping startup movie %lu of %lu", *(DWORD*)(p + 0xB0), *(DWORD*)(p + 0xA0));
-    startvideo_stop(self);
+    if (g_build == BUILD_GOG) startvideo_stop_gog(self); else startvideo_stop(self);
+}
+
+// 1 when the call site (`call` = VA_STARTVIDEO_CALL) and the three functions hold the running
+// build's code. GOG: `jz; call builder` in the start wrapper; the tick's prologue is 4 bytes
+// shorter; the stop check ends in the low 16 bits of a relocated push (stable over 64 KB load
+// steps). tools/buildprobe runs this against the real GOG exe.
+static int startvideo_site_ok(uintptr_t call)
+{
+    return code_matches(call - 2, by_build("8b c6 e8 fc c8 fe ff", "74 05 e8 f9 fe ff ff"));
+}
+
+static int startvideo_code_ok(void)
+{
+    return code_matches(g_startvideoList, by_build("55 8b ec 83 e4 f8 83 ec 34 53 56 05 9c 00 00 00",
+                                                   "55 8b ec 83 ec 30 56 57 81 c1 9c 00 00 00 33 f6")) &&
+           code_matches(g_startvideoTick + (g_build == BUILD_GOG ? 0x1B : 0x1F),
+                        "8b 86 b0 00 00 00 8b 8e a0 00 00 00 3b c1 72 1b") &&
+           code_matches(g_startvideoStop, by_build("55 8b ec 83 e4 f8 83 ec 10 53 33 db 57 68 1c 38",
+                                                   "55 8b ec 83 ec 10 53 33 db 56 8b f1 68 18 3e"));
 }
 
 // The code is SteamStub-encrypted until the stub has run, and 009B581C runs a few
@@ -1588,11 +1639,8 @@ static DWORD WINAPI startvideo_thread(LPVOID param)
         return 0;
     }
     while (g_running && GetTickCount() - t0 < 120000) {
-        if (code_matches(call - 2, "8b c6 e8 fc c8 fe ff")) {
-            if (!code_matches(g_startvideoList, "55 8b ec 83 e4 f8 83 ec 34 53 56 05 9c 00 00 00") ||
-                !code_matches(g_startvideoTick + 0x1F, "8b 86 b0 00 00 00 8b 8e a0 00 00 00 3b c1 72 1b") ||
-                !code_matches(g_startvideoStop, "55 8b ec 83 e4 f8 83 ec 10 53 33 db 57 68 1c 38") ||
-                read_ptr((void*)vslot) != (void*)g_startvideoTick) {
+        if (startvideo_site_ok(call)) {
+            if (!startvideo_code_ok() || read_ptr((void*)vslot) != (void*)g_startvideoTick) {
                 logf_("startup: movie code not recognised - skip_intro off");
                 return 0;
             }
@@ -1602,7 +1650,8 @@ static DWORD WINAPI startvideo_thread(LPVOID param)
             }
             InterlockedExchangePointer((void* volatile*)vslot, (void*)startvideo_tick);
             VirtualProtect((void*)vslot, 4, old, &tmp);
-            if (patch_call(call, g_startvideoList, (void*)startvideo_build_hook))
+            if (patch_call(call, g_startvideoList, g_build == BUILD_GOG ? (void*)startvideo_build_hook_gog
+                                                                        : (void*)startvideo_build_hook))
                 logf_("startup: movie list and tick hooked after %lu ms", GetTickCount() - t0);
             else
                 logf_("startup: movie list call could not be patched - skip_intro off");
@@ -4108,8 +4157,8 @@ static void save_tick(void)
 // ---- ray cast guard ----------------------------------------------------
 // [stability] raycast_guard=1. Crash of 2026-11-02 18:02:55 (leaving the Flotsam inn through a
 // streaming door, docs/fixes/crash-raycast-stale-body.md): a worker thread's broadphase ray cast
-// (FUN_00625400, `call [edx+4]` at 006258DB) handed a stale collidable to the ray collector's
-// per-object callback FUN_0084c750 (vtable 00D41A34, slot 1 = 00D41A38; thiscall (handle, index),
+// (FUN_00625400, `call edx` after `mov edx,[edx+4]` at 006258DB) handed a stale collidable to
+// the ray collector's per-object callback FUN_0084c750 (vtable 00D41A34, slot 1 = 00D41A38; thiscall (handle, index),
 // RET 8, returns the hit fraction in ST0). It computes the owner as handle + (signed char)
 // handle[5]; the freed handle gave an odd owner (5947BE03) whose transform pointer pointed into
 // nvgpucomp32.dll, and `movaps xmm1,[esi+30h]` (0084C7AF) faulted. The callback's own "no hit"
@@ -4197,9 +4246,16 @@ __declspec(naked) static void facts_time_stub(void)
     }
 }
 
+// The 12 bytes at VA_FACTS_TIME: the 9 replaced ones and the store of the result. GOG keeps the
+// time in [ebp-4], Steam in [ebp-8].
+static const char* quit_site_bytes(void)
+{
+    return by_build("8b 80 90 00 00 00 8b 40 08 89 45 f8", "8b 80 90 00 00 00 8b 40 08 89 45 fc");
+}
+
 static void quit_guard_tick(void)
 {
-    static const char* const orig = "8b 80 90 00 00 00 8b 40 08 89 45 f8";
+    const char* const orig = quit_site_bytes();
     static int done, tries;
     unsigned char code[9];
     pb_range range;
@@ -4622,9 +4678,18 @@ static int wf_install_style(void)
 
 // FUN_0041F4B7 entry -> "jmp wf_write_hook"; the trampoline runs the replaced prologue and jumps
 // back. The replaced prologue is 6 bytes (push ebp; mov ebp,esp; and esp,-8), so 5 + one NOP.
+// The writer's first bytes: the 6-byte prologue the trampoline replays, then what follows it.
+// Steam's next instruction reads the config manager (`mov eax,[01608650]`); GOG's writer gets it
+// in ECX (__thiscall) and goes on with `sub esp,34h; push ebx/esi/edi; push [ebp+8]; call`.
+static const char* wf_writer_bytes(void)
+{
+    return by_build("55 8b ec 83 e4 f8 a1 50 86 60 01", "55 8b ec 83 e4 f8 83 ec 34 53 56 57 ff 75 08 e8");
+}
+
 static int wf_install_writer(void)
 {
-    static const char* const orig = "55 8b ec 83 e4 f8 a1 50 86 60 01";
+    const char* const orig = wf_writer_bytes();
+    int gog = g_build == BUILD_GOG;
     unsigned char* tramp;
     unsigned char code[6];
     pb_range range;
@@ -4633,13 +4698,15 @@ static int wf_install_writer(void)
     DWORD old = 0, tmp = 0;
     uintptr_t at = ga(WF_WRITER_SITE);
     void* site = (void*)at;
-    int64_t delta = (int64_t)(uintptr_t)wf_write_hook - (int64_t)(at + 5);
+    void* hook = gog ? (void*)wf_write_hook_gog : (void*)wf_write_hook;
+    int64_t delta = (int64_t)(uintptr_t)hook - (int64_t)(at + 5);
 
     if (delta < INT32_MIN || delta > INT32_MAX) return 0;   // the jump must be reachable
     if (!code_matches(at, orig)) return 0;
     tramp = (unsigned char*)wf_make_trampoline(site, wf_writer_orig, sizeof wf_writer_orig);
     if (!tramp) return 0;
-    wf_real_write = (wf_write_fn)(void*)tramp;
+    if (gog) wf_real_write_gog = (wf_write_gog_fn)(void*)tramp;
+    else wf_real_write = (wf_write_fn)(void*)tramp;
     code[0] = 0xE9;
     *(uint32_t*)(code + 1) = (uint32_t)(int32_t)delta;
     code[5] = 0x90;
@@ -4658,6 +4725,7 @@ static int wf_install_writer(void)
     return 1;
 failed:
     wf_real_write = NULL;
+    wf_real_write_gog = NULL;
     VirtualFree(tramp, 0, MEM_RELEASE);
     return 0;
 }
@@ -4783,11 +4851,17 @@ static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
     InterlockedIncrement(&g_fsTicks);
     if (GetCurrentThreadId() == g_mainTid) ko_frame();
     if (g_ddSync && GetCurrentThreadId() != g_mainTid) g_ddOffThread = 1;
-    else if (g_ddSync && wf_real_write && InterlockedExchange(&g_ddSync, 0)) {
+    else if (g_ddSync && (wf_real_write || wf_real_write_gog) && InterlockedExchange(&g_ddSync, 0)) {
         float level = (float)g_preset;
 
-        // The trampoline skips wf_write_hook, so this is not taken for a menu choice.
-        wf_real_write(L"User", L"Rendering", L"EngineFixDrawDistance", &level);
+        // The trampoline skips the hook, so this is not taken for a menu choice. GOG's writer
+        // takes the config manager in ECX, the value Steam's reads from the same global.
+        if (wf_real_write_gog) {
+            void* config = read_ptr((void*)ga(WF_CONFIG));
+            if (config) wf_real_write_gog(config, NULL, L"User", L"Rendering", L"EngineFixDrawDistance", &level);
+        } else {
+            wf_real_write(L"User", L"Rendering", L"EngineFixDrawDistance", &level);
+        }
     }
     if (g_fsStage == 0) {
         if (want < 0 || *state != 0 || wf_engine_fullscreen() < 0) return real(vp, edx);
@@ -4940,6 +5014,15 @@ static void wf_tick(void)
 // Viewport tick slot -> wf_vp_tick_hook. A data write (the vtable is in .rdata), aligned and
 // atomic, so no thread has to be stopped. Fingerprinted: the slot must hold the tick, the tick
 // must read its state from +0xB0, and the Reset must copy the present parameters from WF_PP.
+// `mov ecx,0Eh; mov esi,WF_PP` in the Reset: the operand is checked against ga(WF_PP), since the
+// loader relocates it on GOG.
+static int wf_reset_copy_ok(void)
+{
+    uintptr_t at = ga(WF_RESET_COPY);
+    return code_matches(at, "b9 0e 00 00 00 be") && range_readable((void*)at, 10) &&
+           *(const DWORD*)(at + 6) == (DWORD)ga(WF_PP);
+}
+
 static int wf_install_vp_tick(void)
 {
     volatile LONG* slot = (volatile LONG*)ga(WF_VP_TICK_SLOT);
@@ -4950,7 +5033,7 @@ static int wf_install_vp_tick(void)
     if (!slot || !tick || !ga(WF_PP) || (uint32_t)*slot != (uint32_t)tick) return 0;
     if (!code_matches(tick, "55 8b ec 83 e4 f8 56 57 8b f9 8b c7 e8") ||
         !code_matches(tick + 0x11, "8b 87 b0 00 00 00") ||
-        !code_matches(ga(WF_RESET_COPY), "b9 0e 00 00 00 be a0 67 62 01"))
+        !wf_reset_copy_ok())
         return 0;
     if (!VirtualProtect((void*)slot, sizeof(LONG), PAGE_READWRITE, &old)) return 0;
     g_wfVpTick = tick;
@@ -5044,14 +5127,14 @@ static DWORD WINAPI window_init_thread(LPVOID param)
         } else {
             logf_("window: startup borderless style patched");
         }
-        if (!wf_wait_site(ga(WF_WRITER_SITE), "55 8b ec 83 e4 f8 a1 50 86 60 01", 60000)) {
+        if (!wf_wait_site(ga(WF_WRITER_SITE), wf_writer_bytes(), 60000)) {
             logf_("window: config writer site never appeared - the menu setting applies at the next start");
         } else if (!wf_install_writer_retry()) {
             logf_("window: menu channel not hooked (bytes differ or out of range) - the menu setting applies at the next start");
         } else {
             logf_("window: menu channel hooked (Options > Graphics applies borderless at once)");
             // Full screen follows the menu live only through the menu channel.
-            if (!wf_wait_site(ga(WF_RESET_COPY), "b9 0e 00 00 00 be a0 67 62 01", 60000) ||
+            if (!wf_wait_site(ga(WF_RESET_COPY), "b9 0e 00 00 00 be", 60000) ||
                 !wf_install_vp_tick()) {
                 logf_("window: viewport tick not hooked (bytes differ) - Full screen applies at the next start");
             } else {
@@ -5396,12 +5479,12 @@ static const ga_row k_gog[] = {
     { VA_DOOR_TIMER,         0 },
     { VA_DOOR_TIMER_SLOT,    0 },
     { VA_EMPTY_STRING,       0 },
-    { VA_FACTS_TIME,         0 },
+    { VA_FACTS_TIME,         0x0050B0A9u },   // in FactsAdd 0050B044 ("FactsAdd" 00D441D4)
     { VA_FADE_IN_EXEC,       0 },
     { VA_FADE_IN_EXEC_SLOT,  0 },
     { VA_FADE_OUT_EXEC,      0 },
     { VA_FADE_OUT_EXEC_SLOT, 0 },
-    { VA_GAME,               0 },
+    { VA_GAME,               0x01475740u },   // written at 00AFB1DC; +0x40 activeWorld, +0x250 player
     { VA_GC,                 0 },
     { VA_IMAGES_ADD,         0 },
     { VA_IMAGES_REMOVE,      0 },
@@ -5424,32 +5507,33 @@ static const ga_row k_gog[] = {
     { VA_PROV_OPEN,          0 },
     { VA_PROV_STREAM,        0 },
     { VA_PROV_VTBL_OPEN,     0 },
-    { VA_RAY_HIT,            0 },
-    { VA_RAY_SLOT,           0 },
+    { VA_RAY_HIT,            0x0091F110u },   // body identical to Steam's 0084C750
+    { VA_RAY_SLOT,           0x00E08740u },   // hkpSimpleWorldRayCaster vtable 00E0873C + 4
     { VA_RENDER_THREAD,      0 },
     { VA_SAVELIST,           0 },
     { VA_SAVELIST_CALL_A,    0 },
     { VA_SAVELIST_CALL_B,    0 },
-    { VA_STARTVIDEO_CALL,    0 },
-    { VA_STARTVIDEO_LIST,    0 },
-    { VA_STARTVIDEO_STOP,    0 },
-    { VA_STARTVIDEO_TICK,    0 },
-    { VA_STARTVIDEO_VSLOT,   0 },
+    { VA_STARTVIDEO_CALL,    0x00509EF7u },   // in the start wrapper 00509EEB (ECX = player)
+    { VA_STARTVIDEO_LIST,    0x00509DF5u },   // thiscall on GOG
+    { VA_STARTVIDEO_STOP,    0x00509D26u },   // thiscall on GOG
+    { VA_STARTVIDEO_TICK,    0x0050A01Eu },
+    { VA_STARTVIDEO_VSLOT,   0x00D43FB0u },   // CVideoInstance vtable 00D43F3C + 0x74
     { VA_STEAM_STREAM,       0 },
     { VA_STREAM_DTOR,        0 },
     { VA_STR_FADE_OUT,       0 },
     { VA_UNPACK,             0 },
     { VA_UNPACK_CALL,        0 },
-    { WF_D3D_DEVICE,         0 },
-    { WF_GAME_WNDPROC,       0 },
-    { WF_PP,                 0 },
-    { WF_RESET_COPY,         0 },
-    { WF_STYLE_SITE,         0 },
-    { WF_VP_TICK,            0 },
-    { WF_VP_TICK_SLOT,       0 },
-    { WF_WRITER_SITE,        0 },
-    { WK_WNDPROC,            0 },
-    { WK_WNDPROC_SLOT,       0 },
+    { WF_CONFIG,             0x01679440u },   // written at 00A078CF; loaded into ECX before the writer
+    { WF_D3D_DEVICE,         0x01690818u },   // stored at 004CE0D9 in device creation 004CDE00
+    { WF_GAME_WNDPROC,       0x00A2362Du },   // W2ViewportClass lpfnWndProc, set at 00A2592D
+    { WF_PP,                 0x01690830u },   // the stored present parameters (004CE0DF)
+    { WF_RESET_COPY,         0x004CE64Eu },   // in the Reset 004CE510
+    { WF_STYLE_SITE,         0x00A258C0u },   // windowed branch of 00A257D7
+    { WF_VP_TICK,            0x00A32999u },   // pushes "Flushing all pending loading"
+    { WF_VP_TICK_SLOT,       0x00F68B38u },   // CRenderInterface vtable 00F68B2C + 0x0C
+    { WF_WRITER_SITE,        0x00420D54u },   // __thiscall on GOG (ECX = [WF_CONFIG])
+    { WK_WNDPROC,            0x00A25ED3u },
+    { WK_WNDPROC_SLOT,       0x00F68FA0u },   // CViewportWindow vtable, slot 0
 };
 
 static const char* build_name(void)
@@ -5568,7 +5652,7 @@ static void build_gate(void)
     int loadtrace = partitions && doortimer && ga_have(VA_UNPACK, VA_UNPACK_CALL,
         VA_RENDER_THREAD, VA_DOOR_INTERIOR_VT, WF_D3D_DEVICE, WF_PP, RVA_SETTINGS, 0);
     int window = ga_have(WF_STYLE_SITE, WF_WRITER_SITE, WF_VP_TICK_SLOT, WF_VP_TICK,
-        WF_RESET_COPY, WF_D3D_DEVICE, WF_PP, WF_GAME_WNDPROC, 0);
+        WF_RESET_COPY, WF_D3D_DEVICE, WF_PP, WF_GAME_WNDPROC, WF_CONFIG, 0);
     int winkeys = ga_have(WK_WNDPROC_SLOT, WK_WNDPROC, 0);
     int ray = ga_have(VA_RAY_SLOT, VA_RAY_HIT, 0);
     int quit = ga_have(VA_FACTS_TIME, 0);

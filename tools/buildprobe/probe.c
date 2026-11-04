@@ -129,7 +129,8 @@ int main(int argc, char** argv)
     printf("GOG mapped at %08X, delta %08X\n", (unsigned)gog, (unsigned)g_delta);
     check("GOG: detected as GOG 3.5.0.26g", g_build == BUILD_GOG);
     check("GOG: import slots found by name (no SteamRemoteStorage)", slots_match(gog, k_gogSlots));
-    check("GOG: unported addresses read as 0", !ga(VA_GAME) && !ga(WF_PP) && !ga_have(VA_FACTS_TIME, 0));
+    check("GOG: unported addresses read as 0", !ga(VA_PART_SWITCH) && !ga(VA_SAVELIST) &&
+          !ga_have(VA_DOOR_TIMER, 0));
     check("GOG: ported RVAs and the delta", ga_rva(RVA_SETTINGS) == 0x021EAEB8u &&
           ga_rva(EF_RANGE_RVA) == 0x0060C120u && ga_rva(EF_SHADOW_RVA) == 0x0060C4F6u &&
           ga_have(RVA_SETTINGS, EF_RANGE_RVA, EF_SHADOW_RVA, 0));
@@ -149,6 +150,49 @@ int main(int argc, char** argv)
     check("GOG: Steam's distance signatures do not", memcmp((const void*)(gog + ga_rva(EF_RANGE_RVA)),
           ef_range_sig, ef_range_sig_len) && memcmp((const void*)(gog + ga_rva(EF_SHADOW_RVA)),
           ef_shadow_sig, ef_shadow_sig_len));
+    // The DLL's own per-build checks, run against the mapped GOG code (ga() = this mapping).
+    check("GOG: the quit guard's 12 bytes sit at VA_FACTS_TIME", code_matches(ga(VA_FACTS_TIME), quit_site_bytes()));
+    g_startvideoList = ga(VA_STARTVIDEO_LIST);
+    g_startvideoStop = ga(VA_STARTVIDEO_STOP);
+    g_startvideoTick = ga(VA_STARTVIDEO_TICK);
+    check("GOG: the skip-intro call site and code are recognised",
+          startvideo_site_ok(ga(VA_STARTVIDEO_CALL)) && startvideo_code_ok());
+    {
+        uintptr_t call = ga(VA_STARTVIDEO_CALL);
+        LONG rel = *(const LONG*)(call + 1);
+        check("GOG: VA_STARTVIDEO_CALL calls VA_STARTVIDEO_LIST",
+              *(const unsigned char*)call == 0xE8 && call + 5 + rel == g_startvideoList);
+    }
+    // Slots in the mapped image are relocated to the file's shared random base, not this mapping.
+    check("GOG: the ray and start-movie slots hold the k_gog functions (low 16 bits)",
+          ((*(const DWORD*)ga(VA_RAY_SLOT) - (DWORD)ga(VA_RAY_HIT)) & 0xFFFF) == 0 &&
+          ((*(const DWORD*)ga(VA_STARTVIDEO_VSLOT) - (DWORD)g_startvideoTick) & 0xFFFF) == 0);
+    check("GOG: window style site, viewport tick and window procedure are recognised",
+          code_matches(ga(WF_STYLE_SITE), "bf 00 00 c8 00") &&
+          code_matches(ga(WF_VP_TICK), "55 8b ec 83 e4 f8 56 57 8b f9 8b c7 e8") &&
+          code_matches(ga(WF_VP_TICK) + 0x11, "8b 87 b0 00 00 00") &&
+          code_matches(ga(WK_WNDPROC), "55 8b ec 83 e4 f8 83 ec 64") &&
+          code_matches(ga(WK_WNDPROC) + 0x2F2, "c2 0c 00"));
+    check("GOG: the config writer's bytes (GOG prologue and body start)",
+          code_matches(ga(WF_WRITER_SITE), wf_writer_bytes()));
+    check("GOG: the Reset copies WF_PP (operand low 16 bits)",
+          code_matches(ga(WF_RESET_COPY), "b9 0e 00 00 00 be") &&
+          ((*(const DWORD*)(ga(WF_RESET_COPY) + 6) - (DWORD)ga(WF_PP)) & 0xFFFF) == 0);
+    check("GOG: the tick and window-procedure slots hold them (low 16 bits)",
+          ((*(const DWORD*)ga(WF_VP_TICK_SLOT) - (DWORD)ga(WF_VP_TICK)) & 0xFFFF) == 0 &&
+          ((*(const DWORD*)ga(WK_WNDPROC_SLOT) - (DWORD)ga(WK_WNDPROC)) & 0xFFFF) == 0);
+    {
+        // WriteConfigParamFloat (004EB142): mov ecx,[WF_CONFIG]; push eax; call writer.
+        const unsigned char* c = (const unsigned char*)(gog + 0xEB1D8);
+        LONG rel = *(const LONG*)(c + 8);
+        check("GOG: the writer is called with ECX = [WF_CONFIG] (thiscall)",
+              c[0] == 0x8B && c[1] == 0x0D && c[6] == 0x50 && c[7] == 0xE8 &&
+              ((*(const DWORD*)(c + 2) - (DWORD)(ga(WF_CONFIG) - g_delta)) & 0xFFFF) == 0 &&
+              (uintptr_t)(c + 12) + rel == ga(WF_WRITER_SITE));
+    }
+    check("GOG: the game global is written after 'Initializing Game...' (00AFB1DC)",
+          *(const unsigned char*)(gog + 0x6FB1DC) == 0xA3 &&
+          ((*(const DWORD*)(gog + 0x6FB1DD) - (DWORD)(ga(VA_GAME) - g_delta)) & 0xFFFF) == 0);
     all_on();
     build_gate();
     check("GOG: LOD, presets, hotkeys and distance stay on", cfg_enforce && cfg_enforce_down &&
@@ -158,11 +202,11 @@ int main(int argc, char** argv)
     check("GOG: doors and interiors off", !cfg_keep_outdoors && !cfg_keep_interiors &&
           !cfg_preload_interiors && !cfg_skip_door_gc && !cfg_indoor_outdoors && !cfg_fast_doors &&
           !cfg_instant_doors && cfg_door_fade == 0.5f && cfg_area_fade == 0.5f);
-    check("GOG: window, window_mode rows, Windows keys off", !cfg_wf_enabled && !cfg_window_mode && !cfg_winkeys);
-    check("GOG: skip_intro, load_trace, raycast and quit guards off", !cfg_skip_intro && !cfg_load_trace &&
-          !cfg_ray_guard && !cfg_quit_guard);
-    check("GOG: script patches stay on", cfg_book_marker && cfg_continue && cfg_medallion);
-    check("GOG: pause_quit waits for quit_guard", !cfg_pause_quit);
+    check("GOG: window, window_mode rows, Windows keys stay on", cfg_wf_enabled && cfg_window_mode && cfg_winkeys);
+    check("GOG: load_trace off", !cfg_load_trace);
+    check("GOG: skip_intro, raycast and quit guards stay on", cfg_skip_intro && cfg_ray_guard && cfg_quit_guard);
+    check("GOG: script patches stay on, pause_quit too now that quit_guard is", cfg_book_marker &&
+          cfg_continue && cfg_medallion && cfg_pause_quit);
     check("GOG: cpu32 guard, crash capture, keyboard filter, file trace stay on", cfg_cpu32_guard &&
           cfg_crash_dump && cfg_suppress && cfg_file_trace);
 

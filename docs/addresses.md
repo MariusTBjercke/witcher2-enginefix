@@ -30,12 +30,12 @@ running exe's import directory.
 | `VA_DOOR_TIMER` | `0095DB00` |  |  |
 | `VA_DOOR_TIMER_SLOT` | `00EF01BC` |  | streaming door OnTimer |
 | `VA_EMPTY_STRING` | `0160FBA0` |  | the game's empty String, its usual loading-screen argument |
-| `VA_FACTS_TIME` | `0099871E` |  | mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game |
+| `VA_FACTS_TIME` | `0099871E` | `0050B0A9` | mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game |
 | `VA_FADE_IN_EXEC` | `009DC2C3` |  |  |
 | `VA_FADE_IN_EXEC_SLOT` | `00E7C394` |  |  |
 | `VA_FADE_OUT_EXEC` | `009DC316` |  |  |
 | `VA_FADE_OUT_EXEC_SLOT` | `00E7C380` |  |  |
-| `VA_GAME` | `01404950` |  | CGame*: +0x40 world, +0xE8 queued world requests, +0x234 cloud flag |
+| `VA_GAME` | `01404950` | `01475740` | CGame*: +0x40 world, +0xE8 queued world requests, +0x234 cloud flag |
 | `VA_GC` | `00ABD770` |  |  |
 | `VA_IMAGES_ADD` | `00B28657` |  | thiscall AddImage(String* name, stream) |
 | `VA_IMAGES_REMOVE` | `00B285C6` |  | thiscall Remove(key) |
@@ -58,29 +58,30 @@ running exe's import directory.
 | `VA_PROV_OPEN` | `00931DB7` |  | thiscall Stream* Open(String* name, bool mode1) |
 | `VA_PROV_STREAM` | `0052ADFF` |  | the provider stream's constructor |
 | `VA_PROV_VTBL_OPEN` | `00F02B90` |  | Steam provider vtable slot +0x18 |
-| `VA_RAY_HIT` | `0084C750` |  |  |
-| `VA_RAY_SLOT` | `00D41A38` |  |  |
+| `VA_RAY_HIT` | `0084C750` | `0091F110` |  |
+| `VA_RAY_SLOT` | `00D41A38` | `00E08740` |  |
 | `VA_RENDER_THREAD` | `0160D0A4` |  | render thread object while its loop runs |
 | `VA_SAVELIST` | `009A49B9` |  | stdcall void BuildSaveList(panel) |
 | `VA_SAVELIST_CALL_A` | `009A5175` |  | E8 rel32, startup / main menu |
 | `VA_SAVELIST_CALL_B` | `009A524F` |  | E8 rel32, GUI request |
-| `VA_STARTVIDEO_CALL` | `009B588F` |  | E8 rel32 in 009B581C (after mov eax,esi) |
-| `VA_STARTVIDEO_LIST` | `009A2190` |  | builds the startup list, EAX = player object |
-| `VA_STARTVIDEO_STOP` | `009A1F2E` |  | ends the current movie, ESI = player |
-| `VA_STARTVIDEO_TICK` | `009A211D` |  | thiscall void Tick(float), ret 4 |
-| `VA_STARTVIDEO_VSLOT` | `00ECAF78` |  | player vtable 00ECAF04 + 0x74 = Tick |
+| `VA_STARTVIDEO_CALL` | `009B588F` | `00509EF7` | E8 rel32 in 009B581C (after mov eax,esi) |
+| `VA_STARTVIDEO_LIST` | `009A2190` | `00509DF5` | builds the startup list, EAX = player object |
+| `VA_STARTVIDEO_STOP` | `009A1F2E` | `00509D26` | ends the current movie, ESI = player |
+| `VA_STARTVIDEO_TICK` | `009A211D` | `0050A01E` | thiscall void Tick(float), ret 4 |
+| `VA_STARTVIDEO_VSLOT` | `00ECAF78` | `00D43FB0` | player vtable 00ECAF04 + 0x74 = Tick |
 | `VA_STEAM_STREAM` | `00F02C2C` |  | vtable of the provider's read stream (0052ADFF) |
 | `VA_STREAM_DTOR` | `0052AFAA` |  | its scalar deleting destructor, slot 0 |
 | `VA_STR_FADE_OUT` | `00EF0050` |  | L"fade_out", the string the handler names its event by |
 | `VA_UNPACK` | `0068F3B0` |  |  |
 | `VA_UNPACK_CALL` | `0068E8E7` |  | call FUN_0068f3b0 in FUN_0068e890 |
-| `WF_D3D_DEVICE` | `01626788` |  | IDirect3DDevice9* |
-| `WF_GAME_WNDPROC` | `009D237E` |  | W2ViewportClass lpfnWndProc (FUN_009d44e1) |
-| `WF_PP` | `016267A0` |  | the stored D3DPRESENT_PARAMETERS |
-| `WF_RESET_COPY` | `0052D4FE` |  | mov ecx,0xE; mov esi,WF_PP (the Reset's parameter copy) |
-| `WF_STYLE_SITE` | `009D45CA` |  | mov edi, 0x00C80000 (windowed branch of FUN_009d44e1) |
-| `WF_VP_TICK` | `009E146E` |  | __thiscall, no stack arguments, returns AL |
-| `WF_VP_TICK_SLOT` | `00EC60F8` |  | viewport vtable slot -> FUN_009E146E |
-| `WF_WRITER_SITE` | `0041F4B7` |  | config writer, __stdcall (RET 0x10) |
-| `WK_WNDPROC` | `009D4BD9` |  | __thiscall (msg, wparam, lparam), RET 0xC |
-| `WK_WNDPROC_SLOT` | `00EC6560` |  | window object vtable slot 0 -> FUN_009D4BD9 |
+| `WF_CONFIG` | `01608650` | `01679440` | the config manager the writer works on (its ECX on GOG) |
+| `WF_D3D_DEVICE` | `01626788` | `01690818` | IDirect3DDevice9* |
+| `WF_GAME_WNDPROC` | `009D237E` | `00A2362D` | W2ViewportClass lpfnWndProc (FUN_009d44e1) |
+| `WF_PP` | `016267A0` | `01690830` | the stored D3DPRESENT_PARAMETERS |
+| `WF_RESET_COPY` | `0052D4FE` | `004CE64E` | mov ecx,0xE; mov esi,WF_PP (the Reset's parameter copy) |
+| `WF_STYLE_SITE` | `009D45CA` | `00A258C0` | mov edi, 0x00C80000 (windowed branch of FUN_009d44e1) |
+| `WF_VP_TICK` | `009E146E` | `00A32999` | __thiscall, no stack arguments, returns AL |
+| `WF_VP_TICK_SLOT` | `00EC60F8` | `00F68B38` | viewport vtable slot -> FUN_009E146E |
+| `WF_WRITER_SITE` | `0041F4B7` | `00420D54` | config writer, __stdcall (RET 0x10); __thiscall on GOG |
+| `WK_WNDPROC` | `009D4BD9` | `00A25ED3` | __thiscall (msg, wparam, lparam), RET 0xC |
+| `WK_WNDPROC_SLOT` | `00EC6560` | `00F68FA0` | window object vtable slot 0 -> FUN_009D4BD9 |
