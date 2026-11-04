@@ -1,8 +1,8 @@
 # Startup time: launch to main menu
 
-Status 2026-11-04: `[startup] fast_start=1` (on by default) implemented and measured on Steam, not
-released yet. Measurements: `docs/validation/startup-time-2026-11-04.md`. Target: Steam Enhanced
-Edition 3.5.0.26; the same two FMOD files ship on GOG 3.5.0.26g, not tried there.
+Status 2026-11-04: `[startup] fast_start=1` and `[saves] light_previews=1` (both on by default)
+implemented and measured on Steam, not released yet. Measurements: `docs/validation/startup-time-2026-11-04.md`. Target: Steam Enhanced
+Edition 3.5.0.26 and GOG 3.5.0.26g, which ship the same two FMOD files; one run seen on GOG.
 
 ## Symptom
 
@@ -102,8 +102,10 @@ measured on its own.
   disk time stays, so the gain may be smaller there.
 * **Why the Nexus player needed ~10 s.** Not measured. Their timer may already be finer, or they may
   have a faster main menu.
-* **GOG.** `fmodex.dll` and `fmod_event.dll` are byte-identical (SHA-256) on the two builds and the
-  code uses no game address, so it should work, but it has not been run there.
+* **The gain on GOG.** `fmodex.dll` and `fmod_event.dll` are byte-identical (SHA-256) on the two
+  builds and the code uses no game address. One run with both features was fine: main menu after 7.7 s,
+  normal sound, right pictures in the Load menu. No GOG run without them was timed, so the gain there
+  is not measured.
 
 ## What is left in the owner's startup
 
@@ -113,14 +115,48 @@ Measured on the last run:
   `compiledscripts.w2scripts` (2 MB) lies in `CookedPC`, but the exe contains neither that name nor
   `w2scripts`, in UTF-16 or ASCII, so this build does not seem to read it. Scripts are also what
   `src/scriptpatches` changes, so a cache of our own needs care.
-* **Render thread, ~2.5 s after `main menu reached`.** Main thread idle, render thread at 100 % in
-  `d3dx9_39.dll` under `D3DXCreateTextureFromFileInMemory` (`0053FFF0` <- `FUN_009C47F8` <-
-  `FUN_009DB889`, which drains a queue of images loaded in the background). What is in that queue and
-  how many there are was not measured. The owner has many saves, but the save previews do not look
-  like the source: `AddImage` has its own path (`save-bloat.md`), so this needs a count before anything
-  is changed.
-* **Main menu and GUI, ~3 s of CPU**, spread over `__VEC_memzero`, `FUN_00758470`, `FUN_0080DAB0`.
-  Not looked into.
+* **Scripts, allocator.** About half of the script phase is the allocator's lock and statistics
+  (`FUN_00AC8686`: `EnterCriticalSection` and four interlocked counters per allocation). Removing the
+  counters might give ~0.5 s, but that allocator serves the whole game on two builds, so this was not
+  tried.
+* **Main menu, save list and GUI, ~3.5 s of CPU**, spread over the save list (`009A49B9`, already
+  `fast_list`), `__VEC_memzero`, `FUN_00758470`, `FUN_0080DAB0`. No single target stands out.
+
+## Save previews on the render thread
+
+After the window the render thread ran at 100 % for ~2.5-3 s with the main thread waiting, in
+`d3dx9_39.dll` under `0053FFF0` <- `FUN_009C47F8` <- `FUN_009DB889` (which drains a queue of images
+loaded in the background). The call at `0054013C` is `D3DXCreateTextureFromFileInMemory` (import slot
+`00CAD484`, 4 arguments, stdcall). A temporary log of each call on the owner's install:
+
+```
+165 calls, all on the render thread, all BMP 640x360 with one level
+133 x A8R8G8B8 (921 656 bytes) and 32 x R8G8B8 (691 254 bytes), 17.0-17.8 ms each, 2 914 ms in total
+```
+
+165 is the number of `.sav` files, so these are the save previews: the cost is per save. By D3DX's
+documentation the defaults of this call round the size up to a power of two (1024x512) and generate a
+full mip chain, which fits the hot code; the finished texture was not read back.
+
+`[saves] light_previews=1` (`hook_lpCreate`, `src/enginefix.c`) wraps that import, found by name. For
+a BMP of exactly 640x360, read with `D3DXGetImageInfoFromFileInMemory`, it calls
+`D3DXCreateTextureFromFileInMemoryEx` with `D3DX_DEFAULT_NONPOW2` for both sizes, 1 level, format from
+the file, the managed pool that the default call uses, and no filters. Every other image, and any
+failure of the Ex call, goes to the original. Off switch: `light_previews=0`.
+
+Seen by the owner on DXVK: 150 previews in 259 ms, **~1.7 ms each**; the last one is done at +9.0 s
+instead of +11.6 s. The pictures look right in the Load menu, and a save loaded and the game exited
+cleanly. Log: `saves: light previews on (640x360 BMP at its own size, one level)` and `saves: first
+preview made at its own size`. `[diagnostics] savelist_trace=1` adds memory per 50 previews.
+
+Not established: the memory saved. By the numbers a preview goes from ~2.8 MB to ~0.9 MB of texture,
+but no run compared the two, and how much of that sits in the 32-bit address space depends on the
+renderer. Also not tried: native Direct3D 9, a low resolution where the picture is drawn much smaller
+than 640x360 (no mip levels to fall back on), and a new quicksave picture.
+
+On GOG the first preview was made when the Load menu opened (+14.1 s, the menu having been reached at
++7.7 s), not during the start as on Steam: its list keeps no previews at game start (`save-bloat.md`).
+So on GOG `light_previews` shortens opening that menu, not the start.
 
 ## Tool
 

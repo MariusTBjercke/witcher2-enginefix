@@ -19,7 +19,7 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Clean quit** | Quit in the pause menu (or any quit with an area loaded) crashed the game while it shut down: a script recorded a quest fact after the world was gone. Nobody saw it, but each quit left a crash dump. The mod gives that fact time 0 instead. `[stability] quit_guard`. | on |
 | **32-thread CPUs** | On a CPU with 32 or more logical processors the game never showed a window: its own CPU count never ended. The mod skips that count, the same as taking a core away in Task Manager, but keeps the core. `[stability] cpu32_guard`. | on |
 | **Crash capture** | The game's own crash handler closes the game without a word. The mod logs what crashed and writes a small dump next to the log, so a crash can be reported and analysed. `[diagnostics] crash_dump`. | on |
-| **Faster start** | The game sat idle for about 11 s while the sound system loaded, waiting on a coarse timer. The mod removes most of that wait: on the machine it was measured on the main menu comes after 6.5 s instead of 16 s. Your gain depends on your disk and on what else your system does. | on |
+| **Faster start** | The game sat idle for about 11 s while the sound system loaded, waiting on a coarse timer. The mod removes most of that wait: on the machine it was measured on the main menu comes after 6.5 s instead of 16 s. Your gain depends on your disk and on what else your system does. Save previews also load about ten times faster, which matters if you have many saves: 165 saves took 2.9 s, now under 0.3 s. | on |
 | **Skip the startup videos** | `[startup] skip_intro=1` starts at the main menu without the logo videos and the intro movie. The mod presses "skip" for the game on each startup movie (the same path as Esc), so a short black moment remains. Works with or without an intro removal mod. | off |
 | **Ctrl+F9/F10 do not quick-load** | F9 (quick load) and F10 cannot be rebound in this game. While Ctrl or Alt is held, the mod hides F9/F10 from the game, so the mod's hotkeys never trigger a quick load. Plain F9 still quick-loads. | on |
 | **Snipping Tool and Windows keys** | The game blocks every Windows key combination while it is in front, so Win+Shift+S and Print Screen (Snipping Tool) did nothing. Now they work, as do Win+D and the rest; a Windows key tapped on its own still does not open the Start menu. `[hotkeys] windows_keys`. | on |
@@ -102,6 +102,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[saves] fix_thumbnails` | 1 | 0 turns the save-preview fix off |
 | `[saves] fix_list_leak` | 1 | 0 turns the save-list leak fix off |
 | `[saves] fast_list` | 1 | 0 lets the game unpack every save in full for the Load/Save list |
+| `[saves] light_previews` | 1 | 0 lets the game scale up every save preview and give it a full set of smaller copies |
 | `[loading] interiors` | 2 | 1 loads each interior on its first visit (short fade then), 0 restores the game's doors |
 | `[loading] fast_doors`, `door_fade`, `area_fade` | 1, 0.05, 0.25 | fade lengths for house doors and area changes; `fast_doors=0` and 0.5 restore the game's timing |
 | `[loading] door_light_blend` | 1.0 | seconds the lighting takes to change at a house door without a fade; 0 switches at once as the game does |

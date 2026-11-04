@@ -131,6 +131,7 @@ static int cfg_save_thumbs = 1; // [saves] fix_thumbnails: write the late save p
 static int cfg_savelist_trace;  // [diagnostics] savelist_trace: time/memory of the save list
 static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the save list leaks
 static int cfg_fast_list = 1;   // [saves] fast_list: unpack only the save header blocks (2 = every other build)
+static int cfg_light_previews = 1; // [saves] light_previews: Load menu previews without upscaling and mip chain
 static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos before the main menu
 static int cfg_fast_start = 1;  // [startup] fast_start: no idle waiting for FMOD while the game starts
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
@@ -405,6 +406,7 @@ static void load_config(void)
     cfg_savelist_trace = ini_int("diagnostics", "savelist_trace", 0);
     cfg_list_leak = ini_int("saves", "fix_list_leak", 1);
     cfg_fast_list = ini_int("saves", "fast_list", 1);
+    cfg_light_previews = ini_int("saves", "light_previews", 1);
     cfg_skip_intro = ini_int("startup", "skip_intro", 0);
     cfg_fast_start = ini_int("startup", "fast_start", 1);
     cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
@@ -6330,6 +6332,72 @@ static void fast_start_fmod(void)
           GetTickCount() - t0, g_startCutEx, g_startCutEvent);
 }
 
+// [saves] light_previews=1. The first Load menu build hands every save's 640x360 BMP preview to
+// D3DXCreateTextureFromFileInMemory, whose defaults scale it to 1024x512 and generate a full mip
+// chain: ~18 ms each on the render thread, with the main thread waiting. The same picture at its own
+// size with one level needs neither step. Other images pass through. See docs/fixes/startup-time.md.
+#define D3DX_NONPOW2 ((UINT)-2)
+#define D3DX_NO_FILTER 1u
+#define D3DPOOL_MANAGED_ 1u
+typedef struct { UINT w, h, depth, mips; DWORD fmt, restype, filefmt; } lp_info;
+typedef HRESULT (WINAPI *lp_create_t)(void*, const void*, UINT, void**);
+typedef HRESULT (WINAPI *lp_createex_t)(void*, const void*, UINT, UINT, UINT, UINT, DWORD, DWORD, DWORD, DWORD, DWORD,
+                                        DWORD, void*, void*, void**);
+typedef HRESULT (WINAPI *lp_info_t)(const void*, UINT, lp_info*);
+static lp_create_t g_lpCreate;
+static lp_createex_t g_lpCreateEx;
+static lp_info_t g_lpInfo;
+static volatile LONG g_lpLight, g_lpFallback;
+
+static HRESULT WINAPI hook_lpCreate(void* dev, const void* data, UINT size, void** out)
+{
+    lp_info ti;
+
+    if (g_lpInfo(data, size, &ti) >= 0 && ti.filefmt == 0 /* D3DXIFF_BMP */ && ti.w == 640 && ti.h == 360) {
+        HRESULT hr = g_lpCreateEx(dev, data, size, D3DX_NONPOW2, D3DX_NONPOW2, 1, 0, 0 /* format from the file */,
+                                  D3DPOOL_MANAGED_, D3DX_NO_FILTER, D3DX_NO_FILTER, 0, NULL, NULL, out);
+        if (hr >= 0) {
+            LONG n = InterlockedIncrement(&g_lpLight);
+            if (n == 1) logf_("saves: first preview made at its own size");
+            if (cfg_savelist_trace && (n == 1 || n % 50 == 0)) {
+                char what[40];
+                sprintf_s(what, sizeof what, "light preview %ld:", n);
+                log_mem(what);
+            }
+            return hr;
+        }
+        if (InterlockedIncrement(&g_lpFallback) == 1) logf_("saves: light preview failed (%08lX) - the game's own", (unsigned long)hr);
+    }
+    return g_lpCreate(dev, data, size, out);
+}
+
+static void lp_slot_cb(void* ctx, const char* dll, const char* fn, uintptr_t slot)
+{
+    if (!_stricmp(dll, "d3dx9_39.dll") && !strcmp(fn, "D3DXCreateTextureFromFileInMemory")) *(uintptr_t*)ctx = slot;
+}
+
+static DWORD WINAPI light_previews_thread(LPVOID param)
+{
+    uintptr_t slot = 0;
+    HMODULE d3dx;
+
+    (void)param;
+    Sleep(1500);   // the SteamStub fills the exe's import table during start-up
+    d3dx = GetModuleHandleA("d3dx9_39.dll");
+    if (d3dx) {
+        g_lpInfo = (lp_info_t)(void*)GetProcAddress(d3dx, "D3DXGetImageInfoFromFileInMemory");
+        g_lpCreateEx = (lp_createex_t)(void*)GetProcAddress(d3dx, "D3DXCreateTextureFromFileInMemoryEx");
+    }
+    if (!g_lpInfo || !g_lpCreateEx) {
+        logf_("saves: d3dx9_39.dll functions not found - light_previews off");
+        return 0;
+    }
+    imports_walk((const unsigned char*)g_base, lp_slot_cb, &slot);
+    if (patch_import_slot("saves", "d3dx9_39.dll", "D3DXCreateTextureFromFileInMemory", slot, (void*)hook_lpCreate, (void**)&g_lpCreate))
+        logf_("saves: light previews on (640x360 BMP at its own size, one level)");
+    return 0;
+}
+
 static double timed_sleep1_ms(void)
 {
     LARGE_INTEGER f, a, b;
@@ -7196,6 +7264,10 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                     g_startMainTid = GetCurrentThreadId();
                     h = CreateThread(NULL, 0, fast_start_thread, NULL, 0, NULL);
                     if (h) CloseHandle(h); else logf_("startup: CreateThread failed - fast_start off");
+                }
+                if (cfg_light_previews) {
+                    h = CreateThread(NULL, 0, light_previews_thread, NULL, 0, NULL);
+                    if (h) CloseHandle(h); else logf_("saves: CreateThread failed - light_previews off");
                 }
             }
             if (cfg_file_trace) {

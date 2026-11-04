@@ -47,6 +47,8 @@ What it does:
 - Faster start ([startup] fast_start=1, on by default): removes most of an idle
   wait of about 11 s while the sound system loads. Measured on one machine: main
   menu after 6.5 s instead of 16 s. Your gain depends on your disk and system.
+  Save previews also load about ten times faster ([saves] light_previews=1, on by
+  default), which matters if you have many saves.
 - Skip intro ([startup] skip_intro=1, off by default): starts at the main
   menu without the logo videos and the intro movie (a short black moment
   remains).
@@ -119,6 +121,7 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [saves]   fix_thumbnails=1     0 turns the save-preview fix off
   [saves]   fix_list_leak=1      0 turns the save-list leak fix off
   [saves]   fast_list=1          0 unpacks every save in full for the list
+  [saves]   light_previews=1     0 scales up every save preview, with smaller copies
   [loading] interiors=2          1 loads each interior on its first visit,
                                  0 restores the game's doors
   [loading] fast_doors=1         0 restores the game's door timing

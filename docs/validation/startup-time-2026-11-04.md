@@ -63,6 +63,48 @@ loading a save ("lyden var normal i hovedmeny og inne i spillet"). From the log:
 
 That is 6.3 s to the menu, no new dump.
 
+## Save previews
+
+Run 6, a temporary log of every `D3DXCreateTextureFromFileInMemory`, `fast_start` on: 165 calls, first
+at 23:14:18.403, last at 23:14:21.315; DLL loaded at 23:14:09.751, so done at +11.6 s.
+
+```
+tex 2 2d tid=40528 640x360 mips=1 fmt=00000015 file=0 size=921656 18.5 ms total 36 ms
+tex 165 2d tid=40528 640x360 mips=1 fmt=00000015 file=0 size=921656 17.6 ms total 2914 ms
+```
+
+Run 7, `light_previews=1`; DLL loaded at 23:16:52.373, main menu reached at 23:16:58.712 (6.3 s):
+
+```
+23:17:01.054 savelist: light preview 1: private=1183 MB commit=1519 ...
+23:17:01.142 savelist: light preview 50: private=1102 MB commit=1434 ...
+23:17:01.228 savelist: light preview 100: private=1018 MB commit=1371 ...
+23:17:01.313 savelist: light preview 150: private=933 MB commit=1278 ...
+```
+
+Private memory falls by ~1.7 MB per preview while the queue drains. No run with the game's own textures
+logged the same numbers, so this does not show how much the change saves. The owner in the Load menu:
+"Bildene ser riktige ut". A save was loaded (`distance stats` in the log) and the game exited with
+`ExitProcess(0)`, no new dump.
+
+## GOG
+
+Run 8, GOG 3.5.0.26g, the same DLL as the Steam runs with both features, DXVK, 3840x2160. The owner:
+"GOG virket fint" after being asked to check the main menu music, the pictures in the Load menu, and
+sound after loading a save. No GOG run without the features was timed.
+
+```
+23:20:23.892 witcher2_enginefix 0.10.0 loaded (image base 0x00030000)
+23:20:23.921 startup: fast_start: timeBeginPeriod(1) = 0, Sleep(1) took 13.7 ms before, 1.9 ms after
+23:20:25.406 saves: light previews on (640x360 BMP at its own size, one level)
+23:20:30.239 startup: fast_start: FMOD waits of 10 ms cut to 1 ms until the game window, after 6313 ms: fmodex 1733, fmod_event 840
+23:20:31.567 startup: 2 startup movie(s) stopped, main menu reached
+23:20:37.983 saves: first preview made at its own size
+23:20:58.196 exit: CorExitProcess(0) from witcher2.EXE+0x343F48 on thread 49520 (the main thread)
+```
+
+That is 7.7 s to the menu, no dump.
+
 ## Main thread stack in the idle time (run 1)
 
 ```
