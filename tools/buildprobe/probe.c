@@ -28,7 +28,9 @@ static const DWORD k_steamSlots[IMP_COUNT] = {
     [IMP_GETFILESIZE] = 0x00CAD280, [IMP_GETFILESIZEEX] = 0x00CAD290,
     [IMP_READFILE] = 0x00CAD27C, [IMP_SLEEP] = 0x00CAD304,
     [IMP_WAITSINGLE] = 0x00CAD2B0, [IMP_WAITSINGLEEX] = 0x00CAD07C,
-    [IMP_GETPROCAFFINITY] = 0x00CAD20C, [IMP_D3DX_SAVEFILE] = 0x00CAD4A8,
+    [IMP_GETPROCAFFINITY] = 0x00CAD20C, [IMP_EXITPROCESS] = 0x00CAD248,
+    [IMP_TERMINATEPROCESS] = 0x00CAD178, [IMP_GETPROCADDRESS] = 0x00CAD250,
+    [IMP_D3DX_SAVEFILE] = 0x00CAD4A8,
     [IMP_D3DX_SAVEMEM] = 0x00CAD4AC, [IMP_STEAM_RS] = 0x00CAD624,
 };
 
@@ -43,7 +45,9 @@ static const DWORD k_gogSlots[IMP_COUNT] = {
     [IMP_GETFILESIZE] = 0x00D0027C, [IMP_GETFILESIZEEX] = 0x00D0032C,
     [IMP_READFILE] = 0x00D00278, [IMP_SLEEP] = 0x00D00308,
     [IMP_WAITSINGLE] = 0x00D002B0, [IMP_WAITSINGLEEX] = 0x00D000A0,
-    [IMP_GETPROCAFFINITY] = 0x00D0020C, [IMP_D3DX_SAVEFILE] = 0x00D004DC,
+    [IMP_GETPROCAFFINITY] = 0x00D0020C, [IMP_EXITPROCESS] = 0x00D00248,
+    [IMP_TERMINATEPROCESS] = 0x00D0017C, [IMP_GETPROCADDRESS] = 0x00D00250,
+    [IMP_D3DX_SAVEFILE] = 0x00D004DC,
     [IMP_D3DX_SAVEMEM] = 0x00D004D8, [IMP_STEAM_RS] = 0,   // GOG has no steam_api.dll
 };
 
@@ -66,6 +70,18 @@ static void all_on(void)
     cfg_door_fade = 0.05f;
     cfg_area_fade = 0.25f;
     g_gated = 0;
+}
+
+// Holds the log lock until told to let go (the exit_logf check).
+static HANDLE g_lockHeld, g_lockRelease;
+static DWORD WINAPI hold_log_lock(LPVOID param)
+{
+    (void)param;
+    EnterCriticalSection(&g_logLock);
+    SetEvent(g_lockHeld);
+    WaitForSingleObject(g_lockRelease, 5000);
+    LeaveCriticalSection(&g_logLock);
+    return 0;
 }
 
 static uintptr_t map_exe(const char* path)
@@ -129,8 +145,8 @@ int main(int argc, char** argv)
     printf("GOG mapped at %08X, delta %08X\n", (unsigned)gog, (unsigned)g_delta);
     check("GOG: detected as GOG 3.5.0.26g", g_build == BUILD_GOG);
     check("GOG: import slots found by name (no SteamRemoteStorage)", slots_match(gog, k_gogSlots));
-    check("GOG: unported addresses read as 0", !ga(VA_PART_SWITCH) && !ga(VA_SAVELIST) &&
-          !ga_have(VA_DOOR_TIMER, 0));
+    check("GOG: unported addresses read as 0", !ga(VA_SAVELIST) && !ga(VA_IMAGES_ADD) &&
+          !ga_have(VA_PROV_OPEN, 0));
     check("GOG: ported RVAs and the delta", ga_rva(RVA_SETTINGS) == 0x021EAEB8u &&
           ga_rva(EF_RANGE_RVA) == 0x0060C120u && ga_rva(EF_SHADOW_RVA) == 0x0060C4F6u &&
           ga_have(RVA_SETTINGS, EF_RANGE_RVA, EF_SHADOW_RVA, 0));
@@ -190,6 +206,53 @@ int main(int argc, char** argv)
               ((*(const DWORD*)(c + 2) - (DWORD)(ga(WF_CONFIG) - g_delta)) & 0xFFFF) == 0 &&
               (uintptr_t)(c + 12) + rel == ga(WF_WRITER_SITE));
     }
+    // Doors and interiors (phase 1c). Calls inside .text are not relocated; absolutes and slots
+    // are compared by their low 16 bits, as above.
+    {
+        uintptr_t a = ga(VA_PART_SWITCH_A), b = ga(VA_PART_SWITCH_B), r = ga(VA_PART_RUN_CALL);
+        uintptr_t gc = ga(VA_PART_GC_CALL), u = ga(VA_UNPACK_CALL);
+        check("GOG: switch, run, request and GC bytes (the GOG conventions)",
+              code_matches(ga(VA_PART_SWITCH), "55 8b ec 83 ec 50 53 56 57 ff 75 08") &&
+              code_matches(ga(VA_PART_RUN), pt_run_bytes()) && code_matches(ga(VA_PART_REQUEST), pt_request_bytes()) &&
+              code_matches(ga(VA_GC), pt_gc_bytes()));
+        check("GOG: Steam's run and request bytes do not match there (EDI job, thiscall request)",
+              !code_matches(ga(VA_PART_RUN), "55 8b ec 83 ec 18 53 8b 5d 08 56 57") &&
+              !code_matches(ga(VA_PART_REQUEST), "55 8b ec 53 57 8b f8 8b 47 40 33 db"));
+        check("GOG: both switch calls, the sync run (after mov edi,esi) and the GC call",
+              *(const unsigned char*)a == 0xE8 && a + 5 + *(const LONG*)(a + 1) == ga(VA_PART_SWITCH) &&
+              *(const unsigned char*)b == 0xE8 && b + 5 + *(const LONG*)(b + 1) == ga(VA_PART_SWITCH) &&
+              code_matches(r - 2, "8b fe e8") && r + 5 + *(const LONG*)(r + 1) == ga(VA_PART_RUN) &&
+              *(const unsigned char*)gc == 0xE8 && gc + 5 + *(const LONG*)(gc + 1) == ga(VA_GC));
+        check("GOG: the door timer and start slots hold them (low 16 bits)",
+              ((*(const DWORD*)ga(VA_DOOR_TIMER_SLOT) - (DWORD)ga(VA_DOOR_TIMER)) & 0xFFFF) == 0 &&
+              ((*(const DWORD*)ga(VA_DOOR_START_SLOT) - (DWORD)ga(VA_DOOR_START)) & 0xFFFF) == 0 &&
+              code_matches(ga(VA_DOOR_TIMER), "55 8b ec f6 05") &&
+              code_matches(ga(VA_DOOR_START), "55 8b ec 83 ec 10 53 56 8b 75 08 8b 06 33 db 57"));
+        check("GOG: BlackScreen slot 2 is the fade_out handler; the fade commands' execute slots",
+              ((*(const DWORD*)(ga(VA_DOOR_TELEPORT_VT) + 8) - (DWORD)ga(VA_DOOR_FADE_EVENT)) & 0xFFFF) == 0 &&
+              ((*(const DWORD*)ga(VA_FADE_OUT_EXEC_SLOT) - (DWORD)ga(VA_FADE_OUT_EXEC)) & 0xFFFF) == 0 &&
+              ((*(const DWORD*)ga(VA_FADE_IN_EXEC_SLOT) - (DWORD)ga(VA_FADE_IN_EXEC)) & 0xFFFF) == 0);
+        check("GOG: CName lookup is the thiscall one; L\"fade_out\" is at VA_STR_FADE_OUT",
+              code_matches(ga(VA_CNAME_FROM_STR), "55 8b ec 56 6a 00 ff 75 08 8b f1 e8") &&
+              !wcscmp((const wchar_t*)ga(VA_STR_FADE_OUT), L"fade_out"));
+        {
+            const unsigned char* fo = (const unsigned char*)ga(VA_DOOR_FADE_OUT);
+            const unsigned char* fi = (const unsigned char*)ga(VA_DOOR_FADE_IN);
+            const unsigned char* op;
+            unsigned n = door_fade_op(&op);
+            DWORD len = (DWORD)ga(VA_DOOR_FADE_LEN);
+            check("GOG: both door fades load the shared 0.5 with fld (D9 05, disp32 at +2)",
+                  n == 2 && !memcmp(fo, op, n) && !memcmp(fi, op, n) &&
+                  ((*(const DWORD*)(fo + n) - len) & 0xFFFF) == 0 && ((*(const DWORD*)(fi + n) - len) & 0xFFFF) == 0 &&
+                  *(const float*)ga(VA_DOOR_FADE_LEN) == 0.5f);
+        }
+        check("GOG: the indoor draw check and its immediate",
+              code_matches(ga(VA_INDOOR_CMP), "80 b8 ac 00 00 00 00 74 0d 83 b8 a8 00 00 00 01 75 04") &&
+              ga(VA_INDOOR_IMM) == ga(VA_INDOOR_CMP) + 15 && *(const unsigned char*)ga(VA_INDOOR_IMM) == 0x01);
+        check("GOG: the block unpack and its only call",
+              code_matches(ga(VA_UNPACK), "55 8b ec 8b 4d 08 0f b6 01 c1 e8 05") &&
+              *(const unsigned char*)u == 0xE8 && u + 5 + *(const LONG*)(u + 1) == ga(VA_UNPACK));
+    }
     check("GOG: the game global is written after 'Initializing Game...' (00AFB1DC)",
           *(const unsigned char*)(gog + 0x6FB1DC) == 0xA3 &&
           ((*(const DWORD*)(gog + 0x6FB1DD) - (DWORD)(ga(VA_GAME) - g_delta)) & 0xFFFF) == 0);
@@ -199,16 +262,51 @@ int main(int argc, char** argv)
           cfg_preset_mode && cfg_hotkeys && cfg_distance);
     check("GOG: save features off", !cfg_save_thumbs && !cfg_save_trace && !cfg_list_leak &&
           !cfg_fast_list && !cfg_savelist_trace);
-    check("GOG: doors and interiors off", !cfg_keep_outdoors && !cfg_keep_interiors &&
-          !cfg_preload_interiors && !cfg_skip_door_gc && !cfg_indoor_outdoors && !cfg_fast_doors &&
-          !cfg_instant_doors && cfg_door_fade == 0.5f && cfg_area_fade == 0.5f);
+    check("GOG: doors and interiors stay on", cfg_keep_outdoors && cfg_keep_interiors &&
+          cfg_preload_interiors && cfg_skip_door_gc && cfg_indoor_outdoors && cfg_fast_doors &&
+          cfg_instant_doors && cfg_door_fade == 0.05f && cfg_area_fade == 0.25f);
     check("GOG: window, window_mode rows, Windows keys stay on", cfg_wf_enabled && cfg_window_mode && cfg_winkeys);
-    check("GOG: load_trace off", !cfg_load_trace);
+    check("GOG: load_trace stays on", cfg_load_trace);
     check("GOG: skip_intro, raycast and quit guards stay on", cfg_skip_intro && cfg_ray_guard && cfg_quit_guard);
     check("GOG: script patches stay on, pause_quit too now that quit_guard is", cfg_book_marker &&
           cfg_continue && cfg_medallion && cfg_pause_quit);
     check("GOG: cpu32 guard, crash capture, keyboard filter, file trace stay on", cfg_cpu32_guard &&
           cfg_crash_dump && cfg_suppress && cfg_file_trace);
+
+    // The exit wrapper's GetProcAddress hook (naked): other lookups pass through unchanged,
+    // CorExitProcess comes back as the DLL's wrapper around the real export.
+    {
+        typedef FARPROC (WINAPI *Gpa_t)(HMODULE, LPCSTR);
+        Gpa_t hook = (Gpa_t)(void*)hook_GetProcAddress;
+        HMODULE k32 = GetModuleHandleA("kernel32.dll"), cor = LoadLibraryA("mscoree.dll");
+        FARPROC realCor = cor ? GetProcAddress(cor, "CorExitProcess") : NULL;
+        g_realGetProcAddress = GetProcAddress;
+        check("exit: GetProcAddress hook passes names and ordinals through",
+              hook(k32, "GetTickCount") == GetProcAddress(k32, "GetTickCount") &&
+              hook(k32, (LPCSTR)(uintptr_t)1) == GetProcAddress(k32, (LPCSTR)(uintptr_t)1) &&
+              !hook(k32, "NoSuchExport"));
+        check("exit: CorExitProcess is handed out as the wrapper, the real one kept",
+              realCor && hook(cor, "CorExitProcess") == (FARPROC)(void*)hook_CorExitProcess &&
+              g_realCorExitProcess == (CorExitProcess_t)(void*)realCor && !hook(k32, "CorExitProcess"));
+    }
+
+    // exit_logf: with the log lock held by another thread it gives up after 250 ms and writes
+    // the line straight to the file handle.
+    {
+        HANDLE th;
+        DWORD t0, dt;
+        g_lockHeld = CreateEventA(NULL, TRUE, FALSE, NULL);
+        g_lockRelease = CreateEventA(NULL, TRUE, FALSE, NULL);
+        th = CreateThread(NULL, 0, hold_log_lock, NULL, 0, NULL);
+        WaitForSingleObject(g_lockHeld, 5000);
+        t0 = GetTickCount();
+        exit_logf("exit: probe line written raw past a held log lock");
+        dt = GetTickCount() - t0;
+        SetEvent(g_lockRelease);
+        WaitForSingleObject(th, 5000);
+        CloseHandle(th);
+        check("exit: exit_logf waits at most ~250 ms for a held log lock", dt >= 240 && dt < 1000);
+    }
 
     // Unknown: this probe itself
     build_read((uintptr_t)GetModuleHandleA(NULL));

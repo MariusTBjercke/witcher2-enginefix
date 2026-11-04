@@ -103,6 +103,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
 | `[diagnostics] load_trace` | 0 | 1 measures every loading screen and house door |
 | `[diagnostics] crash_dump` | 1 | 1 logs a crash and writes a minidump, 2 a full dump, 0 off |
+| `[diagnostics] exit_trace` | 1 | 1 logs which code ended the game (one line at exit), 0 off |
 
 The ini file itself documents every key, including the legacy separate hotkeys (`[presets] enabled=0`).
 

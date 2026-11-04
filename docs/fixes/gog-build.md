@@ -117,7 +117,7 @@ only hook file APIs; `build\sptest.exe test --game "<gog>"` passes), the F9/F10 
 not re-checked), crash capture and the interior map files. Ported since (below): LOD, the presets
 with Ctrl+F10 and the distance hooks; then `quit_guard` (and with it `pause_quit`),
 `raycast_guard`, `skip_intro`, the window patches with the Options rows (`window_mode`) and the
-Windows keys.
+Windows keys; then the doors and interiors (`[loading]`) and `load_trace`.
 
 ## Ported addresses
 
@@ -137,6 +137,39 @@ Windows keys.
 | `VA_STARTVIDEO_VSLOT` `00ECAF78` | `00D43FB0` | the vtable slot above |
 | `WF_*` (8) and `WF_CONFIG` | see `borderless-window.md`, "GOG 3.5.0.26g" | the window creation, the render interface and the device code are the same functions; the config writer is `__thiscall` on GOG |
 | `WK_WNDPROC_SLOT` `00EC6560` / `WK_WNDPROC` `009D4BD9` | `00F68FA0` / `00A25ED3` | `CViewportWindow` RTTI, the same procedure (`windows-keys.md`) |
+| `VA_PART_SWITCH` `00A91BF9` | `00AE626C` | pushes L"Streaming PH: " (one copy); the same offsets (`+0x30C`, `+0x310`, `+0x358`), a 0x58-byte job, 3 callers as on Steam; the same 12 bytes |
+| `VA_PART_SWITCH_A` / `_B` | `00AFE3F0` / `00AFF2DC` | its two calls: the request queue `00AFE36B` and `00AFF209` |
+| `VA_PART_RUN` `00A91952` / `VA_PART_RUN_CALL` `00A91DAD` | `00AE5FCA` / `00AE6418` | the stage strings ("Flushing...", "GC...", "Attaching entities..."); **the job in EDI**, no stack arguments, plain `RET` (Steam: stdcall, `RET 4`); both callers load EDI first (`mov edi,esi; call`, and the async tick) |
+| `VA_PART_GC_CALL` `00A91AD7` / `VA_GC` `00ABD770` | `00AE614D` / `00B11BA4` | after "GC..."; the GC's 14 instructions as on Steam, stdcall `RET 4`, its rel32 differs |
+| `VA_PART_REQUEST` `00AA7E18` | `00AFCFA6` | the StreamWorldPartition (mode 0) and LoadWorldPartition (mode 1) natives and the door task (mode 4) call it, 10 callers on each; **`__thiscall`, the game in ECX** (Steam: EAX); `RET 0xC` |
+| `VA_EMPTY_STRING` `0160FBA0` | `01680110` | pushed by every request caller |
+| `VA_DOOR_TIMER_SLOT` / `VA_DOOR_TIMER` | `00D7A4CC` / `005AF658` | `CStreamingDoor` RTTI, vtable `00D7A394` (154 slots on both), slot 78; L"StreamingDoorTimer"; thiscall `RET 8` |
+| `VA_DOOR_START_SLOT` / `VA_DOOR_START` | `00D7A5F8` / `005AF6D9` | slot 153; "Overlapped door streaming task on door '%s'"; thiscall `RET 4` |
+| `VA_DOOR_TELEPORT_VT` / `VA_DOOR_FADE_EVENT` | `00D7A318` / `005B0276` | `CDoorStreamingBlackScreen` RTTI, slot 2; thiscall `RET 8`, reads only the event's CName at +4 |
+| `VA_DOOR_INTERIOR_VT` | `00D7A36C` | `CDoorStreamingWaitOnKnob` RTTI |
+| `VA_CNAME_FROM_STR` `00B28D76` | `00B5E7AC` | the door handler builds its own `fade_out` id with it (`005B0293`); **`__thiscall`, `out` in ECX, `RET 4`** (Steam: stdcall, `RET 8`) |
+| `VA_STR_FADE_OUT` | `00D7A328` | L"fade_out", the only copy |
+| `VA_DOOR_FADE_OUT` / `_IN` / `_LEN` | `005B01DF` / `005B02ED` / `00D269BC` | the two loads of the fade length in the BlackScreen constructor and handler: **`fld dword [00D269BC]`** (`D9 05`, disp32 at +2; Steam `movss xmm0`, `F3 0F 10 05`, disp32 at +4). `00D269BC` is a 0.5 shared by 324 sites, so only the two instructions are repointed |
+| `VA_FADE_OUT_EXEC(_SLOT)` / `VA_FADE_IN_EXEC(_SLOT)` | `00A2D7E1` (`00F1F3B8`) / `00A2D789` (`00F1F3CC`) | `CRenderCommand_ScreenFadeOut`/`In` RTTI, slot 3; length at +0x0C / +0x08 as on Steam |
+| `VA_INDOOR_CMP` / `_IMM` | `00A11286` / `00A11295` | in the frame setup `00A11181` (the same 160 instructions); the same 18 bytes, once in `.text` |
+| `VA_RENDER_THREAD` | `0167DE94` | `CRenderThread` RTTI, its loop (slot 1, `00A23145`) stores itself there; +0x268/+0x26C as on Steam |
+| `VA_UNPACK` / `VA_UNPACK_CALL` | `007614F0` / `007618C7` | the FastLZ decompressor, byte-identical; its call in the dzip block reader `00761870` |
+
+The world, job, layer group, layer info and partition node offsets the door code reads are all
+the same on GOG (`world+0x30C/+0x310/+0x50/+0x358`, `game+0xE4/+0xE8`, job `+0x0C..+0x2C`,
+layer info `+0x38/+0x5C/+0x68/+0x78`, node `+0x04/+0x28/+0x60..+0x78`, door `+0x228`, task
+`+0x14`, entity position `+0xA0`), each found in the same instruction of the matching
+function. GOG also has a second FastLZ caller (`0054D84B`, beside the Arena server code, no
+static reference); the load trace does not count it.
+
+Seen in game on GOG on 2026-11-04 (`docs/validation/gog-doors-2026-11-04.md`):
+- Every door and partition hook went in.
+- 64 interiors were preloaded with Flotsam.
+- House doors in Flotsam and Binduga went without a fade. Each job ran in 17-38 ms with the GC
+  skipped, and the `fade_out` handler took the DLL's event (`state 2`).
+- The occluders were loaded through the request function once Geralt was out.
+- The Flotsam-Binduga gate kept its 0.25 s fade.
+- The load trace's loading-screen and door windows were logged.
 
 Seen in game on GOG on 2026-11-04 (`docs/validation/gog-presets-2026-11-04.md`): the settings
 object found at its static address plus the delta, LOD enforced, both distance hooks installed,
@@ -144,13 +177,21 @@ non-zero `baseline_reject`/`admitted`, Ctrl+F10 through all four levels.
 
 ## Open
 
-* On GOG the log usually ends at the CRT's shutdown filter change without `unloaded`, even with
-  the detach only trying the log lock: three of four GOG runs on 2026-11-04, with and without a
-  save loaded; the first, with only the phase-0 features, did write it. Every Steam run ends with
-  `unloaded`. The game closes normally (Galaxy logs a normal close, no dump, no error event);
-  whether the DLL's detach runs at all there is not known yet. Next step: log the exe's
-  `ExitProcess` call (its import slot by name) and, when the log lock is busy at detach, write a
-  marker through the raw file handle.
+* On GOG the log usually ends at the CRT's shutdown filter change without `unloaded` (three of
+  four GOG runs on 2026-11-04; every Steam run ends with `unloaded`). Explained on 2026-11-04
+  (`docs/validation/gog-shutdown-2026-11-04.md`): the game's CRT gives the exit to the .NET
+  runtime's `CorExitProcess` whenever `mscoree.dll` is in the process (`__crtCorExitProcess`, GOG
+  `00743F1F`, Steam `00672346`). On GOG it is, most likely brought by Galaxy's overlay:
+  `mscoreei.dll` joins the filter chain as the overlay's input proxy starts, which is
+  suggestive but not proof. The runtime then ends the process without the DLL detach. The
+  first GOG run, which only visited the menu, did write `unloaded`. Either .NET was not loaded
+  yet, or its `CorExitProcess` returned; the trace now logs that case too. A diagnostic run
+  logged no `ExitProcess` or `TerminateProcess` from the exe or `Galaxy.dll` and no detach at all.
+  The Steam process has no .NET runtime, so its CRT calls `ExitProcess`. Since then the exe's
+  `GetProcAddress` hands out a wrapper for `CorExitProcess` that logs the end first
+  (`[diagnostics] exit_trace=1`, 0 = off). On GOG the
+  log now ends with `exit: CorExitProcess(0) from witcher2.EXE+0x343F48` (the CRT's `call eax`,
+  `docs/validation/gog-doors-2026-11-04.md`). The game itself closes normally either way.
 
 Start tests on 2026-11-04 (owner, the same 0.10.0 build on both):
 
@@ -186,17 +227,25 @@ non-zero delta, and which switches the gate turns off on each build.
    which survive the 64 KB load steps. Bytes that differ per build go through `by_build()`.
 4. Re-check struct offsets the feature reads, and the calling convention: the builds were
    compiled apart, and a function can keep its bytes and still take `this` in another register
-   (the config writer, the skip-intro builder and stop).
+   (the config writer, the skip-intro builder and stop, the partition request and the CName
+   lookup are `__thiscall` on GOG; the partition run takes its job in EDI). A float can be
+   loaded by another instruction too (the door fades: `fld` on GOG, `movss` on Steam). The
+   first bytes usually tell the conventions apart, so check them per build before calling.
 5. When a feature group has all its addresses, `build_gate` lets it run; test it in game on GOG.
 
 ## Still to do
 
-* Doors and interiors (`[loading]`: the partition switch, the door timer and start, the fades,
-  the indoor draw check), the largest set; a player saw `interiors=2` crash on their own port.
+* The door's last step differs on GOG: `005AF51F` (Steam `0095DB81`) does not walk the area
+  environments and ends in a jump to what is probably Stabilize (`00AC8CDF`). Anything that hooks
+  that step on Steam has no one-to-one site on GOG and needs its own research.
 * Saves: the thumbnail fix and the fast save list go through `ISteamRemoteStorage`; GOG has its
   own save path, which needs its own research.
 
 ## `interiors=2` crash
 
-Not explained yet. LAA is ruled out: the GOG exe has the flag, so preloading interiors has the
-same 4 GB as on Steam. The player's log and crash dump would show more.
+Not seen with 0.10.0 yet. LAA is ruled out: the GOG exe has the flag, so preloading interiors has
+the same 4 GB as on Steam. A likely cause in a port that only moves the Steam addresses: two of
+the functions the interiors call changed convention on GOG. The partition run takes its job in
+EDI (a stdcall hook passes it on the stack, so the game runs a job from whatever EDI holds), and
+the partition request is `__thiscall` (a call with the game in EAX leaves ECX undefined). The
+player's log and crash dump would tell.

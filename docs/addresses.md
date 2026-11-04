@@ -18,49 +18,49 @@ running exe's import directory.
 | `RVA_SETTINGS` | `02180E28` | `021EAEB8` | 0x02580E28 - IMAGE_BASE |
 | `VA_CAPTURE_PENDING` | `0160D0ED` |  |  |
 | `VA_CAPTURE_QUEUED` | `0160D0EE` |  |  |
-| `VA_CNAME_FROM_STR` | `00B28D76` |  | __stdcall (DWORD* out, const wchar_t*), RET 8 |
-| `VA_DOOR_FADE_EVENT` | `00502B5F` |  | slot 2: thiscall (event, unused), RET 8 |
-| `VA_DOOR_FADE_IN` | `00502BD9` |  | movss xmm0,[00E30444] in 00502B5F |
-| `VA_DOOR_FADE_LEN` | `00E30444` |  | the float 0.5 both fades read (the disp32 above) |
-| `VA_DOOR_FADE_OUT` | `00502ACD` |  | movss xmm0,[00E30444] in FUN_00502a7f |
-| `VA_DOOR_INTERIOR_VT` | `00EF0438` |  | the interior task: +0x14 state (1 = faded out) |
-| `VA_DOOR_START` | `0095DCC4` |  |  |
-| `VA_DOOR_START_SLOT` | `00EF02E8` |  |  |
-| `VA_DOOR_TELEPORT_VT` | `00EF0410` |  | type 1 task: +0x14 state (1 = switch queued) |
-| `VA_DOOR_TIMER` | `0095DB00` |  |  |
-| `VA_DOOR_TIMER_SLOT` | `00EF01BC` |  | streaming door OnTimer |
-| `VA_EMPTY_STRING` | `0160FBA0` |  | the game's empty String, its usual loading-screen argument |
+| `VA_CNAME_FROM_STR` | `00B28D76` | `00B5E7AC` | __stdcall (DWORD* out, const wchar_t*), RET 8; __thiscall on GOG |
+| `VA_DOOR_FADE_EVENT` | `00502B5F` | `005B0276` | slot 2: thiscall (event, unused), RET 8 |
+| `VA_DOOR_FADE_IN` | `00502BD9` | `005B02ED` | movss xmm0,[00E30444] in 00502B5F (GOG: fld) |
+| `VA_DOOR_FADE_LEN` | `00E30444` | `00D269BC` | the float 0.5 both fades read (the disp32 above) |
+| `VA_DOOR_FADE_OUT` | `00502ACD` | `005B01DF` | movss xmm0,[00E30444] in FUN_00502a7f (GOG: fld) |
+| `VA_DOOR_INTERIOR_VT` | `00EF0438` | `00D7A36C` | the interior task: +0x14 state (1 = faded out) |
+| `VA_DOOR_START` | `0095DCC4` | `005AF6D9` |  |
+| `VA_DOOR_START_SLOT` | `00EF02E8` | `00D7A5F8` |  |
+| `VA_DOOR_TELEPORT_VT` | `00EF0410` | `00D7A318` | type 1 task: +0x14 state (1 = switch queued) |
+| `VA_DOOR_TIMER` | `0095DB00` | `005AF658` |  |
+| `VA_DOOR_TIMER_SLOT` | `00EF01BC` | `00D7A4CC` | streaming door OnTimer |
+| `VA_EMPTY_STRING` | `0160FBA0` | `01680110` | the game's empty String, its usual loading-screen argument |
 | `VA_FACTS_TIME` | `0099871E` | `0050B0A9` | mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game |
-| `VA_FADE_IN_EXEC` | `009DC2C3` |  |  |
-| `VA_FADE_IN_EXEC_SLOT` | `00E7C394` |  |  |
-| `VA_FADE_OUT_EXEC` | `009DC316` |  |  |
-| `VA_FADE_OUT_EXEC_SLOT` | `00E7C380` |  |  |
+| `VA_FADE_IN_EXEC` | `009DC2C3` | `00A2D789` |  |
+| `VA_FADE_IN_EXEC_SLOT` | `00E7C394` | `00F1F3CC` |  |
+| `VA_FADE_OUT_EXEC` | `009DC316` | `00A2D7E1` |  |
+| `VA_FADE_OUT_EXEC_SLOT` | `00E7C380` | `00F1F3B8` |  |
 | `VA_GAME` | `01404950` | `01475740` | CGame*: +0x40 world, +0xE8 queued world requests, +0x234 cloud flag |
-| `VA_GC` | `00ABD770` |  |  |
+| `VA_GC` | `00ABD770` | `00B11BA4` |  |
 | `VA_IMAGES_ADD` | `00B28657` |  | thiscall AddImage(String* name, stream) |
 | `VA_IMAGES_REMOVE` | `00B285C6` |  | thiscall Remove(key) |
 | `VA_IMAGES_VTBL_ADD` | `00EC619C` |  | 00EC6194 + 8 |
 | `VA_IMAGE_KEY` | `00B30E9F` |  | stdcall key = ImageKey(String* name) |
-| `VA_INDOOR_CMP` | `009C0223` |  | cmp byte [eax+0xAC],0 / jz / cmp dword [eax+0xA8],1 |
-| `VA_INDOOR_IMM` | `009C0232` |  |  |
+| `VA_INDOOR_CMP` | `009C0223` | `00A11286` | cmp byte [eax+0xAC],0 / jz / cmp dword [eax+0xA8],1 |
+| `VA_INDOOR_IMM` | `009C0232` | `00A11295` |  |
 | `VA_MAP_FIND` | `004A4A03` |  | bool Find(EAX = map, key*, out*), ret 8 |
 | `VA_MEM_SERIALIZE` | `00ABF380` |  | its slot 1 |
 | `VA_MEM_SIZE` | `00ABF379` |  | its slot 3 |
 | `VA_MEM_STREAM` | `00E77440` |  | memory stream vtable: [+0x10] array* {data,size}, [+0x14] pos |
-| `VA_PART_GC_CALL` | `00A91AD7` |  | call FUN_00abd770 (GC) in FUN_00a91952 |
-| `VA_PART_REQUEST` | `00AA7E18` |  | EAX = game; stdcall (String* name, mode, String* screen), RET 0xC |
-| `VA_PART_RUN` | `00A91952` |  |  |
-| `VA_PART_RUN_CALL` | `00A91DAD` |  | the synchronous run in FUN_00a91bf9 |
-| `VA_PART_SWITCH` | `00A91BF9` |  |  |
-| `VA_PART_SWITCH_A` | `00AAA1FF` |  | call from the request queue |
-| `VA_PART_SWITCH_B` | `00AAB089` |  |  |
+| `VA_PART_GC_CALL` | `00A91AD7` | `00AE614D` | call FUN_00abd770 (GC) in FUN_00a91952 |
+| `VA_PART_REQUEST` | `00AA7E18` | `00AFCFA6` | EAX = game; stdcall (String* name, mode, String* screen), RET 0xC; ECX on GOG |
+| `VA_PART_RUN` | `00A91952` | `00AE5FCA` | stdcall (job), RET 4; job in EDI on GOG |
+| `VA_PART_RUN_CALL` | `00A91DAD` | `00AE6418` | the synchronous run in FUN_00a91bf9 |
+| `VA_PART_SWITCH` | `00A91BF9` | `00AE626C` |  |
+| `VA_PART_SWITCH_A` | `00AAA1FF` | `00AFE3F0` | call from the request queue |
+| `VA_PART_SWITCH_B` | `00AAB089` | `00AFF2DC` |  |
 | `VA_PROV_FORWARD` | `0052AF96` |  | provider stream slot 1: forwards to the inner stream (+0x20) |
 | `VA_PROV_OPEN` | `00931DB7` |  | thiscall Stream* Open(String* name, bool mode1) |
 | `VA_PROV_STREAM` | `0052ADFF` |  | the provider stream's constructor |
 | `VA_PROV_VTBL_OPEN` | `00F02B90` |  | Steam provider vtable slot +0x18 |
 | `VA_RAY_HIT` | `0084C750` | `0091F110` |  |
 | `VA_RAY_SLOT` | `00D41A38` | `00E08740` |  |
-| `VA_RENDER_THREAD` | `0160D0A4` |  | render thread object while its loop runs |
+| `VA_RENDER_THREAD` | `0160D0A4` | `0167DE94` | render thread object while its loop runs |
 | `VA_SAVELIST` | `009A49B9` |  | stdcall void BuildSaveList(panel) |
 | `VA_SAVELIST_CALL_A` | `009A5175` |  | E8 rel32, startup / main menu |
 | `VA_SAVELIST_CALL_B` | `009A524F` |  | E8 rel32, GUI request |
@@ -71,9 +71,9 @@ running exe's import directory.
 | `VA_STARTVIDEO_VSLOT` | `00ECAF78` | `00D43FB0` | player vtable 00ECAF04 + 0x74 = Tick |
 | `VA_STEAM_STREAM` | `00F02C2C` |  | vtable of the provider's read stream (0052ADFF) |
 | `VA_STREAM_DTOR` | `0052AFAA` |  | its scalar deleting destructor, slot 0 |
-| `VA_STR_FADE_OUT` | `00EF0050` |  | L"fade_out", the string the handler names its event by |
-| `VA_UNPACK` | `0068F3B0` |  |  |
-| `VA_UNPACK_CALL` | `0068E8E7` |  | call FUN_0068f3b0 in FUN_0068e890 |
+| `VA_STR_FADE_OUT` | `00EF0050` | `00D7A328` | L"fade_out", the string the handler names its event by |
+| `VA_UNPACK` | `0068F3B0` | `007614F0` |  |
+| `VA_UNPACK_CALL` | `0068E8E7` | `007618C7` | call FUN_0068f3b0 in FUN_0068e890 |
 | `WF_CONFIG` | `01608650` | `01679440` | the config manager the writer works on (its ECX on GOG) |
 | `WF_D3D_DEVICE` | `01626788` | `01690818` | IDirect3DDevice9* |
 | `WF_GAME_WNDPROC` | `009D237E` | `00A2362D` | W2ViewportClass lpfnWndProc (FUN_009d44e1) |

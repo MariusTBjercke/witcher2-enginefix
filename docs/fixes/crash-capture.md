@@ -66,9 +66,40 @@ directly; those do reach WER and would show up in the event log.
 - Re-entry (a filter chaining back to us, or a second thread crashing) returns
   `EXCEPTION_CONTINUE_SEARCH`.
 
-A session that ends without `unloaded` as the last log line and without `crash:`
-lines was killed some other way (`TerminateProcess`, a CRT abort, a driver/TDR,
-or power loss): check the event logs for those.
+How a session ended shows in its last lines (`[diagnostics] exit_trace`, below):
+
+- `exit: ExitProcess(0) ...` and then `unloaded`: a normal quit (Steam).
+- `exit: CorExitProcess(0) ...` as the last lines: also a normal quit, with the .NET
+  runtime in the process (GOG, most likely brought by Galaxy's overlay). The runtime
+  ends the process without the DLL detach, so `unloaded` never comes.
+- `crash:` lines: a crash, as above.
+- None of these: the process was ended some other way (`TerminateProcess` from
+  another module, a CRT abort, a driver/TDR, a hang closed from Task Manager, or
+  power loss). Check the event logs for those.
+
+## Exit trace
+
+`[diagnostics] exit_trace`, default 1. Logging only; 0 turns it off without touching
+the crash capture.
+
+- In DllMain, these import slots get hooks that log
+  `exit: <function>(<code>) from <module+offset> on thread N` and then call the real
+  function:
+  - the exe's `ExitProcess` and `TerminateProcess`;
+  - the same two in the platform DLL (`Galaxy.dll` on GOG, `steam_api.dll` on Steam).
+
+  `TerminateProcess` is logged only when the target is the game itself. A slot that does
+  not hold the real export (a compatibility shim, another overlay) is left alone.
+- The game's CRT ends in `__crtExitProcess` (Steam `00672371`, GOG `00743F4A`). When
+  `mscoree.dll` is loaded, it first calls the .NET runtime's `CorExitProcess`, found
+  through `GetProcAddress`, and calls `ExitProcess` only if that returns. So the exe's
+  `GetProcAddress` slot is hooked as well. That hook hands out a logging wrapper for this
+  one name, and every other lookup jumps on with the game's own return address. If
+  `CorExitProcess` returns, the log says so.
+- The exit lines wait for the log lock for 250 ms at most, then write straight to the
+  file handle. The DLL detach does the same when the lock's owner was already ended.
+
+See `docs/validation/gog-shutdown-2026-11-04.md`.
 
 ## Reading a dump
 

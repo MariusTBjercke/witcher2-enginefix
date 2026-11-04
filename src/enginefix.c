@@ -32,6 +32,7 @@
 #include <objbase.h>   // LPUNKNOWN / REFIID for the DirectInput8Create signature
 #include <shlobj.h>    // SHGetFolderPathW: the game's Documents folder (User.ini)
 #include <stdio.h>
+#include <io.h>        // _get_osfhandle: DllMain's last log line when the log lock is orphaned
 #include <share.h>
 #include <stdarg.h>
 #include <math.h>
@@ -68,6 +69,7 @@ static uintptr_t ga_rva(uintptr_t steam_rva);
 
 static HINSTANCE g_self;
 static FILE*     g_log;
+static DWORD     g_mainTid;   // the thread DllMain ran on: the game's main thread
 static char      g_ini[MAX_PATH];
 static char      g_logPath[MAX_PATH];
 static char      g_prevLogPath[MAX_PATH];
@@ -149,6 +151,7 @@ static int cfg_wf_enabled = 1;  // [window] enabled: borderless support (patch +
 static int cfg_wf_borderless;   // [window] borderless: start borderless until the menu has saved it
 static int cfg_wf_dpi = 1;      // [window] dpi_aware: DPI awareness when borderless starts on
 static int cfg_crash_dump = 1;  // [diagnostics] crash_dump: 0 off, 1 log + minidump, 2 full dump
+static int cfg_exit_trace = 1;  // [diagnostics] exit_trace: log how the game ends (exit: lines)
 static int cfg_ray_guard = 1;   // [stability] raycast_guard: a ray cast that hits freed physics misses it
 static int cfg_cpu32_guard = 1; // [stability] cpu32_guard: no endless CPU count on 32+ logical processors
 static int cfg_quit_guard = 1;  // [stability] quit_guard: FactsAdd without a world (quitting) does not crash
@@ -171,6 +174,42 @@ static void logf_(const char* fmt, ...)
     va_list ap; va_start(ap, fmt); vfprintf(g_log, fmt, ap); va_end(ap);
     fputc('\n', g_log);
     fflush(g_log);
+    LeaveCriticalSection(&g_logLock);
+}
+
+// One line straight to the log file's handle, past the FILE buffer and its lock: for the end
+// of the process, when the lock may belong to a thread that will never let go of it.
+static void log_raw(const char* text)
+{
+    char line[600];
+    SYSTEMTIME st;
+    HANDLE fh;
+    DWORD wrote = 0;
+    int n;
+    if (!g_log || !cfg_log) return;
+    fh = (HANDLE)_get_osfhandle(_fileno(g_log));
+    GetLocalTime(&st);
+    n = _snprintf_s(line, sizeof line, _TRUNCATE, "\r\n%02d:%02d:%02d.%03d %s\r\n", st.wHour, st.wMinute,
+                    st.wSecond, st.wMilliseconds, text);
+    if (fh != INVALID_HANDLE_VALUE && n > 0) WriteFile(fh, line, (DWORD)n, &wrote, NULL);
+}
+
+// logf_ for the exit hooks: waits for the log lock 250 ms at most, then writes raw. Whoever ends
+// the process may have suspended the other threads first, one of them inside logf_.
+static void exit_logf(const char* fmt, ...)
+{
+    char text[480];
+    DWORD t0 = GetTickCount();
+    va_list ap;
+    if (!g_log || !cfg_log) return;
+    va_start(ap, fmt);
+    _vsnprintf_s(text, sizeof text, _TRUNCATE, fmt, ap);
+    va_end(ap);
+    while (!TryEnterCriticalSection(&g_logLock)) {
+        if (GetTickCount() - t0 >= 250) { log_raw(text); return; }
+        Sleep(1);
+    }
+    logf_("%s", text);
     LeaveCriticalSection(&g_logLock);
 }
 
@@ -384,6 +423,7 @@ static void load_config(void)
     cfg_wf_borderless = ini_int("window", "borderless", 0);
     cfg_wf_dpi = ini_int("window", "dpi_aware", 1);
     cfg_crash_dump = ini_int("diagnostics", "crash_dump", 1);
+    cfg_exit_trace = ini_int("diagnostics", "exit_trace", 1);
     cfg_ray_guard = ini_int("stability", "raycast_guard", 1);
     cfg_cpu32_guard = ini_int("stability", "cpu32_guard", 1);
     cfg_quit_guard = ini_int("stability", "quit_guard", 1);
@@ -1675,8 +1715,8 @@ enum {
     IMP_GETFILEATTREXW, IMP_GETFILEATTRW, IMP_GETFILEATTRA, IMP_GETFILEINFO,
     IMP_FINDFIRSTFILEW, IMP_FINDFIRSTFILEA, IMP_FINDFIRSTFILEEXW, IMP_FINDNEXTFILEW,
     IMP_FINDNEXTFILEA, IMP_GETFILESIZE, IMP_GETFILESIZEEX, IMP_READFILE, IMP_SLEEP,
-    IMP_WAITSINGLE, IMP_WAITSINGLEEX, IMP_GETPROCAFFINITY, IMP_D3DX_SAVEFILE, IMP_D3DX_SAVEMEM,
-    IMP_STEAM_RS, IMP_COUNT
+    IMP_WAITSINGLE, IMP_WAITSINGLEEX, IMP_GETPROCAFFINITY, IMP_EXITPROCESS, IMP_TERMINATEPROCESS,
+    IMP_GETPROCADDRESS, IMP_D3DX_SAVEFILE, IMP_D3DX_SAVEMEM, IMP_STEAM_RS, IMP_COUNT
 };
 static const struct { const char* dll; const char* fn; } k_imports[IMP_COUNT] = {
     { "kernel32.dll",  "CreateFileW" },
@@ -1700,16 +1740,21 @@ static const struct { const char* dll; const char* fn; } k_imports[IMP_COUNT] = 
     { "kernel32.dll",  "WaitForSingleObject" },
     { "kernel32.dll",  "WaitForSingleObjectEx" },
     { "kernel32.dll",  "GetProcessAffinityMask" },
+    { "kernel32.dll",  "ExitProcess" },
+    { "kernel32.dll",  "TerminateProcess" },
+    { "kernel32.dll",  "GetProcAddress" },
     { "d3dx9_39.dll",  "D3DXSaveSurfaceToFileW" },
     { "d3dx9_39.dll",  "D3DXSaveSurfaceToFileInMemory" },
     { "steam_api.dll", "SteamRemoteStorage" },
 };
 static uintptr_t g_imp[IMP_COUNT];
 
-// Reads only the image's own headers and import names: safe in DllMain.
-static void imports_find(void)
+// Calls `cb` for every import by name of a loaded image, with its IAT slot. Reads only the
+// image's own headers and import names: safe in DllMain.
+typedef void (*import_cb)(void* ctx, const char* dll, const char* fn, uintptr_t slot);
+
+static void imports_walk(const unsigned char* base, import_cb cb, void* ctx)
 {
-    const unsigned char* base = (const unsigned char*)g_base;
     __try {
         const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)base;
         const IMAGE_NT_HEADERS32* nt;
@@ -1730,16 +1775,26 @@ static void imports_find(void)
             names = (const IMAGE_THUNK_DATA32*)(base + d->OriginalFirstThunk);
             for (i = 0; names[i].u1.AddressOfData; i++) {
                 const IMAGE_IMPORT_BY_NAME* by;
-                int k;
                 if (IMAGE_SNAP_BY_ORDINAL32(names[i].u1.Ordinal)) continue;
                 by = (const IMAGE_IMPORT_BY_NAME*)(base + names[i].u1.AddressOfData);
-                for (k = 0; k < IMP_COUNT; k++)
-                    if (!g_imp[k] && !strcmp((const char*)by->Name, k_imports[k].fn) &&
-                        !_stricmp(dll, k_imports[k].dll))
-                        g_imp[k] = (uintptr_t)(base + d->FirstThunk) + 4 * i;
+                cb(ctx, dll, (const char*)by->Name, (uintptr_t)(base + d->FirstThunk) + 4 * i);
             }
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
+static void imports_find_cb(void* ctx, const char* dll, const char* fn, uintptr_t slot)
+{
+    int k;
+    (void)ctx;
+    for (k = 0; k < IMP_COUNT; k++)
+        if (!g_imp[k] && !strcmp(fn, k_imports[k].fn) && !_stricmp(dll, k_imports[k].dll))
+            g_imp[k] = slot;
+}
+
+static void imports_find(void)
+{
+    imports_walk((const unsigned char*)g_base, imports_find_cb, NULL);
 }
 
 // What an import slot holds now; NULL when the build does not import it.
@@ -1749,15 +1804,14 @@ static void* imp_value(int imp)
     return slot && range_readable((void*)slot, sizeof(void*)) ? read_ptr((void*)slot) : NULL;
 }
 
-// Replace one import slot only if it still holds the expected export.
-static int patch_iat(const char* tag, int imp, void* hook, void** orig)
+// Replace one import slot (of the exe or another module) only if it still holds the expected
+// export.
+static int patch_import_slot(const char* tag, const char* dll, const char* fn, uintptr_t slot,
+                             void* hook, void** orig)
 {
-    const char* dll = k_imports[imp].dll;
-    const char* fn = k_imports[imp].fn;
-    uintptr_t slot = g_imp[imp];
     HMODULE mod = GetModuleHandleA(dll);
     void* expect = mod ? (void*)GetProcAddress(mod, fn) : NULL;
-    void* have = imp_value(imp);
+    void* have = slot && range_readable((void*)slot, sizeof(void*)) ? read_ptr((void*)slot) : NULL;
     if (!slot) {
         logf_("%s: %s!%s is not imported by this build - not hooked", tag, dll, fn);
         return 0;
@@ -1775,6 +1829,11 @@ static int patch_iat(const char* tag, int imp, void* hook, void** orig)
     VirtualProtect((void*)slot, sizeof(void*), old, &tmp);
     logf_("%s: hooked %s!%s", tag, dll, fn);
     return 1;
+}
+
+static int patch_iat(const char* tag, int imp, void* hook, void** orig)
+{
+    return patch_import_slot(tag, k_imports[imp].dll, k_imports[imp].fn, g_imp[imp], hook, orig);
 }
 
 // ---- 32 logical processors ---------------------------------------------
@@ -2731,7 +2790,7 @@ static HRESULT WINAPI hook_Present(void* self, const RECT* src, const RECT* dst,
 #define VA_PART_SWITCH      0x00A91BF9u
 #define VA_PART_SWITCH_A    0x00AAA1FFu   // call from the request queue
 #define VA_PART_SWITCH_B    0x00AAB089u
-#define VA_PART_RUN         0x00A91952u
+#define VA_PART_RUN         0x00A91952u   // stdcall (job), RET 4; job in EDI on GOG
 #define VA_PART_RUN_CALL    0x00A91DADu   // the synchronous run in FUN_00a91bf9
 #define OFF_GAME_PLAYER     0x250
 #define OFF_NODE_POS        0xA0
@@ -3204,7 +3263,7 @@ static void kp_walk(const void* group, int depth, kp_collect_t* t)
 #define KO_OCC_DIST     5.0f
 #define KO_OCC_MIN_MS   400
 #define KO_OCC_MAX_MS   30000
-#define VA_PART_REQUEST 0x00AA7E18u   // EAX = game; stdcall (String* name, mode, String* screen), RET 0xC
+#define VA_PART_REQUEST 0x00AA7E18u   // EAX = game; stdcall (String* name, mode, String* screen), RET 0xC; ECX on GOG
 #define VA_EMPTY_STRING 0x0160FBA0u   // the game's empty String, its usual loading-screen argument
 
 static volatile DWORD g_koFrameTick;   // last viewport tick (game thread)
@@ -3229,17 +3288,21 @@ static void ko_defer_occluders(void)
     g_koDeferSince = GetTickCount();
 }
 
+// Steam's request (FUN_00aa7e18) takes the game in EAX; GOG's (00AFCFA6) is thiscall with it in
+// ECX. Neither reads the other register or EDX before writing it, so the game goes in both and
+// the call goes through EDX.
 #pragma warning(push)
 #pragma warning(disable: 4100)   // the arguments are read by the asm
 __declspec(naked) static unsigned char __stdcall ko_part_request(void* game, void* name, int mode, void* screen)
 {
     __asm {
         mov eax, [esp + 4]
+        mov ecx, eax
         push dword ptr [esp + 16]
         push dword ptr [esp + 16]
         push dword ptr [esp + 16]
-        mov ecx, dword ptr [g_partRequest]   ; VA_PART_REQUEST on this build
-        call ecx
+        mov edx, dword ptr [g_partRequest]   ; VA_PART_REQUEST on this build
+        call edx
         ret 16
     }
 }
@@ -3282,6 +3345,22 @@ static void ko_frame(void)
 static void* g_koUnloadOut[KO_LIST];
 static int   g_koPreloaded;   // preload_interiors ran on the current area
 static void* g_koLoadOut[5][KO_LIST];
+
+// GOG's run (00AE5FCA) takes the job in EDI, with no stack arguments and a plain RET (its call
+// site and the async tick load EDI first); Steam's is stdcall (job), RET 4. EDI is kept.
+#pragma warning(push)
+#pragma warning(disable: 4100)   // the argument is read by the asm
+__declspec(naked) static void __stdcall part_run_orig_gog(void* job)
+{
+    __asm {
+        push edi
+        mov edi, [esp + 8]
+        call dword ptr [g_partRun]
+        pop edi
+        ret 4
+    }
+}
+#pragma warning(pop)
 
 static void __stdcall hook_PartRun(void* job)
 {
@@ -3333,7 +3412,8 @@ static void __stdcall hook_PartRun(void* job)
                 int c = ko_class(d[i]);
                 if ((c == LC_FAKE && (cfg_preload_interiors || (on && cfg_keep_interiors))) || (on && c == LC_LOWPOLY))
                     skipped++;
-                else if (on && g_ptMode == 4 && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo) && ko_is_occluder(d[i]))
+                else if (on && g_ptMode == 4 && g_partRequest && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo) &&
+                         ko_is_occluder(d[i]))
                     deferred++;
                 else
                     g_koLoadOut[b][m++] = d[i];
@@ -3369,7 +3449,8 @@ static void __stdcall hook_PartRun(void* job)
     }
     g_koSkipGc = on && cfg_skip_door_gc;
     tRun = qpc_us();
-    ((PartRun_t)g_partRun)(job);
+    if (g_build == BUILD_GOG) part_run_orig_gog(job);
+    else ((PartRun_t)g_partRun)(job);
     tRun = qpc_us() - tRun;
     g_koSkipGc = 0;
     if (filter) {
@@ -3433,23 +3514,58 @@ static void __stdcall hook_PartRun(void* job)
     }
 }
 
+// GOG's call site is `mov edi,esi; call run`: the job goes on the stack for hook_PartRun, which
+// keeps EDI (callee-saved), as the original does.
+__declspec(naked) static void part_run_hook_gog(void)
+{
+    __asm {
+        push edi
+        call hook_PartRun
+        ret
+    }
+}
+
+// The first bytes of the run and of the request tell the builds' conventions apart (Steam: run
+// stdcall, request with EAX = game; GOG: run with EDI = job, request thiscall).
+static const char* pt_run_bytes(void)
+{
+    return by_build("55 8b ec 83 ec 18 53 8b 5d 08 56 57", "55 8b ec 83 ec 18 53 33 db 83 7f 04");
+}
+
+static const char* pt_request_bytes(void)
+{
+    return by_build("55 8b ec 53 57 8b f8 8b 47 40 33 db", "55 8b ec 53 56 57 8b f9 8b 57 40 33");
+}
+
+// The GC's first bytes; its rel32 differs per build.
+static const char* pt_gc_bytes(void)
+{
+    return by_build("55 8b ec e8 df ba 94 ff", "55 8b ec e8 96 82 8f ff");
+}
+
 // .text is decrypted by the SteamStub: call once the fingerprints are there.
 static int pt_install(void)
 {
     static int done;
     int a, b, c;
+    uintptr_t runCall = ga(VA_PART_RUN_CALL);
     if (done) return 1;
     if (!code_matches(ga(VA_PART_SWITCH), "55 8b ec 83 ec 50 53 56 57 ff 75 08") ||
-        !code_matches(ga(VA_PART_RUN), "55 8b ec 83 ec 18 53 8b 5d 08 56 57"))
+        !code_matches(ga(VA_PART_RUN), pt_run_bytes()))
         return 0;
     g_partSwitch = ga(VA_PART_SWITCH);
     g_partRun = ga(VA_PART_RUN);
-    g_partRequest = ga(VA_PART_REQUEST);
+    // Without it a kept door does not hold its occluders back (ko_frame could not load them).
+    g_partRequest = code_matches(ga(VA_PART_REQUEST), pt_request_bytes()) ? ga(VA_PART_REQUEST) : 0;
+    if (!g_partRequest) logf_("partition: request function not recognised - kept doors load their occluders at once");
     g_gc = ga(VA_GC);
     a = patch_call(ga(VA_PART_SWITCH_A), g_partSwitch, (void*)hook_PartSwitch);
     b = patch_call(ga(VA_PART_SWITCH_B), g_partSwitch, (void*)hook_PartSwitch);
-    c = patch_call(ga(VA_PART_RUN_CALL), g_partRun, (void*)hook_PartRun);
-    if (!code_matches(g_gc, "55 8b ec e8 df ba 94 ff") || !patch_call(ga(VA_PART_GC_CALL), g_gc, (void*)hook_PartGc))
+    if (g_build == BUILD_GOG)
+        c = code_matches(runCall - 2, "8b fe e8") && patch_call(runCall, g_partRun, (void*)part_run_hook_gog);
+    else
+        c = patch_call(runCall, g_partRun, (void*)hook_PartRun);
+    if (!code_matches(g_gc, pt_gc_bytes()) || !patch_call(ga(VA_PART_GC_CALL), g_gc, (void*)hook_PartGc))
         logf_("partition: GC call not recognised - skip_door_gc off");
     logf_("partition: switch calls %s/%s, sync run %s (load_trace=%d keep_outdoors=%d)", a ? "hooked" : "NOT hooked",
           b ? "hooked" : "NOT hooked", c ? "hooked" : "NOT hooked", cfg_load_trace, cfg_keep_outdoors);
@@ -3467,21 +3583,33 @@ static int pt_install(void)
 // reports no pending streaming (world+0x30C == 0, the test the interior task 00502DC0 uses) for
 // FD_READY_TICKS door ticks, the hook calls that handler with a synthetic `fade_out` event, so
 // the game itself fades in and finishes the task; the real event later finds state 2 and does
-// nothing. [loading] door_fade repoints the two fades' `movss xmm0,[00E30444]` (the shared 0.5)
-// at a float of ours. Everything runs on the game thread inside the door's own OnTimer.
+// nothing. [loading] door_fade repoints the two fades' `movss xmm0,[00E30444]` (the shared 0.5;
+// GOG loads it with `fld`) at a float of ours. Everything runs on the game thread inside the
+// door's own OnTimer.
 #define VA_DOOR_TELEPORT_VT 0x00EF0410u   // type 1 task: +0x14 state (1 = switch queued)
 #define VA_DOOR_FADE_EVENT  0x00502B5Fu   // slot 2: thiscall (event, unused), RET 8
-#define VA_CNAME_FROM_STR   0x00B28D76u   // __stdcall (DWORD* out, const wchar_t*), RET 8
+#define VA_CNAME_FROM_STR   0x00B28D76u   // __stdcall (DWORD* out, const wchar_t*), RET 8; __thiscall on GOG
 #define VA_STR_FADE_OUT     0x00EF0050u   // L"fade_out", the string the handler names its event by
-#define VA_DOOR_FADE_OUT    0x00502ACDu   // movss xmm0,[00E30444] in FUN_00502a7f
-#define VA_DOOR_FADE_IN     0x00502BD9u   // movss xmm0,[00E30444] in 00502B5F
+#define VA_DOOR_FADE_OUT    0x00502ACDu   // movss xmm0,[00E30444] in FUN_00502a7f (GOG: fld)
+#define VA_DOOR_FADE_IN     0x00502BD9u   // movss xmm0,[00E30444] in 00502B5F (GOG: fld)
 #define VA_DOOR_FADE_LEN    0x00E30444u   // the float 0.5 both fades read (the disp32 above)
 #define FD_READY_TICKS      2
 
 typedef void (__fastcall *DoorEvent_t)(void* task, void* edx, const void* event, void* unused);
 typedef void (__stdcall *CNameFromStr_t)(DWORD* out, const wchar_t* name);
+typedef void (__fastcall *CNameFromStrGog_t)(DWORD* out, void* edx, const wchar_t* name);
 
 static float g_doorFade = 0.5f;
+
+// Steam's 00B28D76 is stdcall (out, name), RET 8; GOG's 00B5E7AC is thiscall with `out` in ECX,
+// RET 4. Its first bytes tell them apart; anything else leaves the id 0 (the game's own timing).
+static void cname_from_str(DWORD* out, const wchar_t* name)
+{
+    uintptr_t fn = ga(VA_CNAME_FROM_STR);
+    if (!code_matches(fn, by_build("55 8b ec 6a 00 ff 75 0c e8", "55 8b ec 56 6a 00 ff 75 08 8b f1 e8"))) return;
+    if (g_build == BUILD_GOG) ((CNameFromStrGog_t)fn)(out, NULL, name);
+    else ((CNameFromStr_t)fn)(out, name);
+}
 
 static void fast_door_tick(void* task)
 {
@@ -3507,7 +3635,7 @@ static void fast_door_tick(void* task)
     waited = GetTickCount() - s_since;
     // The handler's own copy (026ADE10) is only set on the first event it sees; the name pool
     // gives the same id for the same string, so look it up here (game thread).
-    if (!s_fadeOut) ((CNameFromStr_t)ga(VA_CNAME_FROM_STR))(&s_fadeOut, (const wchar_t*)ga(VA_STR_FADE_OUT));
+    if (!s_fadeOut) cname_from_str(&s_fadeOut, (const wchar_t*)ga(VA_STR_FADE_OUT));
     if (!s_fadeOut) {
         logf_("doors: interior ready after %lu ms, event name not found - the game's own timing", waited);
         return;
@@ -3595,29 +3723,43 @@ static int indoor_patch(void)
     return 1;
 }
 
-// `movss xmm0,[VA_DOOR_FADE_LEN]` (F3 0F 10 05 disp32) at `at`. With ASLR the loader has
-// relocated the disp32 like any absolute address, so it is compared with ga().
-static int door_fade_site(uintptr_t at)
+// The fade length load at `at`: Steam `movss xmm0,[VA_DOOR_FADE_LEN]` (F3 0F 10 05 disp32), GOG
+// `fld dword [VA_DOOR_FADE_LEN]` (D9 05 disp32; it passes the length on the stack). Returns the
+// opcode's length, where the disp32 starts.
+static unsigned door_fade_op(const unsigned char** op)
 {
-    static const unsigned char op[4] = { 0xF3, 0x0F, 0x10, 0x05 };
-    uintptr_t len = ga(VA_DOOR_FADE_LEN);
-    return at && len && range_readable((void*)at, 8) && !memcmp((void*)at, op, 4) &&
-           *(const DWORD*)(at + 4) == (DWORD)len;
+    static const unsigned char movss[4] = { 0xF3, 0x0F, 0x10, 0x05 }, fld[2] = { 0xD9, 0x05 };
+    if (g_build == BUILD_GOG) { *op = fld; return 2; }
+    *op = movss;
+    return 4;
 }
 
-// Repoint one `movss xmm0,[00E30444]` (F3 0F 10 05 disp32) at g_doorFade.
+// With ASLR the loader has relocated the disp32 like any absolute address, so it is compared
+// with ga().
+static int door_fade_site(uintptr_t at)
+{
+    const unsigned char* op;
+    unsigned n = door_fade_op(&op);
+    uintptr_t len = ga(VA_DOOR_FADE_LEN);
+    return at && len && range_readable((void*)at, n + 4) && !memcmp((void*)at, op, n) &&
+           *(const DWORD*)(at + n) == (DWORD)len;
+}
+
+// Repoint one fade length load at g_doorFade. The shared 0.5 itself is never written.
 static int door_fade_patch(uintptr_t at)
 {
+    const unsigned char* op;
+    unsigned n = door_fade_op(&op);
     LONG mine = (LONG)(uintptr_t)&g_doorFade;
     DWORD old = 0, tmp = 0;
-    if (!at || !range_readable((void*)at, 8)) return 0;
-    if (*(LONG*)(at + 4) == mine) return 1;
+    if (!at || !range_readable((void*)at, n + 4)) return 0;
+    if (*(LONG*)(at + n) == mine) return 1;
     if (!door_fade_site(at)) return 0;
-    if (!VirtualProtect((void*)at, 8, PAGE_EXECUTE_READWRITE, &old)) return 0;
-    InterlockedCompareExchange((volatile LONG*)(at + 4), mine, (LONG)ga(VA_DOOR_FADE_LEN));
-    VirtualProtect((void*)at, 8, old, &tmp);
-    FlushInstructionCache(GetCurrentProcess(), (void*)at, 8);
-    return *(LONG*)(at + 4) == mine;
+    if (!VirtualProtect((void*)at, n + 4, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    InterlockedCompareExchange((volatile LONG*)(at + n), mine, (LONG)ga(VA_DOOR_FADE_LEN));
+    VirtualProtect((void*)at, n + 4, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), (void*)at, n + 4);
+    return *(LONG*)(at + n) == mine;
 }
 
 // Door fade per door: the door's start method (vtable slot 00EF02E8 -> FUN_0095dcc4, thiscall
@@ -4298,6 +4440,16 @@ static void quit_guard_tick(void)
     logf_("stability: quit guard installed (FactsAdd time default at %08X)", (unsigned)at);
 }
 
+// The first catch is logged from the next worker tick, not only in the total at the DLL detach,
+// which GOG did not always reach (docs/fixes/gog-build.md, "Open").
+static void quit_guard_report(void)
+{
+    static int seen;
+    if (seen || !g_factsNoWorld) return;
+    seen = 1;
+    logf_("stability: quit guard: FactsAdd ran without a world - time 0 used");
+}
+
 // ---- crash capture ------------------------------------------------------
 // The game's own top-level filter (installed by the static initializer at 00930D99,
 // handler 00930D4A) is `xor eax,eax; inc eax; ret 4`: EXCEPTION_EXECUTE_HANDLER, so a
@@ -4506,6 +4658,127 @@ static void crash_init(void)
     crash_tick();
 }
 
+// ---- how the game ends --------------------------------------------------
+// [diagnostics] exit_trace=1 (default): the log also says who ends the process: the exe's ExitProcess and
+// TerminateProcess import slots, and the same two in the platform DLL (Galaxy.dll on GOG,
+// steam_api.dll on Steam), are logged with their caller just before the real function runs.
+// After ExitProcess Windows ends every other thread and then runs the DLL detach, which writes
+// `unloaded`.
+// The CRT's exit (__crtExitProcess, GOG 00743F4A, Steam 00672371) first looks for the .NET
+// runtime: with mscoree.dll in the process it calls its CorExitProcess (GOG 00743F1F, Steam
+// 00672346: GetModuleHandleW, then GetProcAddress), and only if that returns ExitProcess.
+// On GOG the runtime is loaded (its filter, mscoreei.dll, shows in the log; Steam's process has
+// none), and the process then ends without the DLL detach: the log stopped at the CRT's
+// filter change, with no `unloaded` (docs/fixes/gog-build.md, "Open"). So the exe's
+// GetProcAddress hands out a wrapper for CorExitProcess that logs the end first. Logging only.
+typedef void (WINAPI *ExitProcess_t)(UINT);
+typedef BOOL (WINAPI *TerminateProcess_t)(HANDLE, UINT);
+typedef FARPROC (WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
+typedef void (WINAPI *CorExitProcess_t)(int);
+static ExitProcess_t      g_realExitProcess;
+static TerminateProcess_t g_realTerminateProcess;
+static GetProcAddress_t   g_realGetProcAddress;
+static CorExitProcess_t   g_realCorExitProcess;
+
+static void exit_note(const char* what, UINT code, void* caller)
+{
+    char where[MAX_PATH + 16], quit[96] = "";
+    DWORD tid = GetCurrentThreadId();
+    crash_where((DWORD)(uintptr_t)caller, where, sizeof where);
+    if (g_factsNoWorld)
+        sprintf_s(quit, sizeof quit, "; quit guard: FactsAdd ran without a world %ld time(s)",
+                  (long)g_factsNoWorld);
+    exit_logf("exit: %s(%u) from %s on thread %lu%s%s", what, code, where, tid,
+              tid == g_mainTid ? " (the main thread)" : "", quit);
+}
+
+static void WINAPI hook_ExitProcess(UINT code)
+{
+    exit_note("ExitProcess", code, _ReturnAddress());
+    g_realExitProcess(code);
+}
+
+static BOOL WINAPI hook_TerminateProcess(HANDLE process, UINT code)
+{
+    if (process == GetCurrentProcess() || GetProcessId(process) == GetCurrentProcessId())
+        exit_note("TerminateProcess", code, _ReturnAddress());
+    return g_realTerminateProcess(process, code);
+}
+
+static void WINAPI hook_CorExitProcess(int code)
+{
+    exit_note("CorExitProcess", (UINT)code, _ReturnAddress());
+    exit_logf("exit: the CRT hands the exit to the .NET runtime (on GOG it ends the process without the DLL detach)");
+    g_realCorExitProcess(code);
+    exit_logf("exit: CorExitProcess returned - the CRT goes on to ExitProcess");
+}
+
+static int __stdcall gpa_is_corexit(LPCSTR name)
+{
+    int is = 0;
+    __try { is = ((uintptr_t)name >> 16) && !strcmp(name, "CorExitProcess"); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { is = 0; }
+    return is;
+}
+
+static FARPROC WINAPI gpa_corexit(HMODULE mod, LPCSTR name)
+{
+    FARPROC real = g_realGetProcAddress(mod, name);
+    if (!real) return NULL;
+    g_realCorExitProcess = (CorExitProcess_t)(void*)real;
+    return (FARPROC)(void*)hook_CorExitProcess;
+}
+
+// GetProcAddress resolves for its caller (KERNELBASE!GetProcAddressForCaller takes the return
+// address), so every other lookup jumps on with the game's own return address on the stack.
+__declspec(naked) static void hook_GetProcAddress(void)
+{
+    __asm {
+        push dword ptr [esp + 8]             ; name
+        call gpa_is_corexit
+        test eax, eax
+        jnz corexit
+        jmp dword ptr [g_realGetProcAddress]
+    corexit:
+        jmp gpa_corexit
+    }
+}
+
+typedef struct { uintptr_t exitSlot, termSlot; } exit_slots;
+
+static void exit_slots_cb(void* ctx, const char* dll, const char* fn, uintptr_t slot)
+{
+    exit_slots* s = (exit_slots*)ctx;
+    if (_stricmp(dll, "kernel32.dll")) return;
+    if (!strcmp(fn, "ExitProcess")) s->exitSlot = slot;
+    else if (!strcmp(fn, "TerminateProcess")) s->termSlot = slot;
+}
+
+// From DllMain: the loader has filled every static import by then.
+static void exit_trace_install(void)
+{
+    static const char* const platform[] = { "Galaxy.dll", "steam_api.dll" };
+    int i;
+    if (!cfg_exit_trace) return;
+    patch_iat("exit", IMP_EXITPROCESS, (void*)hook_ExitProcess, (void**)&g_realExitProcess);
+    patch_iat("exit", IMP_TERMINATEPROCESS, (void*)hook_TerminateProcess, (void**)&g_realTerminateProcess);
+    patch_iat("exit", IMP_GETPROCADDRESS, (void*)hook_GetProcAddress, (void**)&g_realGetProcAddress);
+    for (i = 0; i < 2; i++) {
+        HMODULE mod = GetModuleHandleA(platform[i]);
+        exit_slots s = { 0, 0 };
+        char tag[40];
+        if (!mod) continue;
+        imports_walk((const unsigned char*)mod, exit_slots_cb, &s);
+        sprintf_s(tag, sizeof tag, "exit (%s)", platform[i]);
+        if (s.exitSlot)
+            patch_import_slot(tag, "kernel32.dll", "ExitProcess", s.exitSlot, (void*)hook_ExitProcess,
+                              (void**)&g_realExitProcess);
+        if (s.termSlot)
+            patch_import_slot(tag, "kernel32.dll", "TerminateProcess", s.termSlot,
+                              (void*)hook_TerminateProcess, (void**)&g_realTerminateProcess);
+    }
+}
+
 // ---- window mode: full screen, borderless, windowed -----------------------------------------
 // The game creates its top-level window in FUN_009d44e1: as a captioned window (style 0x00C80000,
 // centered, client area = the configured resolution) when windowed, or as a topmost popup when
@@ -4541,7 +4814,6 @@ static HWND g_wfWnd;
 // write calls the engine's config writer, so it happens on the game's main thread, inside the
 // viewport tick, never from the DLL's threads.
 static volatile LONG g_ddMenu = -1;      // level the menu chose, -1 nothing pending
-static DWORD g_mainTid;                  // the thread DllMain ran on: the game's main thread
 static volatile LONG g_ddOffThread;      // the viewport tick ran elsewhere: no sync (logged)
 // The swapchain's size: [Viewport] Width/Height from User.ini, else the client area the window
 // was born with. A restyle always restores it, because a framed window as large as the screen is
@@ -5167,6 +5439,7 @@ static DWORD WINAPI worker(LPVOID param)
         crash_tick();
         ray_guard_tick();
         quit_guard_tick();
+        quit_guard_report();
         osd_pump();
         dd_tick();
         apply_lod();
@@ -5467,49 +5740,49 @@ static const ga_row k_gog[] = {
     { RVA_SETTINGS,          0x021EAEB8u },   // [025EAEB8] -> object 025EAF08, loader 00B40DCD
     { VA_CAPTURE_PENDING,    0 },
     { VA_CAPTURE_QUEUED,     0 },
-    { VA_CNAME_FROM_STR,     0 },
-    { VA_DOOR_FADE_EVENT,    0 },
-    { VA_DOOR_FADE_IN,       0 },
-    { VA_DOOR_FADE_LEN,      0 },
-    { VA_DOOR_FADE_OUT,      0 },
-    { VA_DOOR_INTERIOR_VT,   0 },
-    { VA_DOOR_START,         0 },
-    { VA_DOOR_START_SLOT,    0 },
-    { VA_DOOR_TELEPORT_VT,   0 },
-    { VA_DOOR_TIMER,         0 },
-    { VA_DOOR_TIMER_SLOT,    0 },
-    { VA_EMPTY_STRING,       0 },
+    { VA_CNAME_FROM_STR,     0x00B5E7ACu },   // __thiscall on GOG (ECX = out), RET 4
+    { VA_DOOR_FADE_EVENT,    0x005B0276u },   // CDoorStreamingBlackScreen vtable 00D7A318 slot 2
+    { VA_DOOR_FADE_IN,       0x005B02EDu },   // fld dword [00D269BC] on GOG (D9 05)
+    { VA_DOOR_FADE_LEN,      0x00D269BCu },   // the shared 0.5
+    { VA_DOOR_FADE_OUT,      0x005B01DFu },   // fld, in the BlackScreen constructor 005B0193
+    { VA_DOOR_INTERIOR_VT,   0x00D7A36Cu },   // CDoorStreamingWaitOnKnob
+    { VA_DOOR_START,         0x005AF6D9u },
+    { VA_DOOR_START_SLOT,    0x00D7A5F8u },   // CStreamingDoor vtable 00D7A394, slot 153
+    { VA_DOOR_TELEPORT_VT,   0x00D7A318u },   // CDoorStreamingBlackScreen
+    { VA_DOOR_TIMER,         0x005AF658u },
+    { VA_DOOR_TIMER_SLOT,    0x00D7A4CCu },   // CStreamingDoor vtable 00D7A394, slot 78
+    { VA_EMPTY_STRING,       0x01680110u },   // pushed by the request callers
     { VA_FACTS_TIME,         0x0050B0A9u },   // in FactsAdd 0050B044 ("FactsAdd" 00D441D4)
-    { VA_FADE_IN_EXEC,       0 },
-    { VA_FADE_IN_EXEC_SLOT,  0 },
-    { VA_FADE_OUT_EXEC,      0 },
-    { VA_FADE_OUT_EXEC_SLOT, 0 },
+    { VA_FADE_IN_EXEC,       0x00A2D789u },
+    { VA_FADE_IN_EXEC_SLOT,  0x00F1F3CCu },   // CRenderCommand_ScreenFadeIn vtable 00F1F3C0 + 0x0C
+    { VA_FADE_OUT_EXEC,      0x00A2D7E1u },
+    { VA_FADE_OUT_EXEC_SLOT, 0x00F1F3B8u },   // CRenderCommand_ScreenFadeOut vtable 00F1F3AC + 0x0C
     { VA_GAME,               0x01475740u },   // written at 00AFB1DC; +0x40 activeWorld, +0x250 player
-    { VA_GC,                 0 },
+    { VA_GC,                 0x00B11BA4u },
     { VA_IMAGES_ADD,         0 },
     { VA_IMAGES_REMOVE,      0 },
     { VA_IMAGES_VTBL_ADD,    0 },
     { VA_IMAGE_KEY,          0 },
-    { VA_INDOOR_CMP,         0 },
-    { VA_INDOOR_IMM,         0 },
+    { VA_INDOOR_CMP,         0x00A11286u },   // in the frame setup 00A11181
+    { VA_INDOOR_IMM,         0x00A11295u },
     { VA_MAP_FIND,           0 },
     { VA_MEM_SERIALIZE,      0 },
     { VA_MEM_SIZE,           0 },
     { VA_MEM_STREAM,         0 },
-    { VA_PART_GC_CALL,       0 },
-    { VA_PART_REQUEST,       0 },
-    { VA_PART_RUN,           0 },
-    { VA_PART_RUN_CALL,      0 },
-    { VA_PART_SWITCH,        0 },
-    { VA_PART_SWITCH_A,      0 },
-    { VA_PART_SWITCH_B,      0 },
+    { VA_PART_GC_CALL,       0x00AE614Du },
+    { VA_PART_REQUEST,       0x00AFCFA6u },   // __thiscall on GOG (ECX = game)
+    { VA_PART_RUN,           0x00AE5FCAu },   // job in EDI on GOG, plain RET
+    { VA_PART_RUN_CALL,      0x00AE6418u },   // after mov edi,esi
+    { VA_PART_SWITCH,        0x00AE626Cu },   // pushes "Streaming PH: "
+    { VA_PART_SWITCH_A,      0x00AFE3F0u },   // in the request queue 00AFE36B
+    { VA_PART_SWITCH_B,      0x00AFF2DCu },
     { VA_PROV_FORWARD,       0 },
     { VA_PROV_OPEN,          0 },
     { VA_PROV_STREAM,        0 },
     { VA_PROV_VTBL_OPEN,     0 },
     { VA_RAY_HIT,            0x0091F110u },   // body identical to Steam's 0084C750
     { VA_RAY_SLOT,           0x00E08740u },   // hkpSimpleWorldRayCaster vtable 00E0873C + 4
-    { VA_RENDER_THREAD,      0 },
+    { VA_RENDER_THREAD,      0x0167DE94u },   // set by CRenderThread slot 1, 00A23145
     { VA_SAVELIST,           0 },
     { VA_SAVELIST_CALL_A,    0 },
     { VA_SAVELIST_CALL_B,    0 },
@@ -5520,9 +5793,9 @@ static const ga_row k_gog[] = {
     { VA_STARTVIDEO_VSLOT,   0x00D43FB0u },   // CVideoInstance vtable 00D43F3C + 0x74
     { VA_STEAM_STREAM,       0 },
     { VA_STREAM_DTOR,        0 },
-    { VA_STR_FADE_OUT,       0 },
-    { VA_UNPACK,             0 },
-    { VA_UNPACK_CALL,        0 },
+    { VA_STR_FADE_OUT,       0x00D7A328u },
+    { VA_UNPACK,             0x007614F0u },
+    { VA_UNPACK_CALL,        0x007618C7u },
     { WF_CONFIG,             0x01679440u },   // written at 00A078CF; loaded into ECX before the writer
     { WF_D3D_DEVICE,         0x01690818u },   // stored at 004CE0D9 in device creation 004CDE00
     { WF_GAME_WNDPROC,       0x00A2362Du },   // W2ViewportClass lpfnWndProc, set at 00A2592D
@@ -5899,7 +6172,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                   (unsigned)g_delta, (unsigned)IMAGE_BASE, found, IMP_COUNT,
                   *missing ? ", not imported:" : "", missing);
         }
-        logf_("diagnostics: crash_dump=%d (previous log kept as witcher2_enginefix.prev.log)", cfg_crash_dump);
+        logf_("diagnostics: crash_dump=%d exit_trace=%d (previous log kept as witcher2_enginefix.prev.log)",
+              cfg_crash_dump, cfg_exit_trace);
         // Replaced by the game's static initializer right after; crash_tick re-arms.
         if (cfg_enabled && cfg_crash_dump) g_prevFilter = SetUnhandledExceptionFilter(crash_filter);
         logf_("config: enabled=%d enforce=%d mesh=%.2f foliage=%.2f downscale=%d hotkeys=%d",
@@ -5918,6 +6192,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             logf_("presets: default=%s, cycle modifiers=%d VK=%02X (Options > Graphics remembers the level)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
         build_gate();
+        if (cfg_enabled) exit_trace_install();
         // Before the game's own start-up can reach the CPU count.
         if (cfg_enabled && cfg_cpu32_guard && !cpu32_try()) {
             HANDLE h = CreateThread(NULL, 0, cpu32_thread, NULL, 0, NULL);
@@ -5984,6 +6259,13 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             fclose(g_log);
             g_log = NULL;
             if (reserved) LeaveCriticalSection(&g_logLock);
+        } else if (g_log) {
+            // The lock's owner was ended inside logf_: one line straight to the file handle, so
+            // the log shows that the detach ran.
+            char line[160];
+            sprintf_s(line, sizeof line, "unloaded (the log lock was held by thread %lu, already ended; quit guard: %ld)",
+                      (DWORD)(uintptr_t)g_logLock.OwningThread, (long)g_factsNoWorld);
+            log_raw(line);
         }
     }
     return TRUE;
