@@ -41,6 +41,10 @@ game file is written, the release ships no `.bat`/`.ps1`, uninstalling is deleti
 
 ## IAT slots
 
+Since 0.10.0 the DLL finds these slots by name in the running exe's import directory
+(`k_imports` in `src/enginefix.c`), which gives the same slots on Steam and GOG's own on GOG.
+The addresses below are Steam's.
+
 Computed from the import table of the unpacked 3.5.0.26 binary and re-checked against
 `tools/ghidra-inputs/witcher2.exe.unpacked.exe` on 2026-10-31: every address below holds
 exactly the named export in the `KERNEL32.dll` descriptor, and `CreateFileW`, `CopyFileW` and

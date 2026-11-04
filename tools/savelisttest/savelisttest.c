@@ -28,10 +28,11 @@ static void put_call_site(uintptr_t call)
     put(call + 5, "c2 04 00");
 }
 
-// The exe is linked at 0x00400000 with a large zero-filled arena, so every game
+// The exe is linked at 0x00010000 with a large zero-filled arena, so every game
 // address used below (004A4A03 .. 00F02C2C) lies inside our own image: no other
-// mapping can take them, unlike a VirtualAlloc at run time.
-static unsigned char g_arena[0xD00000];
+// mapping can take them, unlike a VirtualAlloc at run time. (At 0x00400000 the DLL's own
+// code grew past 004A0000 and the arena no longer reached down to the game range.)
+static unsigned char g_arena[0xF00000];
 
 static int map_game_range(void)
 {
@@ -128,6 +129,7 @@ int main(int argc, char** argv)
     InitializeCriticalSection(&g_thumbLock);
     InitializeCriticalSection(&g_logLock);
     g_log = stdout; cfg_log = 1; cfg_savelist_trace = 1;
+    g_build = BUILD_STEAM; g_base = IMAGE_BASE; g_delta = 0;   // the Steam addresses, as in DllMain
     if (!map_game_range()) return 2;
 
     // Find: real prologue, then out = map (EAX), found = (*key == 0x77), ret 8

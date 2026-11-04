@@ -8,6 +8,9 @@
 
 #define EF_RANGE_RVA  0x005BB09Fu
 #define EF_SHADOW_RVA 0x005BB465u
+// The sites ef_distance_install patches, as RVAs. The Steam ones by default (the probe uses
+// them); enginefix.c sets the running build's (ga_rva) before installing, 0 = not on it.
+static uintptr_t ef_range_rva = EF_RANGE_RVA, ef_shadow_rva = EF_SHADOW_RVA;
 static const unsigned char ef_range_signature[] = {
     0xf3,0x0f,0x10,0x83,0xf0,0,0,0,0x0f,0x2f,0xc6,0x0f,0x86,0xd2,1,0,0
 };
@@ -79,9 +82,11 @@ static int ef_distance_install(unsigned char* base, size_t span) {
     HANDLE peers[256];
     unsigned count = 0, i;
     if (ef_distance_active) return 1;
-    if (!base || span < EF_SHADOW_RVA + sizeof ef_shadow_signature) return 0;
-    range = base + EF_RANGE_RVA;
-    shadow = base + EF_SHADOW_RVA;
+    if (!base || !ef_range_rva || !ef_shadow_rva ||
+        span < ef_range_rva + sizeof ef_range_signature ||
+        span < ef_shadow_rva + sizeof ef_shadow_signature) return 0;
+    range = base + ef_range_rva;
+    shadow = base + ef_shadow_rva;
     if (memcmp(range, ef_range_signature, sizeof ef_range_signature) ||
         memcmp(shadow, ef_shadow_signature, sizeof ef_shadow_signature)) return 0;
     ef_range_return = range + 8;

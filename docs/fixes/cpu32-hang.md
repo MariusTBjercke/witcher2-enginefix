@@ -28,7 +28,9 @@ The GOG build has the same bytes (`d3 e7 89 75 ec 85 ff 0f 85`), so it should ha
 
 ## Fix
 
-`[stability] cpu32_guard=1` (default) hooks `GetProcessAffinityMask` (slot `00CAD20C`). When
+`[stability] cpu32_guard=1` (default) hooks `GetProcessAffinityMask` (Steam slot `00CAD20C`; since
+0.10.0 the slot is found by name, and on GOG too, where the CPU count code itself has not been
+re-checked). When
 both masks are `0xFFFFFFFF` it reports the process mask as `0x7FFFFFFF`, so the game takes
 the same path as with the Task Manager trick, while its threads may still use every core.
 Other CPUs get the real values. The other caller, `FUN_006b9a30`, overwrites the value with

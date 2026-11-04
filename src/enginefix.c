@@ -1,11 +1,16 @@
-// witcher2_enginefix - runtime fixes for The Witcher 2: Assassins of Kings (Steam 3.5.0.26)
+// witcher2_enginefix - runtime fixes for The Witcher 2: Assassins of Kings (Steam 3.5.0.26,
+// GOG 3.5.0.26g in progress)
 //
 // Loads as bin\dinput8.dll (the game imports dinput8.dll for controller input) and
 // forwards every export to the real system dinput8.dll. witcher2.exe on disk is never
 // touched. Delete bin\dinput8.dll and bin\witcher2_enginefix.ini to uninstall.
 //
-// The game is built with ASLR disabled (DllCharacteristics has no DYNAMICBASE) and an
-// image base of 0x00400000, so absolute addresses below are stable at runtime.
+// The #defines below are Steam addresses at the preferred image base 0x00400000. Every use
+// goes through ga()/ga_rva() ("builds and addresses" near the end): the running build is
+// read from witcher2.exe's PE header, GOG's value comes from k_gog and the load address is
+// added (the GOG exe has ASLR, Steam's does not). An address not known on the running build
+// is 0, and build_gate() turns the features that need it off. Import slots are found by name
+// in the exe's import directory (k_imports).
 //
 // LOD uses the settings singleton. Optional experimental distance hooks modify two
 // fingerprinted renderer instructions in memory; see distance_patch.h and docs/fixes.
@@ -23,6 +28,7 @@
 #include <psapi.h>
 #include <tlhelp32.h>   // CreateToolhelp32Snapshot: per-thread CPU time for load_trace
 #include <dbghelp.h>   // MINIDUMP_* types only; MiniDumpWriteDump is resolved at runtime
+#include <intrin.h>    // _ReturnAddress: who calls DirectInput8Create and CreateDevice
 #include <objbase.h>   // LPUNKNOWN / REFIID for the DirectInput8Create signature
 #include <shlobj.h>    // SHGetFolderPathW: the game's Documents folder (User.ini)
 #include <stdio.h>
@@ -38,7 +44,7 @@
 #include "sp_dzip.h"
 #include "version.h"
 
-#define IMAGE_BASE          0x00400000u
+#define IMAGE_BASE          0x00400000u   // preferred image base of both builds
 #define RVA_SETTINGS        0x02180E28u   // 0x02580E28 - IMAGE_BASE
 #define OFF_MESH_DOWNSCALE  0x34
 #define OFF_CHAR_DOWNSCALE  0x38
@@ -51,6 +57,14 @@
 #define EF_MOD_CTRL   1
 #define EF_MOD_ALT    2
 #define EF_MOD_SHIFT  4
+
+// The running witcher2.exe; set once in DllMain before any thread starts (build_detect).
+enum { BUILD_UNKNOWN, BUILD_STEAM, BUILD_GOG };
+static int       g_build;
+static uintptr_t g_base;    // where witcher2.exe is loaded
+static uintptr_t g_delta;   // g_base - IMAGE_BASE: 0 on Steam, the ASLR shift on GOG
+static uintptr_t ga(uintptr_t steam_va);
+static uintptr_t ga_rva(uintptr_t steam_rva);
 
 static HINSTANCE g_self;
 static FILE*     g_log;
@@ -544,9 +558,9 @@ typedef struct {
 
 static int grab_settings(settings_view* out)
 {
-    unsigned char* base = (unsigned char*)(uintptr_t)GetModuleHandleA(NULL);
-    if (!base) return 0;
-    const void* slot = base + RVA_SETTINGS;
+    uintptr_t rva = ga_rva(RVA_SETTINGS);
+    if (!rva || !g_base) return 0;
+    const void* slot = (const void*)(g_base + rva);
     if (!range_readable(slot, sizeof(void*))) return 0;
     out->obj = read_ptr(slot);
     if (!out->obj) return 0;
@@ -690,6 +704,8 @@ static void distance_tick(void)
             !grab_settings(&view)) return;
         last_attempt = now;
         attempts++;
+        ef_range_rva = ga_rva(EF_RANGE_RVA);
+        ef_shadow_rva = ga_rva(EF_SHADOW_RVA);
         __try {
             const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)base;
             const IMAGE_NT_HEADERS32* pe = (const IMAGE_NT_HEADERS32*)(base + dos->e_lfanew);
@@ -707,7 +723,7 @@ static void distance_tick(void)
             return;
         }
         logf_("distance: hooks installed at RVA %08X / %08X; visibility=%.2fx shadow=%.2fx",
-              EF_RANGE_RVA, EF_SHADOW_RVA, cfg_visibility, cfg_shadow_range);
+              (unsigned)ef_range_rva, (unsigned)ef_shadow_rva, cfg_visibility, cfg_shadow_range);
         if (cfg_preset_mode) preset_show();
         else osd_show("Distance test ready   visibility %.1fx   shadow %.1fx", cfg_visibility, cfg_shadow_range);
         last_stats = now;
@@ -735,23 +751,17 @@ static void distance_tick(void)
 // itself, nothing is added.
 //
 // Diagnostics ([diagnostics] save_trace=1) log the same path without changing anything.
-// No debugger, no code patch - only IAT slots of the unpacked 3.5.0.26 import table (each
-// verified against GetProcAddress first) and slot 0 of the ISteamRemoteStorage vtable.
+// No debugger, no code patch - only import slots (found by name, each verified against
+// GetProcAddress first) and slot 0 of the ISteamRemoteStorage vtable.
 // See docs/fixes/save-previews.md.
 //
-//   00CAD314 DeleteFileW   00CAD320 CreateFileW   00CAD308 CopyFileW
-//   00CAD4A8 D3DXSaveSurfaceToFileW   00CAD4AC D3DXSaveSurfaceToFileInMemory
-//   00CAD624 SteamRemoteStorage (accessor; called, never patched)
-//   DAT_01404950 engine: +0x234 CloudStorage flag, +0x230 provider, +0x114 storage state
+//   kernel32 DeleteFileW, CreateFileW, CopyFileW (Steam slots 00CAD314, 00CAD320, 00CAD308)
+//   d3dx9_39 D3DXSaveSurfaceToFileW, D3DXSaveSurfaceToFileInMemory (00CAD4A8, 00CAD4AC)
+//   steam_api SteamRemoteStorage (00CAD624; the accessor, called, never patched)
+//   DAT_01404950 game/engine: +0x234 CloudStorage flag, +0x230 provider, +0x114 storage state
 //   DAT_0160D0ED capture pending, DAT_0160D0EE capture requested (009B747E / 009B733A)
 
-#define IAT_COPYFILEW      0x00CAD308u
-#define IAT_DELETEFILEW    0x00CAD314u
-#define IAT_CREATEFILEW    0x00CAD320u
-#define IAT_D3DX_SAVEFILE  0x00CAD4A8u
-#define IAT_D3DX_SAVEMEM   0x00CAD4ACu
-#define IAT_STEAM_RS       0x00CAD624u
-#define VA_ENGINE          0x01404950u
+#define VA_GAME            0x01404950u   // CGame*: +0x40 world, +0xE8 queued world requests, +0x234 cloud flag
 #define VA_CAPTURE_PENDING 0x0160D0EDu
 #define VA_CAPTURE_QUEUED  0x0160D0EEu
 
@@ -928,9 +938,9 @@ static int registry_holds(void* self, void* name)
     unsigned key, slot = 0;
     unsigned char found = 0;
     void* map = (char*)self + 4;
-    uintptr_t find = VA_MAP_FIND;
+    uintptr_t find = ga(VA_MAP_FIND);
     __try {
-        key = ((ImageKey_t)(uintptr_t)VA_IMAGE_KEY)(name);
+        key = ((ImageKey_t)ga(VA_IMAGE_KEY))(name);
         __asm {
             lea  ecx, slot
             push ecx
@@ -961,14 +971,14 @@ static void __fastcall hook_AddImage(void* self, void* edx, void* name, void* st
         if (g_listDepth) __try { savelist_note_image(text); } __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
     if (stale) {
-        unsigned key = ((ImageKey_t)(uintptr_t)VA_IMAGE_KEY)(name);
-        ((RemoveImage_t)(uintptr_t)VA_IMAGES_REMOVE)(self, NULL, key);
+        unsigned key = ((ImageKey_t)ga(VA_IMAGE_KEY))(name);
+        ((RemoveImage_t)ga(VA_IMAGES_REMOVE))(self, NULL, key);
         logf_("thumbnail: menu reloads %ls", text);
     }
     if (g_leakFixOn && g_listDepth && stream && !stale && registry_holds(self, name)) {
         __try {
-            if (*(void**)stream == (void*)(uintptr_t)VA_STEAM_STREAM) {
-                ((void (__fastcall*)(void*, void*, int))(uintptr_t)VA_STREAM_DTOR)(stream, NULL, 1);
+            if (*(void**)stream == (void*)ga(VA_STEAM_STREAM)) {
+                ((void (__fastcall*)(void*, void*, int))ga(VA_STREAM_DTOR))(stream, NULL, 1);
                 g_listFreed++; g_freedTotal++;
                 return;   // the original would return here too, without the stream
             }
@@ -1000,11 +1010,11 @@ static int code_matches(uintptr_t at, const char* hex)
 static void hook_image_registry(void)
 {
     DWORD old = 0, tmp = 0;
-    void** slot = (void**)(uintptr_t)VA_IMAGES_VTBL_ADD;
-    if (!range_readable(slot, sizeof(void*)) || read_ptr(slot) != (void*)(uintptr_t)VA_IMAGES_ADD ||
-        !code_matches(VA_IMAGES_ADD, "55 8b ec 51 53 56 57 ff 75 08 8b d9") ||
-        !code_matches(VA_IMAGES_REMOVE, "55 8b ec 83 ec 10 83 65 fc 00 56 8d") ||
-        !code_matches(VA_IMAGE_KEY, "55 8b ec 83 ec 18 53 56 57 33 db 68")) {
+    void** slot = (void**)ga(VA_IMAGES_VTBL_ADD);
+    if (!range_readable(slot, sizeof(void*)) || read_ptr(slot) != (void*)ga(VA_IMAGES_ADD) ||
+        !code_matches(ga(VA_IMAGES_ADD), "55 8b ec 51 53 56 57 ff 75 08 8b d9") ||
+        !code_matches(ga(VA_IMAGES_REMOVE), "55 8b ec 83 ec 10 83 65 fc 00 56 8d") ||
+        !code_matches(ga(VA_IMAGE_KEY), "55 8b ec 83 ec 18 53 56 57 33 db 68")) {
         logf_("thumbnail: menu image registry not recognised - QuickSave preview refresh and list leak fix off");
         return;
     }
@@ -1104,12 +1114,12 @@ static unsigned char read_u8(uintptr_t at)
 
 static void log_engine_storage(void)
 {
-    unsigned char* engine = (unsigned char*)read_ptr((void*)(uintptr_t)VA_ENGINE);
+    unsigned char* engine = (unsigned char*)read_ptr((void*)ga(VA_GAME));
     if (!engine || !range_readable(engine, 0x238)) { logf_("save-trace: engine not readable"); return; }
     logf_("save-trace: engine cloud=%u provider=%08X state=%d pending=%u queued=%u",
           read_u8((uintptr_t)engine + 0x234), (unsigned)(uintptr_t)read_ptr(engine + 0x230),
           (int)(uintptr_t)read_ptr(engine + 0x114),
-          read_u8(VA_CAPTURE_PENDING), read_u8(VA_CAPTURE_QUEUED));
+          read_u8(ga(VA_CAPTURE_PENDING)), read_u8(ga(VA_CAPTURE_QUEUED)));
 }
 
 static unsigned char __fastcall hook_FileWrite(void* self, void* edx, const char* name, const void* data, int size)
@@ -1272,9 +1282,9 @@ static int lazy_attach(void* outer)
     sp_buf b;
     long long usize;
     __try {
-        if (o[0] != (void*)(uintptr_t)VA_STEAM_STREAM) return 0;
+        if (o[0] != (void*)ga(VA_STEAM_STREAM)) return 0;
         inner = (void**)o[0x20 / 4];
-        if (!inner || inner[0] != (void*)(uintptr_t)VA_MEM_STREAM || inner[0x10 / 4] != (void*)&o[0x10 / 4])
+        if (!inner || inner[0] != (void*)ga(VA_MEM_STREAM) || inner[0x10 / 4] != (void*)&o[0x10 / 4])
             return 0;
         b.p = (unsigned char*)o[0x10 / 4];
         b.n = (size_t)o[0x14 / 4];
@@ -1318,7 +1328,7 @@ static void* __fastcall hook_ProvOpen(void* self, void* edx, void* name, int mod
         if (s && lazy_attach(s)) {
             g_lazyOpens++;
         } else {
-            if (s) __try { ((void (__fastcall*)(void*, void*, int))(uintptr_t)VA_STREAM_DTOR)(s, NULL, 1); }
+            if (s) __try { ((void (__fastcall*)(void*, void*, int))ga(VA_STREAM_DTOR))(s, NULL, 1); }
                    __except (EXCEPTION_EXECUTE_HANDLER) {}
             g_lazyFallbacks++;
             s = g_origProvOpen(self, edx, name, mode);
@@ -1334,17 +1344,17 @@ static void* __fastcall hook_ProvOpen(void* self, void* edx, void* name, int mod
 static int hook_provider_open(void)
 {
     DWORD old = 0, tmp = 0;
-    void** slot = (void**)(uintptr_t)VA_PROV_VTBL_OPEN;
-    void** mem = (void**)(uintptr_t)VA_MEM_STREAM;
-    if (!range_readable(slot, sizeof(void*)) || read_ptr(slot) != (void*)(uintptr_t)VA_PROV_OPEN ||
-        !code_matches(VA_PROV_OPEN, "55 8b ec 56 57 6a 00 6a 03 6a 3c 8b f9") ||
-        !code_matches(VA_PROV_STREAM, "55 8b ec 83 e4 f8 81 ec 30 01 00 00") ||
-        !code_matches(VA_PROV_FORWARD, "55 8b ec 8b 49 20 8b 01 5d ff 60 04") ||
-        !code_matches(VA_STREAM_DTOR, "55 8b ec 56 8b f1 8b 4e 20 c7 06 2c 2c f0 00") ||
-        read_ptr((void*)(uintptr_t)VA_STEAM_STREAM) != (void*)(uintptr_t)VA_STREAM_DTOR ||
-        read_ptr(&mem[1]) != (void*)(uintptr_t)VA_MEM_SERIALIZE || read_ptr(&mem[3]) != (void*)(uintptr_t)VA_MEM_SIZE ||
-        !code_matches(VA_MEM_SERIALIZE, "55 8b ec 56 8b f1 8b 4e 14 8b 46 10") ||
-        !code_matches(VA_MEM_SIZE, "8b 41 10 8b 40 04 c3")) {
+    void** slot = (void**)ga(VA_PROV_VTBL_OPEN);
+    void** mem = (void**)ga(VA_MEM_STREAM);
+    if (!mem || !range_readable(slot, sizeof(void*)) || read_ptr(slot) != (void*)ga(VA_PROV_OPEN) ||
+        !code_matches(ga(VA_PROV_OPEN), "55 8b ec 56 57 6a 00 6a 03 6a 3c 8b f9") ||
+        !code_matches(ga(VA_PROV_STREAM), "55 8b ec 83 e4 f8 81 ec 30 01 00 00") ||
+        !code_matches(ga(VA_PROV_FORWARD), "55 8b ec 8b 49 20 8b 01 5d ff 60 04") ||
+        !code_matches(ga(VA_STREAM_DTOR), "55 8b ec 56 8b f1 8b 4e 20 c7 06 2c 2c f0 00") ||
+        read_ptr((void*)ga(VA_STEAM_STREAM)) != (void*)ga(VA_STREAM_DTOR) ||
+        read_ptr(&mem[1]) != (void*)ga(VA_MEM_SERIALIZE) || read_ptr(&mem[3]) != (void*)ga(VA_MEM_SIZE) ||
+        !code_matches(ga(VA_MEM_SERIALIZE), "55 8b ec 56 8b f1 8b 4e 14 8b 46 10") ||
+        !code_matches(ga(VA_MEM_SIZE), "8b 41 10 8b 40 04 c3")) {
         logf_("savelist: Steam provider open not recognised - fast_list off");
         return 0;
     }
@@ -1401,7 +1411,7 @@ static void savelist_run(void* panel, const char* who)
     g_fastBuild = g_origProvOpen && (cfg_fast_list == 1 || (cfg_fast_list == 2 && (builds & 1)));
     if (!cfg_savelist_trace) {
         InterlockedIncrement(&g_listDepth);
-        ((SaveList_t)(uintptr_t)VA_SAVELIST)(panel);
+        ((SaveList_t)ga(VA_SAVELIST))(panel);
         InterlockedDecrement(&g_listDepth);
         lazy_release();
         return;
@@ -1414,7 +1424,7 @@ static void savelist_run(void* panel, const char* who)
     g_savOpenUs = g_bmpOpenUs = g_lazyUnpackUs = 0;
     t0 = qpc_us();
     InterlockedIncrement(&g_listDepth);
-    ((SaveList_t)(uintptr_t)VA_SAVELIST)(panel);
+    ((SaveList_t)ga(VA_SAVELIST))(panel);
     InterlockedDecrement(&g_listDepth);
     lazy_release();
     t0 = qpc_us() - t0;
@@ -1458,23 +1468,23 @@ static int patch_call(uintptr_t at, uintptr_t target, void* hook)
 static void savelist_install(void)
 {
     int a, b;
-    if (!code_matches(VA_SAVELIST, "55 8b ec 83 e4 f8 81 ec ec 01 00 00")) {
+    if (!code_matches(ga(VA_SAVELIST), "55 8b ec 83 e4 f8 81 ec ec 01 00 00")) {
         logf_("savelist: list builder not recognised - leak fix, fast_list and trace off");
         return;
     }
     if (cfg_list_leak) {
         if (g_origAddImage &&
-            code_matches(VA_MAP_FIND, "55 8b ec 83 ec 0c 56 ff 75 08 8b f0") &&
-            code_matches(VA_STREAM_DTOR, "55 8b ec 56 8b f1 8b 4e 20 c7 06 2c 2c f0 00") &&
-            read_ptr((void*)(uintptr_t)VA_STEAM_STREAM) == (void*)(uintptr_t)VA_STREAM_DTOR)
+            code_matches(ga(VA_MAP_FIND), "55 8b ec 83 ec 0c 56 ff 75 08 8b f0") &&
+            code_matches(ga(VA_STREAM_DTOR), "55 8b ec 56 8b f1 8b 4e 20 c7 06 2c 2c f0 00") &&
+            read_ptr((void*)ga(VA_STEAM_STREAM)) == (void*)ga(VA_STREAM_DTOR))
             g_leakFixOn = 1;
         else
             logf_("savelist: registry lookup or stream destructor not recognised - leak fix off");
     }
     if (!g_leakFixOn && !cfg_savelist_trace && !cfg_fast_list) return;
     if ((cfg_fast_list || cfg_savelist_trace) && !hook_provider_open()) cfg_fast_list = 0;
-    a = patch_call(VA_SAVELIST_CALL_A, VA_SAVELIST, (void*)savelist_startup);
-    b = patch_call(VA_SAVELIST_CALL_B, VA_SAVELIST, (void*)savelist_menu);
+    a = patch_call(ga(VA_SAVELIST_CALL_A), ga(VA_SAVELIST), (void*)savelist_startup);
+    b = patch_call(ga(VA_SAVELIST_CALL_B), ga(VA_SAVELIST), (void*)savelist_menu);
     logf_("savelist: startup call %s, menu call %s; leak fix=%d fast_list=%d trace=%d",
           a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_leakFixOn, cfg_fast_list, cfg_savelist_trace);
     if (cfg_savelist_trace) log_mem("at install");
@@ -1505,6 +1515,7 @@ typedef void (__fastcall *StartTick_t)(void* self, void* edx, float dt);
 static void* volatile g_skipPlayer;        // set by the build hook, cleared when done
 static DWORD g_skipArmedAt, g_skipPlayAt;
 static volatile LONG g_skipStops, g_skipDone;
+static uintptr_t g_startvideoList, g_startvideoStop, g_startvideoTick;   // this build's, set before the patch
 
 static void __stdcall startvideo_after(void* player)
 {
@@ -1519,7 +1530,7 @@ __declspec(naked) static void startvideo_build_hook(void)
 {
     __asm {
         push eax                       ; player object, also the argument below
-        mov ecx, VA_STARTVIDEO_LIST
+        mov ecx, dword ptr [g_startvideoList]
         call ecx
         call startvideo_after          ; stdcall, pops the object
         ret
@@ -1533,7 +1544,7 @@ __declspec(naked) static void __stdcall startvideo_stop(void* player)
     __asm {
         push esi
         mov esi, [esp + 8]
-        mov eax, VA_STARTVIDEO_STOP
+        mov eax, dword ptr [g_startvideoStop]
         call eax
         pop esi
         ret 4
@@ -1544,7 +1555,7 @@ __declspec(naked) static void __stdcall startvideo_stop(void* player)
 static void __fastcall startvideo_tick(void* self, void* edx, float dt)
 {
     unsigned char* p = (unsigned char*)self;
-    ((StartTick_t)(uintptr_t)VA_STARTVIDEO_TICK)(self, edx, dt);
+    ((StartTick_t)g_startvideoTick)(self, edx, dt);
     if (self != g_skipPlayer) return;
     if (p[0xAC] || GetTickCount() - g_skipArmedAt > STARTVIDEO_MAX_MS) {
         g_skipPlayer = NULL;
@@ -1566,23 +1577,31 @@ static void __fastcall startvideo_tick(void* self, void* edx, float dt)
 static DWORD WINAPI startvideo_thread(LPVOID param)
 {
     DWORD t0 = GetTickCount(), old = 0, tmp = 0;
+    uintptr_t call = ga(VA_STARTVIDEO_CALL), vslot = ga(VA_STARTVIDEO_VSLOT);
     (void)param;
+    g_startvideoList = ga(VA_STARTVIDEO_LIST);
+    g_startvideoStop = ga(VA_STARTVIDEO_STOP);
+    g_startvideoTick = ga(VA_STARTVIDEO_TICK);
+    if (!call || !vslot || !g_startvideoList || !g_startvideoStop || !g_startvideoTick) {
+        logf_("startup: movie code not on this build - skip_intro off");
+        return 0;
+    }
     while (g_running && GetTickCount() - t0 < 120000) {
-        if (code_matches(VA_STARTVIDEO_CALL - 2, "8b c6 e8 fc c8 fe ff")) {
-            if (!code_matches(VA_STARTVIDEO_LIST, "55 8b ec 83 e4 f8 83 ec 34 53 56 05 9c 00 00 00") ||
-                !code_matches(VA_STARTVIDEO_TICK + 0x1F, "8b 86 b0 00 00 00 8b 8e a0 00 00 00 3b c1 72 1b") ||
-                !code_matches(VA_STARTVIDEO_STOP, "55 8b ec 83 e4 f8 83 ec 10 53 33 db 57 68 1c 38") ||
-                read_ptr((void*)(uintptr_t)VA_STARTVIDEO_VSLOT) != (void*)(uintptr_t)VA_STARTVIDEO_TICK) {
+        if (code_matches(call - 2, "8b c6 e8 fc c8 fe ff")) {
+            if (!code_matches(g_startvideoList, "55 8b ec 83 e4 f8 83 ec 34 53 56 05 9c 00 00 00") ||
+                !code_matches(g_startvideoTick + 0x1F, "8b 86 b0 00 00 00 8b 8e a0 00 00 00 3b c1 72 1b") ||
+                !code_matches(g_startvideoStop, "55 8b ec 83 e4 f8 83 ec 10 53 33 db 57 68 1c 38") ||
+                read_ptr((void*)vslot) != (void*)g_startvideoTick) {
                 logf_("startup: movie code not recognised - skip_intro off");
                 return 0;
             }
-            if (!VirtualProtect((void*)(uintptr_t)VA_STARTVIDEO_VSLOT, 4, PAGE_READWRITE, &old)) {
+            if (!VirtualProtect((void*)vslot, 4, PAGE_READWRITE, &old)) {
                 logf_("startup: movie tick slot not writable - skip_intro off");
                 return 0;
             }
-            InterlockedExchangePointer((void* volatile*)(uintptr_t)VA_STARTVIDEO_VSLOT, (void*)startvideo_tick);
-            VirtualProtect((void*)(uintptr_t)VA_STARTVIDEO_VSLOT, 4, old, &tmp);
-            if (patch_call(VA_STARTVIDEO_CALL, VA_STARTVIDEO_LIST, (void*)startvideo_build_hook))
+            InterlockedExchangePointer((void* volatile*)vslot, (void*)startvideo_tick);
+            VirtualProtect((void*)vslot, 4, old, &tmp);
+            if (patch_call(call, g_startvideoList, (void*)startvideo_build_hook))
                 logf_("startup: movie list and tick hooked after %lu ms", GetTickCount() - t0);
             else
                 logf_("startup: movie list call could not be patched - skip_intro off");
@@ -1594,12 +1613,105 @@ static DWORD WINAPI startvideo_thread(LPVOID param)
     return 0;
 }
 
-// Replace one import slot only if it still holds the expected export.
-static int patch_iat(const char* tag, uintptr_t slot, const char* dll, const char* fn, void* hook, void** orig)
+// ---- import slots -------------------------------------------------------
+// The exe's import slots the DLL hooks, found by DLL and function name in witcher2.exe's own
+// import directory (imports_find, from DllMain). The packed Steam exe keeps the original
+// directory unencrypted and the loader fills it before any DllMain runs
+// (docs/fixes/dll-script-patches.md, Q2), so on Steam these are exactly the slots 0.9.0 had
+// fixed (00CAD07C..00CAD624). GOG's lie elsewhere and move with its load address.
+// 0 = the running build does not import it (GOG has no steam_api.dll).
+enum {
+    IMP_CREATEFILEW, IMP_CREATEFILEA, IMP_DELETEFILEW, IMP_COPYFILEW, IMP_CREATEFILEMAPPINGW,
+    IMP_GETFILEATTREXW, IMP_GETFILEATTRW, IMP_GETFILEATTRA, IMP_GETFILEINFO,
+    IMP_FINDFIRSTFILEW, IMP_FINDFIRSTFILEA, IMP_FINDFIRSTFILEEXW, IMP_FINDNEXTFILEW,
+    IMP_FINDNEXTFILEA, IMP_GETFILESIZE, IMP_GETFILESIZEEX, IMP_READFILE, IMP_SLEEP,
+    IMP_WAITSINGLE, IMP_WAITSINGLEEX, IMP_GETPROCAFFINITY, IMP_D3DX_SAVEFILE, IMP_D3DX_SAVEMEM,
+    IMP_STEAM_RS, IMP_COUNT
+};
+static const struct { const char* dll; const char* fn; } k_imports[IMP_COUNT] = {
+    { "kernel32.dll",  "CreateFileW" },
+    { "kernel32.dll",  "CreateFileA" },
+    { "kernel32.dll",  "DeleteFileW" },
+    { "kernel32.dll",  "CopyFileW" },
+    { "kernel32.dll",  "CreateFileMappingW" },
+    { "kernel32.dll",  "GetFileAttributesExW" },
+    { "kernel32.dll",  "GetFileAttributesW" },
+    { "kernel32.dll",  "GetFileAttributesA" },
+    { "kernel32.dll",  "GetFileInformationByHandle" },
+    { "kernel32.dll",  "FindFirstFileW" },
+    { "kernel32.dll",  "FindFirstFileA" },
+    { "kernel32.dll",  "FindFirstFileExW" },
+    { "kernel32.dll",  "FindNextFileW" },
+    { "kernel32.dll",  "FindNextFileA" },
+    { "kernel32.dll",  "GetFileSize" },
+    { "kernel32.dll",  "GetFileSizeEx" },
+    { "kernel32.dll",  "ReadFile" },
+    { "kernel32.dll",  "Sleep" },
+    { "kernel32.dll",  "WaitForSingleObject" },
+    { "kernel32.dll",  "WaitForSingleObjectEx" },
+    { "kernel32.dll",  "GetProcessAffinityMask" },
+    { "d3dx9_39.dll",  "D3DXSaveSurfaceToFileW" },
+    { "d3dx9_39.dll",  "D3DXSaveSurfaceToFileInMemory" },
+    { "steam_api.dll", "SteamRemoteStorage" },
+};
+static uintptr_t g_imp[IMP_COUNT];
+
+// Reads only the image's own headers and import names: safe in DllMain.
+static void imports_find(void)
 {
+    const unsigned char* base = (const unsigned char*)g_base;
+    __try {
+        const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)base;
+        const IMAGE_NT_HEADERS32* nt;
+        const IMAGE_DATA_DIRECTORY* dir;
+        const IMAGE_IMPORT_DESCRIPTOR* d;
+        if (!base || dos->e_magic != IMAGE_DOS_SIGNATURE) return;
+        nt = (const IMAGE_NT_HEADERS32*)(base + dos->e_lfanew);
+        if (nt->Signature != IMAGE_NT_SIGNATURE ||
+            nt->OptionalHeader.NumberOfRvaAndSizes <= IMAGE_DIRECTORY_ENTRY_IMPORT) return;
+        dir = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+        if (!dir->VirtualAddress) return;
+        for (d = (const IMAGE_IMPORT_DESCRIPTOR*)(base + dir->VirtualAddress); d->Name; d++) {
+            const char* dll = (const char*)(base + d->Name);
+            const IMAGE_THUNK_DATA32* names;
+            DWORD i;
+            // Without the name array (bound imports) the slots already hold addresses: skip.
+            if (!d->OriginalFirstThunk || !d->FirstThunk) continue;
+            names = (const IMAGE_THUNK_DATA32*)(base + d->OriginalFirstThunk);
+            for (i = 0; names[i].u1.AddressOfData; i++) {
+                const IMAGE_IMPORT_BY_NAME* by;
+                int k;
+                if (IMAGE_SNAP_BY_ORDINAL32(names[i].u1.Ordinal)) continue;
+                by = (const IMAGE_IMPORT_BY_NAME*)(base + names[i].u1.AddressOfData);
+                for (k = 0; k < IMP_COUNT; k++)
+                    if (!g_imp[k] && !strcmp((const char*)by->Name, k_imports[k].fn) &&
+                        !_stricmp(dll, k_imports[k].dll))
+                        g_imp[k] = (uintptr_t)(base + d->FirstThunk) + 4 * i;
+            }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
+// What an import slot holds now; NULL when the build does not import it.
+static void* imp_value(int imp)
+{
+    uintptr_t slot = g_imp[imp];
+    return slot && range_readable((void*)slot, sizeof(void*)) ? read_ptr((void*)slot) : NULL;
+}
+
+// Replace one import slot only if it still holds the expected export.
+static int patch_iat(const char* tag, int imp, void* hook, void** orig)
+{
+    const char* dll = k_imports[imp].dll;
+    const char* fn = k_imports[imp].fn;
+    uintptr_t slot = g_imp[imp];
     HMODULE mod = GetModuleHandleA(dll);
     void* expect = mod ? (void*)GetProcAddress(mod, fn) : NULL;
-    void* have = range_readable((void*)slot, sizeof(void*)) ? read_ptr((void*)slot) : NULL;
+    void* have = imp_value(imp);
+    if (!slot) {
+        logf_("%s: %s!%s is not imported by this build - not hooked", tag, dll, fn);
+        return 0;
+    }
     if (have == hook) return 1;
     if (!expect || have != expect) {
         logf_("%s: %s!%s slot %08X holds %08X, expected %08X - not hooked",
@@ -1625,7 +1737,6 @@ static int patch_iat(const char* tag, uintptr_t slot, const char* dll, const cha
 // in Task Manager makes the masks differ, which skips the count. The hook reports that same
 // case without giving up the core. The only other caller, FUN_006b9a30, overwrites the value
 // with 0xFFFFFFFF on success, so it is not affected. See docs/fixes/cpu32-hang.md.
-#define IAT_GETPROCAFFINITY 0x00CAD20Cu
 
 typedef BOOL (WINAPI *GetProcessAffinityMask_t)(HANDLE, PDWORD_PTR, PDWORD_PTR);
 static GetProcessAffinityMask_t g_realGetProcAffinity;
@@ -1649,12 +1760,11 @@ static int cpu32_try(void)
 {
     HMODULE k32 = GetModuleHandleA("kernel32.dll");
     void* want = k32 ? (void*)GetProcAddress(k32, "GetProcessAffinityMask") : NULL;
-    void* have = range_readable((void*)(uintptr_t)IAT_GETPROCAFFINITY, sizeof(void*))
-                     ? read_ptr((void*)(uintptr_t)IAT_GETPROCAFFINITY) : NULL;
+    void* have = imp_value(IMP_GETPROCAFFINITY);
 
     if (!want || have != want) return 0;
-    patch_iat("cpu32", IAT_GETPROCAFFINITY, "kernel32.dll", "GetProcessAffinityMask",
-              (void*)hook_GetProcessAffinityMask, (void**)&g_realGetProcAffinity);
+    patch_iat("cpu32", IMP_GETPROCAFFINITY, (void*)hook_GetProcessAffinityMask,
+              (void**)&g_realGetProcAffinity);
     return 1;
 }
 
@@ -1673,34 +1783,18 @@ static DWORD WINAPI cpu32_thread(LPVOID param)
 // [diagnostics] file_trace=1 answers how the game opens its data - questions Q1-Q6, with
 // the results in docs/fixes/dll-script-patches.md.
 // Passive: every hook calls the real function first and changes nothing. The slots are
-// the unpacked 3.5.0.26 kernel32 imports, re-checked against the import table of
-// witcher2.exe.unpacked.exe:
-//   00CAD0B4 CreateFileMappingW  00CAD0BC GetFileAttributesExW  00CAD318 GetFileAttributesW
-//   00CAD198 FindFirstFileExW    00CAD264 FindNextFileW        00CAD26C FindFirstFileW
-//   00CAD280 GetFileSize         00CAD290 GetFileSizeEx        00CAD320 CreateFileW
-// The game imports the ANSI variants as well (CreateFileA 00CAD234, GetFileAttributesA
-// 00CAD1D8, FindFirstFileA 00CAD1DC, FindNextFileA 00CAD1E0) and reports sizes/times
-// through GetFileInformationByHandle (00CAD0A8), so those are traced too - missing them
-// would make a "not opened" answer wrong.
+// kernel32 imports found by name (k_imports); on Steam they are the ones re-checked against
+// the import table of witcher2.exe.unpacked.exe (docs/fixes/dll-script-patches.md):
+//   CreateFileMappingW, GetFileAttributesExW, GetFileAttributesW, FindFirstFileExW,
+//   FindNextFileW, FindFirstFileW, GetFileSize, GetFileSizeEx, CreateFileW.
+// The game imports the ANSI variants as well (CreateFileA, GetFileAttributesA,
+// FindFirstFileA, FindNextFileA) and reports sizes/times through GetFileInformationByHandle,
+// so those are traced too - missing them would make a "not opened" answer wrong.
 // CreateFileW is shared with save_trace: one hook chains both behaviours.
 //
-// The Windows loader fills the original IAT (KERNEL32 thunks at 0x00CAD070) before any
-// DllMain runs, so the slots are already usable there; filetrace_thread still polls for
+// The Windows loader fills the IAT (Steam: the original KERNEL32 thunks at 0x00CAD070) before
+// any DllMain runs, so the slots are already usable there; filetrace_thread still polls for
 // the real kernel32 export and keeps watching for a later rewrite (Q2).
-
-#define IAT_CREATEFILEA        0x00CAD234u
-#define IAT_CREATEFILEMAPPINGW 0x00CAD0B4u
-#define IAT_GETFILEATTREXW     0x00CAD0BCu
-#define IAT_GETFILEATTRA       0x00CAD1D8u
-#define IAT_GETFILEINFO        0x00CAD0A8u
-#define IAT_FINDFIRSTFILEA     0x00CAD1DCu
-#define IAT_FINDFIRSTFILEEXW   0x00CAD198u
-#define IAT_FINDNEXTFILEA      0x00CAD1E0u
-#define IAT_FINDNEXTFILEW      0x00CAD264u
-#define IAT_FINDFIRSTFILEW     0x00CAD26Cu
-#define IAT_GETFILESIZE        0x00CAD280u
-#define IAT_GETFILESIZEEX      0x00CAD290u
-#define IAT_GETFILEATTRW       0x00CAD318u
 
 #define FT_SLOTS       14       // patched IAT slots below
 #define FT_MAX_LINES   100000   // log cap: the startup loose-file scan alone is ~4k lines
@@ -2154,63 +2248,44 @@ static HANDLE WINAPI hook_CreateFileMappingW(HANDLE file, LPSECURITY_ATTRIBUTES 
     return map;
 }
 
-static void* ft_slot(uintptr_t slot)
-{
-    return range_readable((void*)slot, sizeof(void*)) ? read_ptr((void*)slot) : NULL;
-}
-
 // Install all trace slots; returns how many hold our hooks afterwards.
 static int ft_install(void)
 {
     int n = 0;
-    n += patch_iat("file-trace", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW",
-                   (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
-    n += patch_iat("file-trace", IAT_CREATEFILEA, "kernel32.dll", "CreateFileA",
-                   (void*)hook_CreateFileA, (void**)&g_origCreateFileA);
-    n += patch_iat("file-trace", IAT_GETFILEATTREXW, "kernel32.dll", "GetFileAttributesExW",
-                   (void*)hook_GetFileAttributesExW, (void**)&g_origGetFileAttributesExW);
-    n += patch_iat("file-trace", IAT_GETFILEATTRW, "kernel32.dll", "GetFileAttributesW",
-                   (void*)hook_GetFileAttributesW, (void**)&g_origGetFileAttributesW);
-    n += patch_iat("file-trace", IAT_GETFILEATTRA, "kernel32.dll", "GetFileAttributesA",
-                   (void*)hook_GetFileAttributesA, (void**)&g_origGetFileAttributesA);
-    n += patch_iat("file-trace", IAT_GETFILEINFO, "kernel32.dll", "GetFileInformationByHandle",
-                   (void*)hook_GetFileInformationByHandle, (void**)&g_origGetFileInformationByHandle);
-    n += patch_iat("file-trace", IAT_FINDFIRSTFILEW, "kernel32.dll", "FindFirstFileW",
-                   (void*)hook_FindFirstFileW, (void**)&g_origFindFirstFileW);
-    n += patch_iat("file-trace", IAT_FINDFIRSTFILEA, "kernel32.dll", "FindFirstFileA",
-                   (void*)hook_FindFirstFileA, (void**)&g_origFindFirstFileA);
-    n += patch_iat("file-trace", IAT_FINDFIRSTFILEEXW, "kernel32.dll", "FindFirstFileExW",
-                   (void*)hook_FindFirstFileExW, (void**)&g_origFindFirstFileExW);
-    n += patch_iat("file-trace", IAT_FINDNEXTFILEW, "kernel32.dll", "FindNextFileW",
-                   (void*)hook_FindNextFileW, (void**)&g_origFindNextFileW);
-    n += patch_iat("file-trace", IAT_FINDNEXTFILEA, "kernel32.dll", "FindNextFileA",
-                   (void*)hook_FindNextFileA, (void**)&g_origFindNextFileA);
-    n += patch_iat("file-trace", IAT_GETFILESIZE, "kernel32.dll", "GetFileSize",
-                   (void*)hook_GetFileSize, (void**)&g_origGetFileSize);
-    n += patch_iat("file-trace", IAT_GETFILESIZEEX, "kernel32.dll", "GetFileSizeEx",
-                   (void*)hook_GetFileSizeEx, (void**)&g_origGetFileSizeEx);
-    n += patch_iat("file-trace", IAT_CREATEFILEMAPPINGW, "kernel32.dll", "CreateFileMappingW",
-                   (void*)hook_CreateFileMappingW, (void**)&g_origCreateFileMappingW);
+    n += patch_iat("file-trace", IMP_CREATEFILEW, (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+    n += patch_iat("file-trace", IMP_CREATEFILEA, (void*)hook_CreateFileA, (void**)&g_origCreateFileA);
+    n += patch_iat("file-trace", IMP_GETFILEATTREXW, (void*)hook_GetFileAttributesExW, (void**)&g_origGetFileAttributesExW);
+    n += patch_iat("file-trace", IMP_GETFILEATTRW, (void*)hook_GetFileAttributesW, (void**)&g_origGetFileAttributesW);
+    n += patch_iat("file-trace", IMP_GETFILEATTRA, (void*)hook_GetFileAttributesA, (void**)&g_origGetFileAttributesA);
+    n += patch_iat("file-trace", IMP_GETFILEINFO, (void*)hook_GetFileInformationByHandle, (void**)&g_origGetFileInformationByHandle);
+    n += patch_iat("file-trace", IMP_FINDFIRSTFILEW, (void*)hook_FindFirstFileW, (void**)&g_origFindFirstFileW);
+    n += patch_iat("file-trace", IMP_FINDFIRSTFILEA, (void*)hook_FindFirstFileA, (void**)&g_origFindFirstFileA);
+    n += patch_iat("file-trace", IMP_FINDFIRSTFILEEXW, (void*)hook_FindFirstFileExW, (void**)&g_origFindFirstFileExW);
+    n += patch_iat("file-trace", IMP_FINDNEXTFILEW, (void*)hook_FindNextFileW, (void**)&g_origFindNextFileW);
+    n += patch_iat("file-trace", IMP_FINDNEXTFILEA, (void*)hook_FindNextFileA, (void**)&g_origFindNextFileA);
+    n += patch_iat("file-trace", IMP_GETFILESIZE, (void*)hook_GetFileSize, (void**)&g_origGetFileSize);
+    n += patch_iat("file-trace", IMP_GETFILESIZEEX, (void*)hook_GetFileSizeEx, (void**)&g_origGetFileSizeEx);
+    n += patch_iat("file-trace", IMP_CREATEFILEMAPPINGW, (void*)hook_CreateFileMappingW, (void**)&g_origCreateFileMappingW);
     return n;
 }
 
 static int ft_hooked(void)
 {
     int n = 0;
-    n += ft_slot(IAT_CREATEFILEW) == (void*)hook_CreateFileW;
-    n += ft_slot(IAT_CREATEFILEA) == (void*)hook_CreateFileA;
-    n += ft_slot(IAT_GETFILEATTREXW) == (void*)hook_GetFileAttributesExW;
-    n += ft_slot(IAT_GETFILEATTRW) == (void*)hook_GetFileAttributesW;
-    n += ft_slot(IAT_GETFILEATTRA) == (void*)hook_GetFileAttributesA;
-    n += ft_slot(IAT_GETFILEINFO) == (void*)hook_GetFileInformationByHandle;
-    n += ft_slot(IAT_FINDFIRSTFILEW) == (void*)hook_FindFirstFileW;
-    n += ft_slot(IAT_FINDFIRSTFILEA) == (void*)hook_FindFirstFileA;
-    n += ft_slot(IAT_FINDFIRSTFILEEXW) == (void*)hook_FindFirstFileExW;
-    n += ft_slot(IAT_FINDNEXTFILEW) == (void*)hook_FindNextFileW;
-    n += ft_slot(IAT_FINDNEXTFILEA) == (void*)hook_FindNextFileA;
-    n += ft_slot(IAT_GETFILESIZE) == (void*)hook_GetFileSize;
-    n += ft_slot(IAT_GETFILESIZEEX) == (void*)hook_GetFileSizeEx;
-    n += ft_slot(IAT_CREATEFILEMAPPINGW) == (void*)hook_CreateFileMappingW;
+    n += imp_value(IMP_CREATEFILEW) == (void*)hook_CreateFileW;
+    n += imp_value(IMP_CREATEFILEA) == (void*)hook_CreateFileA;
+    n += imp_value(IMP_GETFILEATTREXW) == (void*)hook_GetFileAttributesExW;
+    n += imp_value(IMP_GETFILEATTRW) == (void*)hook_GetFileAttributesW;
+    n += imp_value(IMP_GETFILEATTRA) == (void*)hook_GetFileAttributesA;
+    n += imp_value(IMP_GETFILEINFO) == (void*)hook_GetFileInformationByHandle;
+    n += imp_value(IMP_FINDFIRSTFILEW) == (void*)hook_FindFirstFileW;
+    n += imp_value(IMP_FINDFIRSTFILEA) == (void*)hook_FindFirstFileA;
+    n += imp_value(IMP_FINDFIRSTFILEEXW) == (void*)hook_FindFirstFileExW;
+    n += imp_value(IMP_FINDNEXTFILEW) == (void*)hook_FindNextFileW;
+    n += imp_value(IMP_FINDNEXTFILEA) == (void*)hook_FindNextFileA;
+    n += imp_value(IMP_GETFILESIZE) == (void*)hook_GetFileSize;
+    n += imp_value(IMP_GETFILESIZEEX) == (void*)hook_GetFileSizeEx;
+    n += imp_value(IMP_CREATEFILEMAPPINGW) == (void*)hook_CreateFileMappingW;
     return n;
 }
 
@@ -2226,11 +2301,11 @@ static DWORD WINAPI filetrace_thread(LPVOID param)
     (void)param;
 
     logf_("file-trace: thread started, CreateFileW slot holds %08X",
-          (unsigned)(uintptr_t)ft_slot(IAT_CREATEFILEW));
+          (unsigned)(uintptr_t)imp_value(IMP_CREATEFILEW));
     for (;;) {
         if (!k32) k32 = GetModuleHandleA("kernel32.dll");
         if (k32 && !expect) expect = (void*)GetProcAddress(k32, "CreateFileW");
-        if (expect && ft_slot(IAT_CREATEFILEW) == expect) break;
+        if (expect && imp_value(IMP_CREATEFILEW) == expect) break;
         if (!g_running || GetTickCount() - t0 > 120000) {
             logf_("file-trace: CreateFileW slot never held the kernel32 export - not hooked");
             return 0;
@@ -2285,7 +2360,7 @@ static DWORD WINAPI scripthooks_thread(LPVOID param)
     for (;;) {
         if (!k32) k32 = GetModuleHandleA("kernel32.dll");
         if (k32 && !expect) expect = (void*)GetProcAddress(k32, "CreateFileW");
-        if (expect && ft_slot(IAT_CREATEFILEW) == expect) break;
+        if (expect && imp_value(IMP_CREATEFILEW) == expect) break;
         if (!g_running || GetTickCount() - t0 > 120000) {
             logf_("script patches: CreateFileW slot never held the kernel32 export - off");
             g_scriptHooks = 0;
@@ -2301,14 +2376,11 @@ static DWORD WINAPI scripthooks_thread(LPVOID param)
         return 0;
     }
     n = 0;
-    n += patch_iat("script-patcher", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW",
-                   (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
-    n += patch_iat("script-patcher", IAT_FINDFIRSTFILEW, "kernel32.dll", "FindFirstFileW",
-                   (void*)hook_FindFirstFileW, (void**)&g_origFindFirstFileW);
-    n += patch_iat("script-patcher", IAT_FINDNEXTFILEW, "kernel32.dll", "FindNextFileW",
-                   (void*)hook_FindNextFileW, (void**)&g_origFindNextFileW);
+    n += patch_iat("script-patcher", IMP_CREATEFILEW, (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+    n += patch_iat("script-patcher", IMP_FINDFIRSTFILEW, (void*)hook_FindFirstFileW, (void**)&g_origFindFirstFileW);
+    n += patch_iat("script-patcher", IMP_FINDNEXTFILEW, (void*)hook_FindNextFileW, (void**)&g_origFindNextFileW);
     logf_("script patches: hooks installed after %lu ms (%d/3 slots)", GetTickCount() - t0, n);
-    if (ft_slot(IAT_CREATEFILEW) != (void*)hook_CreateFileW) {
+    if (imp_value(IMP_CREATEFILEW) != (void*)hook_CreateFileW) {
         logf_("script patches: CreateFileW not hooked - the patched files cannot be served, off");
         g_scriptHooks = 0;
     }
@@ -2349,10 +2421,6 @@ static DWORD WINAPI scripthooks_thread(LPVOID param)
 // Outside any window, a 250 ms interval that read or unpacked more than 4 MB is logged as a
 // streaming burst (the open world streams without a marker).
 
-#define IAT_READFILE        0x00CAD27Cu
-#define IAT_SLEEP           0x00CAD304u
-#define IAT_WAITSINGLE      0x00CAD2B0u
-#define IAT_WAITSINGLEEX    0x00CAD07Cu
 #define VA_RENDER_THREAD    0x0160D0A4u   // render thread object while its loop runs
 #define OFF_RT_LOAD_MOVIE   0x268         // non-zero while a loading screen is up
 #define OFF_RT_LOAD_SCREEN  0x26C         // the screen object; byte +0x10 = still shown
@@ -2401,6 +2469,7 @@ typedef LONG  (WINAPI *NtQueryInformationThread_t)(HANDLE, int, PVOID, ULONG, PU
 typedef LONG  (WINAPI *NtQueryTimerResolution_t)(PULONG, PULONG, PULONG);
 typedef void  (__fastcall *DoorTimer_t)(void* door, void* edx, void* name, float dt);
 
+static uintptr_t      g_unpack;           // this build's FUN_0068f3b0, set before its call is hooked
 static ReadFile_t     g_origReadFile;
 static Sleep_t        g_origSleep;
 static WaitSingle_t   g_origWaitSingle;
@@ -2535,7 +2604,7 @@ static DWORD WINAPI hook_WaitSingleEx(HANDLE h, DWORD ms, BOOL alertable)
 static int __cdecl hook_Unpack(const void* in, int in_len, void* out, int out_len)
 {
     LONGLONG t0 = qpc_us();
-    int r = ((Unpack_t)(uintptr_t)VA_UNPACK)(in, in_len, out, out_len);
+    int r = ((Unpack_t)g_unpack)(in, in_len, out, out_len);
     LONGLONG us = qpc_us() - t0;
     DWORD err = GetLastError();
     lt_thread* t = lt_self();
@@ -2609,7 +2678,6 @@ static HRESULT WINAPI hook_Present(void* self, const RECT* src, const RECT* dst,
 // its own counter) cost a house door 25-40 ms with nothing loaded or unloaded (run 9). For a
 // job keep_outdoors handled the call is skipped: at most the swapped layers' objects wait
 // for the next GC (area changes, save loads).
-#define VA_GAME             0x01404950u   // CGame*: +0x40 world, +0xE8 queued world requests
 #define VA_PART_SWITCH      0x00A91BF9u
 #define VA_PART_SWITCH_A    0x00AAA1FFu   // call from the request queue
 #define VA_PART_SWITCH_B    0x00AAB089u
@@ -2675,13 +2743,16 @@ typedef void (__stdcall *Gc_t)(void* arg);
 static int      g_koSkipGc;      // set by hook_PartRun for the job it runs (game thread)
 static int      g_ptGcSkipped;
 static LONGLONG g_ptGcUs;
+// This build's FUN_00abd770, FUN_00a91bf9, FUN_00a91952 and FUN_00aa7e18: set by pt_install
+// before any call is redirected (the hooks run on the game thread, often).
+static uintptr_t g_gc, g_partSwitch, g_partRun, g_partRequest;
 
 static void __stdcall hook_PartGc(void* arg)
 {
     LONGLONG t0;
     if (g_koSkipGc) { g_ptGcSkipped = 1; return; }
     t0 = qpc_us();
-    ((Gc_t)(uintptr_t)VA_GC)(arg);
+    ((Gc_t)g_gc)(arg);
     g_ptGcUs = qpc_us() - t0;
 }
 
@@ -2712,7 +2783,7 @@ static const char* pt_mode(int mode)
 
 static void pt_where(const char* what, const void* door)
 {
-    void* game = read_ptr((void*)(uintptr_t)VA_GAME);
+    void* game = read_ptr((void*)ga(VA_GAME));
     void* player = game ? read_ptr((char*)game + OFF_GAME_PLAYER) : NULL;
     float p[3] = { 0, 0, 0 }, d[3] = { 0, 0, 0 };
     int i, havePlayer = player != NULL, haveDoor = door != NULL;
@@ -2872,7 +2943,7 @@ static unsigned char __fastcall hook_PartSwitch(void* world, void* edx, void* na
     }
     g_ptMode = mode;
     g_koDeferOcc = 0;
-    ok = ((PartSwitch_t)(uintptr_t)VA_PART_SWITCH)(world, edx, name, mode, screen);
+    ok = ((PartSwitch_t)g_partSwitch)(world, edx, name, mode, screen);
     g_ptMode = -1;
     if (cfg_load_trace) {
         streaming = read_ptr((char*)world + 0x30C);
@@ -3117,7 +3188,7 @@ __declspec(naked) static unsigned char __stdcall ko_part_request(void* game, voi
         push dword ptr [esp + 16]
         push dword ptr [esp + 16]
         push dword ptr [esp + 16]
-        mov ecx, 0x00AA7E18           ; VA_PART_REQUEST
+        mov ecx, dword ptr [g_partRequest]   ; VA_PART_REQUEST on this build
         call ecx
         ret 16
     }
@@ -3135,7 +3206,7 @@ static void ko_frame(void)
     if (!g_koDeferOcc) return;
     waited = GetTickCount() - g_koDeferSince;
     if (waited < KO_OCC_MIN_MS) return;
-    game = read_ptr((void*)(uintptr_t)VA_GAME);
+    game = read_ptr((void*)ga(VA_GAME));
     world = game ? read_ptr((char*)game + 0x40) : NULL;
     player = game ? read_ptr((char*)game + OFF_GAME_PLAYER) : NULL;
     if (!world) return;
@@ -3149,10 +3220,10 @@ static void ko_frame(void)
     if (!away && waited < KO_OCC_MAX_MS) return;
     // A request already queued (another door) brings the occluders back itself.
     g_koDeferOcc = 0;
-    if (read_ptr((char*)game + 0xE8) || read_ptr((char*)world + 0x30C)) return;
+    if (!g_partRequest || read_ptr((char*)game + 0xE8) || read_ptr((char*)world + 0x30C)) return;
     logf_("doors: Geralt is %s - loading the occluders (%lu ms after the door)",
           away ? "through the door" : "still near the door, waited long enough", waited);
-    ko_part_request(game, (char*)world + 0x310, 4, (void*)(uintptr_t)VA_EMPTY_STRING);
+    ko_part_request(game, (char*)world + 0x310, 4, (void*)ga(VA_EMPTY_STRING));
 }
 
 // The job's lists are pointed at our own arrays for the run (its own arrays are left untouched
@@ -3248,7 +3319,7 @@ static void __stdcall hook_PartRun(void* job)
     }
     g_koSkipGc = on && cfg_skip_door_gc;
     tRun = qpc_us();
-    ((PartRun_t)(uintptr_t)VA_PART_RUN)(job);
+    ((PartRun_t)g_partRun)(job);
     tRun = qpc_us() - tRun;
     g_koSkipGc = 0;
     if (filter) {
@@ -3318,13 +3389,17 @@ static int pt_install(void)
     static int done;
     int a, b, c;
     if (done) return 1;
-    if (!code_matches(VA_PART_SWITCH, "55 8b ec 83 ec 50 53 56 57 ff 75 08") ||
-        !code_matches(VA_PART_RUN, "55 8b ec 83 ec 18 53 8b 5d 08 56 57"))
+    if (!code_matches(ga(VA_PART_SWITCH), "55 8b ec 83 ec 50 53 56 57 ff 75 08") ||
+        !code_matches(ga(VA_PART_RUN), "55 8b ec 83 ec 18 53 8b 5d 08 56 57"))
         return 0;
-    a = patch_call(VA_PART_SWITCH_A, VA_PART_SWITCH, (void*)hook_PartSwitch);
-    b = patch_call(VA_PART_SWITCH_B, VA_PART_SWITCH, (void*)hook_PartSwitch);
-    c = patch_call(VA_PART_RUN_CALL, VA_PART_RUN, (void*)hook_PartRun);
-    if (!code_matches(VA_GC, "55 8b ec e8 df ba 94 ff") || !patch_call(VA_PART_GC_CALL, VA_GC, (void*)hook_PartGc))
+    g_partSwitch = ga(VA_PART_SWITCH);
+    g_partRun = ga(VA_PART_RUN);
+    g_partRequest = ga(VA_PART_REQUEST);
+    g_gc = ga(VA_GC);
+    a = patch_call(ga(VA_PART_SWITCH_A), g_partSwitch, (void*)hook_PartSwitch);
+    b = patch_call(ga(VA_PART_SWITCH_B), g_partSwitch, (void*)hook_PartSwitch);
+    c = patch_call(ga(VA_PART_RUN_CALL), g_partRun, (void*)hook_PartRun);
+    if (!code_matches(g_gc, "55 8b ec e8 df ba 94 ff") || !patch_call(ga(VA_PART_GC_CALL), g_gc, (void*)hook_PartGc))
         logf_("partition: GC call not recognised - skip_door_gc off");
     logf_("partition: switch calls %s/%s, sync run %s (load_trace=%d keep_outdoors=%d)", a ? "hooked" : "NOT hooked",
           b ? "hooked" : "NOT hooked", c ? "hooked" : "NOT hooked", cfg_load_trace, cfg_keep_outdoors);
@@ -3350,6 +3425,7 @@ static int pt_install(void)
 #define VA_STR_FADE_OUT     0x00EF0050u   // L"fade_out", the string the handler names its event by
 #define VA_DOOR_FADE_OUT    0x00502ACDu   // movss xmm0,[00E30444] in FUN_00502a7f
 #define VA_DOOR_FADE_IN     0x00502BD9u   // movss xmm0,[00E30444] in 00502B5F
+#define VA_DOOR_FADE_LEN    0x00E30444u   // the float 0.5 both fades read (the disp32 above)
 #define FD_READY_TICKS      2
 
 typedef void (__fastcall *DoorEvent_t)(void* task, void* edx, const void* event, void* unused);
@@ -3367,11 +3443,11 @@ static void fast_door_tick(void* task)
     void *game, *world;
     DWORD reqs, pending, waited;
 
-    if (!task || read_ptr(task) != (void*)(uintptr_t)VA_DOOR_TELEPORT_VT) return;
+    if (!task || read_ptr(task) != (void*)ga(VA_DOOR_TELEPORT_VT)) return;
     if (task != s_task) { s_task = task; s_since = 0; s_ready = 0; s_done = 0; }
     if (s_done || *(const LONG*)((const char*)task + 0x14) != 1) return;
     if (!s_since) s_since = GetTickCount();
-    game = read_ptr((void*)(uintptr_t)VA_GAME);
+    game = read_ptr((void*)ga(VA_GAME));
     world = game ? read_ptr((char*)game + 0x40) : NULL;
     reqs = game ? (DWORD)(uintptr_t)read_ptr((char*)game + 0xE8) : 1;
     pending = world ? (DWORD)(uintptr_t)read_ptr((char*)world + 0x30C) : 1;
@@ -3381,13 +3457,13 @@ static void fast_door_tick(void* task)
     waited = GetTickCount() - s_since;
     // The handler's own copy (026ADE10) is only set on the first event it sees; the name pool
     // gives the same id for the same string, so look it up here (game thread).
-    if (!s_fadeOut) ((CNameFromStr_t)(uintptr_t)VA_CNAME_FROM_STR)(&s_fadeOut, (const wchar_t*)(uintptr_t)VA_STR_FADE_OUT);
+    if (!s_fadeOut) ((CNameFromStr_t)ga(VA_CNAME_FROM_STR))(&s_fadeOut, (const wchar_t*)ga(VA_STR_FADE_OUT));
     if (!s_fadeOut) {
         logf_("doors: interior ready after %lu ms, event name not found - the game's own timing", waited);
         return;
     }
     event[1] = s_fadeOut;
-    ((DoorEvent_t)(uintptr_t)VA_DOOR_FADE_EVENT)(task, NULL, event, NULL);
+    ((DoorEvent_t)ga(VA_DOOR_FADE_EVENT))(task, NULL, event, NULL);
     logf_("doors: interior ready after %lu ms - picture back now (state %ld)", waited,
           *(const LONG*)((const char*)task + 0x14));
 }
@@ -3415,7 +3491,7 @@ static void __fastcall hook_DoorTimer(void* door, void* edx, void* name, float d
         return;
     }
     g_ltDoorTicks++;
-    if (g_ltDoorVt == (void*)(uintptr_t)VA_DOOR_INTERIOR_VT && after == before &&
+    if (g_ltDoorVt == (void*)ga(VA_DOOR_INTERIOR_VT) && after == before &&
         *(const LONG*)((const char*)before + 0x14) == 1)
         g_ltDoorFaded = 1;
     if (after != before) {
@@ -3428,19 +3504,19 @@ static void __fastcall hook_DoorTimer(void* door, void* edx, void* name, float d
 static void door_timer_install(const char* tag)
 {
     DWORD old = 0, tmp = 0;
-    void* have = read_ptr((void*)(uintptr_t)VA_DOOR_TIMER_SLOT);
+    uintptr_t slot = ga(VA_DOOR_TIMER_SLOT), timer = ga(VA_DOOR_TIMER);
+    void* have = slot ? read_ptr((void*)slot) : NULL;
     if (have == (void*)hook_DoorTimer) return;
-    if (have != (void*)(uintptr_t)VA_DOOR_TIMER) {
+    if (!slot || !timer || have != (void*)timer) {
         logf_("%s: streaming door slot %08X holds %08X, expected %08X - doors untouched",
-              tag, (unsigned)VA_DOOR_TIMER_SLOT, (unsigned)(uintptr_t)have, (unsigned)VA_DOOR_TIMER);
+              tag, (unsigned)slot, (unsigned)(uintptr_t)have, (unsigned)timer);
         return;
     }
-    if (!VirtualProtect((void*)(uintptr_t)VA_DOOR_TIMER_SLOT, 4, PAGE_READWRITE, &old)) return;
-    g_origDoorTimer = (DoorTimer_t)(uintptr_t)VA_DOOR_TIMER;
-    if (InterlockedCompareExchangePointer((void* volatile*)(uintptr_t)VA_DOOR_TIMER_SLOT,
-                                          (void*)hook_DoorTimer, have) == have)
+    if (!VirtualProtect((void*)slot, 4, PAGE_READWRITE, &old)) return;
+    g_origDoorTimer = (DoorTimer_t)timer;
+    if (InterlockedCompareExchangePointer((void* volatile*)slot, (void*)hook_DoorTimer, have) == have)
         logf_("%s: streaming door timer hooked", tag);
-    VirtualProtect((void*)(uintptr_t)VA_DOOR_TIMER_SLOT, 4, old, &tmp);
+    VirtualProtect((void*)slot, 4, old, &tmp);
 }
 
 // indoor_outdoors: applying a partition sends its location type to the renderer (FUN_00aa95fa
@@ -3458,10 +3534,10 @@ static void door_timer_install(const char* tag)
 static int indoor_patch(void)
 {
     DWORD old = 0, tmp = 0;
-    unsigned char* at = (unsigned char*)(uintptr_t)VA_INDOOR_IMM;
-    if (!range_readable(at, 1)) return 0;
+    unsigned char* at = (unsigned char*)ga(VA_INDOOR_IMM);
+    if (!at || !range_readable(at, 1)) return 0;
     if (*at == 0x7F) return 1;
-    if (!code_matches(VA_INDOOR_CMP, "80 b8 ac 00 00 00 00 74 0d 83 b8 a8 00 00 00 01 75 04")) return 0;
+    if (!code_matches(ga(VA_INDOOR_CMP), "80 b8 ac 00 00 00 00 74 0d 83 b8 a8 00 00 00 01 75 04")) return 0;
     if (!VirtualProtect(at, 1, PAGE_EXECUTE_READWRITE, &old)) return 0;
     *at = 0x7F;
     VirtualProtect(at, 1, old, &tmp);
@@ -3469,17 +3545,26 @@ static int indoor_patch(void)
     return 1;
 }
 
+// `movss xmm0,[VA_DOOR_FADE_LEN]` (F3 0F 10 05 disp32) at `at`. With ASLR the loader has
+// relocated the disp32 like any absolute address, so it is compared with ga().
+static int door_fade_site(uintptr_t at)
+{
+    static const unsigned char op[4] = { 0xF3, 0x0F, 0x10, 0x05 };
+    uintptr_t len = ga(VA_DOOR_FADE_LEN);
+    return at && len && range_readable((void*)at, 8) && !memcmp((void*)at, op, 4) &&
+           *(const DWORD*)(at + 4) == (DWORD)len;
+}
+
 // Repoint one `movss xmm0,[00E30444]` (F3 0F 10 05 disp32) at g_doorFade.
 static int door_fade_patch(uintptr_t at)
 {
-    static const unsigned char want[8] = { 0xF3, 0x0F, 0x10, 0x05, 0x44, 0x04, 0xE3, 0x00 };
     LONG mine = (LONG)(uintptr_t)&g_doorFade;
     DWORD old = 0, tmp = 0;
-    if (!range_readable((void*)at, 8)) return 0;
+    if (!at || !range_readable((void*)at, 8)) return 0;
     if (*(LONG*)(at + 4) == mine) return 1;
-    if (memcmp((void*)at, want, 8)) return 0;
+    if (!door_fade_site(at)) return 0;
     if (!VirtualProtect((void*)at, 8, PAGE_EXECUTE_READWRITE, &old)) return 0;
-    InterlockedCompareExchange((volatile LONG*)(at + 4), mine, 0x00E30444);
+    InterlockedCompareExchange((volatile LONG*)(at + 4), mine, (LONG)ga(VA_DOOR_FADE_LEN));
     VirtualProtect((void*)at, 8, old, &tmp);
     FlushInstructionCache(GetCurrentProcess(), (void*)at, 8);
     return *(LONG*)(at + 4) == mine;
@@ -3496,6 +3581,7 @@ static int door_fade_patch(uintptr_t at)
 #define VA_DOOR_START       0x0095DCC4u
 
 typedef int (__fastcall *DoorStart_t)(void* door, void* edx, void* part);
+static uintptr_t g_doorStart;   // this build's FUN_0095dcc4, set before its slot is swapped
 
 // instant_doors: a house door both ways of which keep_interiors has already made load nothing
 // gets no fade at all. Its fade length is set to the KO_NO_FADE marker; the two render
@@ -3512,28 +3598,29 @@ typedef int (__fastcall *DoorStart_t)(void* door, void* edx, void* part);
 
 typedef void (__fastcall *FadeExec_t)(void* cmd, void* edx);
 static int g_fadeExecHooked;
+static uintptr_t g_fadeOutExec, g_fadeInExec;   // this build's, set before the slots are swapped
 
 static void __fastcall hook_FadeOutExec(void* cmd, void* edx)
 {
     float len = 0;
     if (read_f32((char*)cmd + 0x0C, &len) && len == KO_NO_FADE) return;
-    ((FadeExec_t)(uintptr_t)VA_FADE_OUT_EXEC)(cmd, edx);
+    ((FadeExec_t)g_fadeOutExec)(cmd, edx);
 }
 
 static void __fastcall hook_FadeInExec(void* cmd, void* edx)
 {
     float len = 0;
     if (read_f32((char*)cmd + 0x08, &len) && len == KO_NO_FADE) return;
-    ((FadeExec_t)(uintptr_t)VA_FADE_IN_EXEC)(cmd, edx);
+    ((FadeExec_t)g_fadeInExec)(cmd, edx);
 }
 
 static int slot_swap(uintptr_t slot, uintptr_t want, void* hook)
 {
     DWORD old = 0, tmp = 0;
-    void* have = read_ptr((void*)slot);
+    void* have = slot ? read_ptr((void*)slot) : NULL;
     int ok;
     if (have == hook) return 1;
-    if (have != (void*)want || !VirtualProtect((void*)slot, 4, PAGE_READWRITE, &old)) return 0;
+    if (!slot || !want || have != (void*)want || !VirtualProtect((void*)slot, 4, PAGE_READWRITE, &old)) return 0;
     ok = InterlockedCompareExchangePointer((void* volatile*)slot, hook, have) == have;
     VirtualProtect((void*)slot, 4, old, &tmp);
     return ok;
@@ -3541,8 +3628,11 @@ static int slot_swap(uintptr_t slot, uintptr_t want, void* hook)
 
 static void fade_exec_install(void)
 {
-    int a = slot_swap(VA_FADE_OUT_EXEC_SLOT, VA_FADE_OUT_EXEC, (void*)hook_FadeOutExec);
-    int b = slot_swap(VA_FADE_IN_EXEC_SLOT, VA_FADE_IN_EXEC, (void*)hook_FadeInExec);
+    int a, b;
+    g_fadeOutExec = ga(VA_FADE_OUT_EXEC);
+    g_fadeInExec = ga(VA_FADE_IN_EXEC);
+    a = slot_swap(ga(VA_FADE_OUT_EXEC_SLOT), g_fadeOutExec, (void*)hook_FadeOutExec);
+    b = slot_swap(ga(VA_FADE_IN_EXEC_SLOT), g_fadeInExec, (void*)hook_FadeInExec);
     g_fadeExecHooked = a && b;
     logf_("doors: fade commands %s/%s - instant_doors %s", a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked",
           g_fadeExecHooked ? "on" : "off");
@@ -3554,7 +3644,7 @@ static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
                     read_f32((char*)door + OFF_NODE_POS + 4, &g_koDoorPos[1]) &&
                     read_f32((char*)door + OFF_NODE_POS + 8, &g_koDoorPos[2]);
     wchar_t from[160], to[160];
-    void* game = read_ptr((void*)(uintptr_t)VA_GAME);
+    void* game = read_ptr((void*)ga(VA_GAME));
     void* world = game ? read_ptr((char*)game + 0x40) : NULL;
     void* streaming = world ? read_ptr((char*)world + 0x30C) : NULL;
     int nf, nt, area;
@@ -3570,24 +3660,25 @@ static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
         g_doorFade = KO_NO_FADE;
         logf_("doors: '%ls' -> '%ls' is loaded - no fade", from, to);
     }
-    return ((DoorStart_t)(uintptr_t)VA_DOOR_START)(door, edx, part);
+    return ((DoorStart_t)g_doorStart)(door, edx, part);
 }
 
 static void door_start_install(void)
 {
     DWORD old = 0, tmp = 0;
-    void* have = read_ptr((void*)(uintptr_t)VA_DOOR_START_SLOT);
+    uintptr_t slot = ga(VA_DOOR_START_SLOT), start = ga(VA_DOOR_START);
+    void* have = slot ? read_ptr((void*)slot) : NULL;
     if (have == (void*)hook_DoorStart) return;
-    if (have != (void*)(uintptr_t)VA_DOOR_START) {
+    if (!slot || !start || have != (void*)start) {
         logf_("doors: door start slot %08X holds %08X, expected %08X - one fade for every door",
-              (unsigned)VA_DOOR_START_SLOT, (unsigned)(uintptr_t)have, (unsigned)VA_DOOR_START);
+              (unsigned)slot, (unsigned)(uintptr_t)have, (unsigned)start);
         return;
     }
-    if (!VirtualProtect((void*)(uintptr_t)VA_DOOR_START_SLOT, 4, PAGE_READWRITE, &old)) return;
-    if (InterlockedCompareExchangePointer((void* volatile*)(uintptr_t)VA_DOOR_START_SLOT,
-                                          (void*)hook_DoorStart, have) == have)
+    if (!VirtualProtect((void*)slot, 4, PAGE_READWRITE, &old)) return;
+    g_doorStart = start;
+    if (InterlockedCompareExchangePointer((void* volatile*)slot, (void*)hook_DoorStart, have) == have)
         logf_("doors: door start hooked (door_fade %.2f s, area_fade %.2f s)", cfg_door_fade, cfg_area_fade);
-    VirtualProtect((void*)(uintptr_t)VA_DOOR_START_SLOT, 4, old, &tmp);
+    VirtualProtect((void*)slot, 4, old, &tmp);
 }
 
 // Worker tick: the door slots at once, the fade sites once the SteamStub has decrypted .text.
@@ -3608,8 +3699,8 @@ static void doors_tick(void)
     g_doorFade = cfg_door_fade;
     if (cfg_area_fade != cfg_door_fade || (cfg_instant_doors && (cfg_keep_interiors || cfg_preload_interiors))) door_start_install();
     if (cfg_instant_doors && (cfg_keep_interiors || cfg_preload_interiors) && !g_fadeExecHooked && tries == 1) fade_exec_install();
-    if (code_matches(VA_DOOR_FADE_OUT, "f3 0f 10 05 44 04 e3 00") || code_matches(VA_DOOR_FADE_IN, "f3 0f 10 05 44 04 e3 00")) {
-        int a = door_fade_patch(VA_DOOR_FADE_OUT), b = door_fade_patch(VA_DOOR_FADE_IN);
+    if (door_fade_site(ga(VA_DOOR_FADE_OUT)) || door_fade_site(ga(VA_DOOR_FADE_IN))) {
+        int a = door_fade_patch(ga(VA_DOOR_FADE_OUT)), b = door_fade_patch(ga(VA_DOOR_FADE_IN));
         fades_done = 1;
         logf_("doors: fade-out %s, fade-in %s, %.2f s, area changes %.2f s (game 0.5 s); fast_doors=%d",
               a ? "patched" : "NOT patched", b ? "patched" : "NOT patched", cfg_door_fade, cfg_area_fade, cfg_fast_doors);
@@ -3738,10 +3829,11 @@ static int lt_format(char* buf, size_t cap, const lt_thread* d)
 // The device's stored D3DPRESENT_PARAMETERS (window_patch.h) and the VSync setting (+0x11).
 static void lt_present_info(const char* when)
 {
-    const unsigned char* pp = (const unsigned char*)(uintptr_t)WF_PP;
-    void* settings = read_ptr((void*)(uintptr_t)(IMAGE_BASE + RVA_SETTINGS));
+    const unsigned char* pp = (const unsigned char*)ga(WF_PP);
+    uintptr_t rva = ga_rva(RVA_SETTINGS);
+    void* settings = rva ? read_ptr((void*)(g_base + rva)) : NULL;
     unsigned vsync = settings ? read_u8((uintptr_t)settings + 0x11) : 0xFF;
-    if (!range_readable(pp, 0x38)) return;
+    if (!pp || !range_readable(pp, 0x38)) return;
     logf_("load-trace: %s: back buffer %lux%lu windowed=%lu refresh=%lu PresentationInterval=%08lX "
           "(0 default and 1 one wait for vsync, 80000000 immediate); [Rendering] VSync=%u",
           when, *(const DWORD*)pp, *(const DWORD*)(pp + 4), *(const DWORD*)(pp + 0x20),
@@ -3821,7 +3913,7 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
     for (;;) {
         if (!k32) k32 = GetModuleHandleA("kernel32.dll");
         if (k32 && !expect) expect = (void*)GetProcAddress(k32, "ReadFile");
-        if (expect && ft_slot(IAT_READFILE) == expect) break;
+        if (expect && imp_value(IMP_READFILE) == expect) break;
         if (!g_running || GetTickCount() - t0 > 120000) {
             logf_("load-trace: ReadFile slot never held the kernel32 export - off");
             return 0;
@@ -3834,11 +3926,11 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
         logf_("load-trace: could not pin module - off");
         return 0;
     }
-    n += patch_iat("load-trace", IAT_READFILE, "kernel32.dll", "ReadFile", (void*)hook_ReadFile, (void**)&g_origReadFile);
-    n += patch_iat("load-trace", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW", (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
-    n += patch_iat("load-trace", IAT_SLEEP, "kernel32.dll", "Sleep", (void*)hook_Sleep, (void**)&g_origSleep);
-    n += patch_iat("load-trace", IAT_WAITSINGLE, "kernel32.dll", "WaitForSingleObject", (void*)hook_WaitSingle, (void**)&g_origWaitSingle);
-    n += patch_iat("load-trace", IAT_WAITSINGLEEX, "kernel32.dll", "WaitForSingleObjectEx", (void*)hook_WaitSingleEx, (void**)&g_origWaitSingleEx);
+    n += patch_iat("load-trace", IMP_READFILE, (void*)hook_ReadFile, (void**)&g_origReadFile);
+    n += patch_iat("load-trace", IMP_CREATEFILEW, (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+    n += patch_iat("load-trace", IMP_SLEEP, (void*)hook_Sleep, (void**)&g_origSleep);
+    n += patch_iat("load-trace", IMP_WAITSINGLE, (void*)hook_WaitSingle, (void**)&g_origWaitSingle);
+    n += patch_iat("load-trace", IMP_WAITSINGLEEX, (void*)hook_WaitSingleEx, (void**)&g_origWaitSingleEx);
     logf_("load-trace: hooked after %lu ms (%d/5 import slots), main thread %lu", GetTickCount() - t0, n, g_ltMainTid);
     door_timer_install("load-trace");
     lt_sum(g_lt, &tickPrev);
@@ -3849,8 +3941,9 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
         DWORD now = GetTickCount();
 
         // .text is encrypted until the SteamStub reaches the OEP: wait for the fingerprint.
-        if (!unpackOn && code_matches(VA_UNPACK, "55 8b ec 8b 4d 08 0f b6 01 c1 e8 05")) {
-            unpackOn = patch_call(VA_UNPACK_CALL, VA_UNPACK, (void*)hook_Unpack) ? 1 : -1;
+        if (!unpackOn && code_matches(ga(VA_UNPACK), "55 8b ec 8b 4d 08 0f b6 01 c1 e8 05")) {
+            g_unpack = ga(VA_UNPACK);
+            unpackOn = patch_call(ga(VA_UNPACK_CALL), g_unpack, (void*)hook_Unpack) ? 1 : -1;
             logf_("load-trace: block unpack call %s after %lu ms", unpackOn > 0 ? "hooked" : "NOT hooked", now - t0);
         } else if (!unpackOn && now - t0 > 120000) {
             unpackOn = -1;
@@ -3862,7 +3955,7 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
             logf_("load-trace: partition switch not recognised - partitions not traced");
         }
         if (!presentOn) {
-            void* dev = read_ptr((void*)(uintptr_t)WF_D3D_DEVICE);
+            void* dev = read_ptr((void*)ga(WF_D3D_DEVICE));
             if (dev && range_readable(dev, sizeof(void*))) {
                 presentOn = patch_vtable(dev, 17, (void*)hook_Present, (void**)&g_origPresent) ? 1 : -1;
                 logf_("load-trace: device %08X Present %s after %lu ms", (unsigned)(uintptr_t)dev,
@@ -3871,7 +3964,7 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
             }
         }
 
-        rt = read_ptr((void*)(uintptr_t)VA_RENDER_THREAD);
+        rt = read_ptr((void*)ga(VA_RENDER_THREAD));
         if (rt) {
             movie = read_ptr((char*)rt + OFF_RT_LOAD_MOVIE);
             screen = read_ptr((char*)rt + OFF_RT_LOAD_SCREEN);
@@ -3894,7 +3987,7 @@ static DWORD WINAPI loadtrace_thread(LPVOID param)
             else
                 logf_("load-trace: window %d start (streaming door): task %08X vtable %08X%s, ticking for %lu ms (%d threads)",
                       windows, (unsigned)(uintptr_t)g_ltDoorTask, (unsigned)(uintptr_t)g_ltDoorVt,
-                      g_ltDoorVt == (void*)(uintptr_t)VA_DOOR_INTERIOR_VT ? " (interior)" : "",
+                      g_ltDoorVt == (void*)ga(VA_DOOR_INTERIOR_VT) ? " (interior)" : "",
                       now - g_ltDoorStart, n0);
         } else if ((inWin == 1 && !movie) || (inWin == 2 && g_ltDoorEnd)) {
             if (inWin == 1) {
@@ -3963,12 +4056,12 @@ static void save_tick(void)
             return;
         }
         if (cfg_save_trace) {
-            patch_iat("save-trace", IAT_CREATEFILEW, "kernel32.dll", "CreateFileW", (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
-            patch_iat("save-trace", IAT_DELETEFILEW, "kernel32.dll", "DeleteFileW", (void*)hook_DeleteFileW, (void**)&g_origDeleteFileW);
-            patch_iat("save-trace", IAT_COPYFILEW, "kernel32.dll", "CopyFileW", (void*)hook_CopyFileW, (void**)&g_origCopyFileW);
-            patch_iat("save-trace", IAT_D3DX_SAVEFILE, "d3dx9_39.dll", "D3DXSaveSurfaceToFileW", (void*)hook_SaveFile, (void**)&g_origSaveFile);
+            patch_iat("save-trace", IMP_CREATEFILEW, (void*)hook_CreateFileW, (void**)&g_origCreateFileW);
+            patch_iat("save-trace", IMP_DELETEFILEW, (void*)hook_DeleteFileW, (void**)&g_origDeleteFileW);
+            patch_iat("save-trace", IMP_COPYFILEW, (void*)hook_CopyFileW, (void**)&g_origCopyFileW);
+            patch_iat("save-trace", IMP_D3DX_SAVEFILE, (void*)hook_SaveFile, (void**)&g_origSaveFile);
         }
-        if (!patch_iat("save-trace", IAT_D3DX_SAVEMEM, "d3dx9_39.dll", "D3DXSaveSurfaceToFileInMemory", (void*)hook_SaveMem, (void**)&g_origSaveMem) &&
+        if (!patch_iat("save-trace", IMP_D3DX_SAVEMEM, (void*)hook_SaveMem, (void**)&g_origSaveMem) &&
             cfg_save_thumbs) {
             logf_("thumbnail: capture import not found - fix disabled");
             cfg_save_thumbs = 0;
@@ -3980,7 +4073,7 @@ static void save_tick(void)
         HMODULE api = GetModuleHandleA("steam_api.dll");
         SteamRS_t accessor = api ? (SteamRS_t)GetProcAddress(api, "SteamRemoteStorage") : NULL;
         steam_tries++;
-        if (accessor && read_ptr((void*)(uintptr_t)IAT_STEAM_RS) == (void*)accessor) {
+        if (accessor && imp_value(IMP_STEAM_RS) == (void*)accessor) {
             void* rs = accessor();   // NULL until SteamAPI_Init has run
             if (rs) g_remoteStorage = rs;
             if (rs && patch_vtable(rs, 0, (void*)hook_FileWrite, (void**)&g_origFileWrite)) {
@@ -4004,7 +4097,7 @@ static void save_tick(void)
         if (g_freedTotal) logf_("savelist: leaked preview streams freed so far: %ld", g_freedTotal);
     }
     if (!cfg_save_trace) return;
-    unsigned char pending = read_u8(VA_CAPTURE_PENDING), queued = read_u8(VA_CAPTURE_QUEUED);
+    unsigned char pending = read_u8(ga(VA_CAPTURE_PENDING)), queued = read_u8(ga(VA_CAPTURE_QUEUED));
     if (pending != last_pending || queued != last_queued) {
         logf_("save-trace: capture flags pending=%u queued=%u", pending, queued);
         last_pending = pending; last_queued = queued;
@@ -4027,6 +4120,7 @@ static void save_tick(void)
 
 typedef float (__fastcall *RayHit_t)(void* self, void* edx, const void* handle, int index);
 static volatile LONG g_rayCaught;
+static RayHit_t g_rayHit;   // this build's FUN_0084c750, set before the slot is swapped
 
 static int ray_filter(DWORD code)
 {
@@ -4036,7 +4130,7 @@ static int ray_filter(DWORD code)
 static float __fastcall hook_RayHit(void* self, void* edx, const void* handle, int index)
 {
     __try {
-        return ((RayHit_t)(uintptr_t)VA_RAY_HIT)(self, edx, handle, index);
+        return g_rayHit(self, edx, handle, index);
     }
     __except (ray_filter(GetExceptionCode())) {
         LONG n = InterlockedIncrement(&g_rayCaught);
@@ -4054,19 +4148,21 @@ static void ray_guard_tick(void)
 {
     static int done;
     DWORD old = 0, tmp = 0;
+    uintptr_t slot = ga(VA_RAY_SLOT), hit = ga(VA_RAY_HIT);
     void* have;
     if (done || !cfg_ray_guard) return;
     done = 1;
-    have = read_ptr((void*)(uintptr_t)VA_RAY_SLOT);
-    if (have != (void*)(uintptr_t)VA_RAY_HIT) {
+    have = slot ? read_ptr((void*)slot) : NULL;
+    if (!slot || !hit || have != (void*)hit) {
         logf_("stability: ray collector slot %08X holds %08X, expected %08X - guard off",
-              (unsigned)VA_RAY_SLOT, (unsigned)(uintptr_t)have, (unsigned)VA_RAY_HIT);
+              (unsigned)slot, (unsigned)(uintptr_t)have, (unsigned)hit);
         return;
     }
-    if (!VirtualProtect((void*)(uintptr_t)VA_RAY_SLOT, 4, PAGE_READWRITE, &old)) return;
-    InterlockedCompareExchangePointer((void* volatile*)(uintptr_t)VA_RAY_SLOT, (void*)hook_RayHit, have);
-    VirtualProtect((void*)(uintptr_t)VA_RAY_SLOT, 4, old, &tmp);
-    logf_("stability: ray cast guard installed (collector slot %08X)", (unsigned)VA_RAY_SLOT);
+    if (!VirtualProtect((void*)slot, 4, PAGE_READWRITE, &old)) return;
+    g_rayHit = (RayHit_t)hit;
+    InterlockedCompareExchangePointer((void* volatile*)slot, (void*)hook_RayHit, have);
+    VirtualProtect((void*)slot, 4, old, &tmp);
+    logf_("stability: ray cast guard installed (collector slot %08X)", (unsigned)slot);
 }
 
 // ---- quit guard ---------------------------------------------------------
@@ -4109,14 +4205,15 @@ static void quit_guard_tick(void)
     HANDLE peers[256];
     unsigned count = 0;
     DWORD old = 0, tmp = 0;
-    void* site = (void*)(uintptr_t)VA_FACTS_TIME;
-    int64_t delta = (int64_t)(uintptr_t)facts_time_stub - (int64_t)(VA_FACTS_TIME + 5);
+    uintptr_t at = ga(VA_FACTS_TIME);
+    void* site = (void*)at;
+    int64_t delta = (int64_t)(uintptr_t)facts_time_stub - (int64_t)(at + 5);
 
     if (done || !cfg_quit_guard) return;
-    if (!code_matches(VA_FACTS_TIME, orig)) {
+    if (!code_matches(at, orig)) {
         if (++tries >= 50) {
             done = 1;
-            logf_("stability: FactsAdd not recognised at %08X - quit guard off", (unsigned)VA_FACTS_TIME);
+            logf_("stability: FactsAdd not recognised at %08X - quit guard off", (unsigned)at);
         }
         return;
     }
@@ -4131,7 +4228,7 @@ static void quit_guard_tick(void)
         logf_("stability: could not stop the game's threads to patch FactsAdd - quit guard off");
         return;
     }
-    if (!code_matches(VA_FACTS_TIME, orig) ||
+    if (!code_matches(at, orig) ||
         !VirtualProtect(site, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
         pb_resume_peers(peers, count);
         logf_("stability: FactsAdd changed while patching - quit guard off");
@@ -4141,7 +4238,7 @@ static void quit_guard_tick(void)
     VirtualProtect(site, sizeof code, old, &tmp);
     FlushInstructionCache(GetCurrentProcess(), site, sizeof code);
     pb_resume_peers(peers, count);
-    logf_("stability: quit guard installed (FactsAdd time default at %08X)", (unsigned)VA_FACTS_TIME);
+    logf_("stability: quit guard installed (FactsAdd time default at %08X)", (unsigned)at);
 }
 
 // ---- crash capture ------------------------------------------------------
@@ -4374,6 +4471,7 @@ static int g_wfWarnedFullscreen;
 // Live full screen switch (wf_vp_tick_hook). g_fsWant is set by the menu and taken back by the
 // hook once the device runs in that mode; the worker leaves the window alone while it is set.
 static int g_fsHooked;                   // the viewport tick is hooked: Full screen applies live
+static uintptr_t g_wfVpTick;             // this build's viewport tick, set before its slot is swapped
 static volatile LONG g_fsWant = -1;      // 1 full screen, 0 windowed, -1 nothing pending
 static volatile LONG g_fsResult;         // 1/2 switched to full screen/windowed, -1 Reset refused
 static volatile LONG g_fsTicks;          // viewport ticks seen, so a stalled switch is noticed
@@ -4498,17 +4596,18 @@ static int wf_install_style(void)
     HANDLE peers[256];
     unsigned count = 0;
     DWORD old = 0, tmp = 0;
-    void* site = (void*)(uintptr_t)WF_STYLE_SITE;
-    int64_t delta = (int64_t)(uintptr_t)wf_style_stub - (int64_t)(WF_STYLE_SITE + 5);
+    uintptr_t at = ga(WF_STYLE_SITE);
+    void* site = (void*)at;
+    int64_t delta = (int64_t)(uintptr_t)wf_style_stub - (int64_t)(at + 5);
 
     if (delta < INT32_MIN || delta > INT32_MAX) return 0;   // the call must be reachable
-    if (!code_matches(WF_STYLE_SITE, orig)) return 0;
+    if (!code_matches(at, orig)) return 0;
     code[0] = 0xE8;
     *(uint32_t*)(code + 1) = (uint32_t)(int32_t)delta;
     range.start = (const unsigned char*)site;
     range.len = (unsigned)sizeof wf_style_orig;
     if (!pb_stop_peers(peers, &count, &range, 1)) return 0;
-    if (!code_matches(WF_STYLE_SITE, orig) ||
+    if (!code_matches(at, orig) ||
         !VirtualProtect(site, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
         pb_resume_peers(peers, count);
         return 0;
@@ -4531,11 +4630,12 @@ static int wf_install_writer(void)
     HANDLE peers[256];
     unsigned count = 0;
     DWORD old = 0, tmp = 0;
-    void* site = (void*)(uintptr_t)WF_WRITER_SITE;
-    int64_t delta = (int64_t)(uintptr_t)wf_write_hook - (int64_t)(WF_WRITER_SITE + 5);
+    uintptr_t at = ga(WF_WRITER_SITE);
+    void* site = (void*)at;
+    int64_t delta = (int64_t)(uintptr_t)wf_write_hook - (int64_t)(at + 5);
 
     if (delta < INT32_MIN || delta > INT32_MAX) return 0;   // the jump must be reachable
-    if (!code_matches(WF_WRITER_SITE, orig)) return 0;
+    if (!code_matches(at, orig)) return 0;
     tramp = (unsigned char*)wf_make_trampoline(site, wf_writer_orig, sizeof wf_writer_orig);
     if (!tramp) return 0;
     wf_real_write = (wf_write_fn)(void*)tramp;
@@ -4545,7 +4645,7 @@ static int wf_install_writer(void)
     range.start = (const unsigned char*)site;
     range.len = (unsigned)sizeof wf_writer_orig;
     if (!pb_stop_peers(peers, &count, &range, 1)) goto failed;
-    if (!code_matches(WF_WRITER_SITE, orig) ||
+    if (!code_matches(at, orig) ||
         !VirtualProtect(site, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
         pb_resume_peers(peers, count);
         goto failed;
@@ -4611,15 +4711,17 @@ static void wf_restyle(HWND w, int on)
 // The device's mode as the engine knows it: 1 full screen, 0 windowed, -1 no device yet.
 static int wf_engine_fullscreen(void)
 {
-    if (!*(void* volatile*)(uintptr_t)WF_D3D_DEVICE) return -1;
-    return *(volatile BOOL*)(uintptr_t)WF_PP_WINDOWED == FALSE;
+    uintptr_t dev = ga(WF_D3D_DEVICE), pp = ga(WF_PP);
+    if (!dev || !pp || !*(void* volatile*)dev) return -1;
+    return *(volatile BOOL*)(pp + WF_PP_OFF_WINDOWED) == FALSE;
 }
 
 // The window the game itself creates for full screen (FUN_009d44e1): a topmost popup at (0,0).
 // Done before the Reset, synchronously when this thread owns the window.
 static void wf_fullscreen_window(void)
 {
-    HWND w = *(HWND volatile*)(uintptr_t)WF_PP_HWND;
+    uintptr_t pp = ga(WF_PP);
+    HWND w = pp ? *(HWND volatile*)(pp + WF_PP_OFF_HWND) : NULL;
     UINT async = 0;
 
     if (!w || !IsWindow(w)) return;
@@ -4656,7 +4758,7 @@ static void wf_reset_wndproc(HWND w)
     }
     if (!wrapper || !w || !IsWindow(w)) return;
     cls = GetClassLongW(w, GCL_WNDPROC);
-    if ((uint32_t)cls != WF_GAME_WNDPROC) return;
+    if (!ga(WF_GAME_WNDPROC) || (uint32_t)cls != (uint32_t)ga(WF_GAME_WNDPROC)) return;
     if (GetWindowLongW(w, GWL_WNDPROC) != cls) SetWindowLongW(w, GWL_WNDPROC, cls);
 }
 
@@ -4670,9 +4772,10 @@ static void wf_reset_wndproc(HWND w)
 // A refused Reset puts the old flag back; the engine's own retry then resets in the old mode.
 static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
 {
-    wf_vp_tick_fn real = (wf_vp_tick_fn)(uintptr_t)WF_VP_TICK;
+    wf_vp_tick_fn real = (wf_vp_tick_fn)g_wfVpTick;
+    uintptr_t pp = ga(WF_PP);
     volatile LONG* state = (volatile LONG*)((char*)vp + WF_VP_STATE);
-    volatile BOOL* windowed = (volatile BOOL*)(uintptr_t)WF_PP_WINDOWED;
+    volatile BOOL* windowed = (volatile BOOL*)(pp + WF_PP_OFF_WINDOWED);
     LONG want = g_fsWant;
     char r;
 
@@ -4705,12 +4808,12 @@ static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
         return real(vp, edx);
     }
     if (*state != 2) return real(vp, edx);
-    wf_reset_wndproc(*(HWND volatile*)(uintptr_t)WF_PP_HWND);
+    wf_reset_wndproc(*(HWND volatile*)(pp + WF_PP_OFF_HWND));
     if (*windowed == FALSE) wf_fullscreen_window();
     *state = 3;
     r = real(vp, edx);
     // Out of full screen: drop whatever DXVK left behind. Into it: DXVK's hook is wanted.
-    if (*state == 0 && *windowed) wf_reset_wndproc(*(HWND volatile*)(uintptr_t)WF_PP_HWND);
+    if (*state == 0 && *windowed) wf_reset_wndproc(*(HWND volatile*)(pp + WF_PP_OFF_HWND));
     if (*state == 0) {
         InterlockedExchange(&g_fsResult, *windowed ? 2 : 1);
         InterlockedCompareExchange(&g_fsWant, -1, *windowed ? 0 : 1);
@@ -4838,19 +4941,21 @@ static void wf_tick(void)
 // must read its state from +0xB0, and the Reset must copy the present parameters from WF_PP.
 static int wf_install_vp_tick(void)
 {
-    volatile LONG* slot = (volatile LONG*)(uintptr_t)WF_VP_TICK_SLOT;
+    volatile LONG* slot = (volatile LONG*)ga(WF_VP_TICK_SLOT);
+    uintptr_t tick = ga(WF_VP_TICK);
     DWORD old = 0, tmp = 0;
     LONG prev;
 
-    if ((uint32_t)*slot != WF_VP_TICK) return 0;
-    if (!code_matches(WF_VP_TICK, "55 8b ec 83 e4 f8 56 57 8b f9 8b c7 e8") ||
-        !code_matches(WF_VP_TICK + 0x11, "8b 87 b0 00 00 00") ||
-        !code_matches(WF_RESET_COPY, "b9 0e 00 00 00 be a0 67 62 01"))
+    if (!slot || !tick || !ga(WF_PP) || (uint32_t)*slot != (uint32_t)tick) return 0;
+    if (!code_matches(tick, "55 8b ec 83 e4 f8 56 57 8b f9 8b c7 e8") ||
+        !code_matches(tick + 0x11, "8b 87 b0 00 00 00") ||
+        !code_matches(ga(WF_RESET_COPY), "b9 0e 00 00 00 be a0 67 62 01"))
         return 0;
     if (!VirtualProtect((void*)slot, sizeof(LONG), PAGE_READWRITE, &old)) return 0;
-    prev = InterlockedCompareExchange(slot, (LONG)(uintptr_t)wf_vp_tick_hook, (LONG)WF_VP_TICK);
+    g_wfVpTick = tick;
+    prev = InterlockedCompareExchange(slot, (LONG)(uintptr_t)wf_vp_tick_hook, (LONG)tick);
     VirtualProtect((void*)slot, sizeof(LONG), old, &tmp);
-    return (uint32_t)prev == WF_VP_TICK;
+    return (uint32_t)prev == (uint32_t)tick;
 }
 
 // The shipped exe is SteamStub protected: .text is encrypted until the stub jumps to the real
@@ -4928,7 +5033,7 @@ static DWORD WINAPI window_init_thread(LPVOID param)
             logf_("window: could not pin the DLL; the window patches are not installed");
             return 0;
         }
-        if (!wf_wait_site(WF_STYLE_SITE, "bf 00 00 c8 00", 60000)) {
+        if (!wf_wait_site(ga(WF_STYLE_SITE), "bf 00 00 c8 00", 60000)) {
             logf_("window: window style site never appeared - borderless off for this start");
         } else if (!wf_install_style_before_window()) {
             if (wf_window())
@@ -4938,14 +5043,14 @@ static DWORD WINAPI window_init_thread(LPVOID param)
         } else {
             logf_("window: startup borderless style patched");
         }
-        if (!wf_wait_site(WF_WRITER_SITE, "55 8b ec 83 e4 f8 a1 50 86 60 01", 60000)) {
+        if (!wf_wait_site(ga(WF_WRITER_SITE), "55 8b ec 83 e4 f8 a1 50 86 60 01", 60000)) {
             logf_("window: config writer site never appeared - the menu setting applies at the next start");
         } else if (!wf_install_writer_retry()) {
             logf_("window: menu channel not hooked (bytes differ or out of range) - the menu setting applies at the next start");
         } else {
             logf_("window: menu channel hooked (Options > Graphics applies borderless at once)");
             // Full screen follows the menu live only through the menu channel.
-            if (!wf_wait_site(WF_RESET_COPY, "b9 0e 00 00 00 be a0 67 62 01", 60000) ||
+            if (!wf_wait_site(ga(WF_RESET_COPY), "b9 0e 00 00 00 be a0 67 62 01", 60000) ||
                 !wf_install_vp_tick()) {
                 logf_("window: viewport tick not hooked (bytes differ) - Full screen applies at the next start");
             } else {
@@ -5004,12 +5109,59 @@ static DWORD WINAPI worker(LPVOID param)
 #define DIK_F10_CODE 0x44
 
 typedef HRESULT (WINAPI *GDS_t)(void* self, DWORD cb, void* data);
-static GDS_t g_origGDS;
+
+// Each patched DirectInput vtable keeps its own original. On Steam only the game creates
+// DirectInput objects (one IDirectInput8W, one keyboard); on GOG other modules in the process
+// create some too, and an A and a W interface have different vtables whose CreateDevice
+// differ, so one original saved for all of them would call the wrong function. An entry is
+// published before its slot points at the hook, under g_vtLock (set up in DllMain).
+#define VT_MAX 16
+typedef struct { void** vt; int index; void* orig; } vt_hook;
+static vt_hook g_vtHooks[VT_MAX];
+static volatile LONG g_vtCount;
+static CRITICAL_SECTION g_vtLock;
+static int g_diLogged, g_kbLogged;   // first DirectInput8Create and keyboard calls are logged
+
+// The original behind slot `index` of obj's vtable; NULL when that slot is not ours.
+static void* vt_orig(void* obj, int index)
+{
+    void** vt = obj ? *(void***)obj : NULL;
+    LONG i, n = g_vtCount;
+    for (i = 0; i < n; i++)
+        if (g_vtHooks[i].vt == vt && g_vtHooks[i].index == index) return g_vtHooks[i].orig;
+    return NULL;
+}
+
+// 2 = hooked now, 1 = this vtable was already hooked, 0 = not hooked.
+static int vt_hook_slot(void* obj, int index, void* fn)
+{
+    void** vt = obj ? *(void***)obj : NULL;
+    DWORD old = 0, tmp = 0;
+    int r = 0;
+    if (!vt) return 0;
+    EnterCriticalSection(&g_vtLock);
+    if (vt[index] == fn) {
+        r = 1;
+    } else if (g_vtCount < VT_MAX &&
+               VirtualProtect(&vt[index], sizeof(void*), PAGE_READWRITE, &old)) {
+        g_vtHooks[g_vtCount].vt = vt;
+        g_vtHooks[g_vtCount].index = index;
+        g_vtHooks[g_vtCount].orig = vt[index];
+        InterlockedIncrement(&g_vtCount);
+        vt[index] = fn;
+        VirtualProtect(&vt[index], sizeof(void*), old, &tmp);
+        FlushInstructionCache(GetCurrentProcess(), &vt[index], sizeof(void*));
+        r = 2;
+    }
+    LeaveCriticalSection(&g_vtLock);
+    return r;
+}
 
 static HRESULT WINAPI hook_GetDeviceState(void* self, DWORD cb, void* data)
 {
-    if (!g_origGDS) return E_FAIL;
-    HRESULT hr = g_origGDS(self, cb, data);
+    GDS_t orig = (GDS_t)vt_orig(self, 9);
+    if (!orig) return E_FAIL;
+    HRESULT hr = orig(self, cb, data);
     if (SUCCEEDED(hr) && data && cb == 256 && cfg_suppress) {
         if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) || (GetAsyncKeyState(VK_MENU) & 0x8000)) {
             ((unsigned char*)data)[DIK_F9_CODE]  = 0;
@@ -5038,7 +5190,6 @@ static int patch_vtable(void* obj, int index, void* fn, void** orig)
 //   HRESULT CreateDevice(REFGUID rguid, LPDIRECTINPUTDEVICE8 *lplpDevice, LPUNKNOWN pUnkOuter)
 // Reading it as (rguid, outer, riid, out) made the hook patch a garbage pointer.
 typedef HRESULT (WINAPI *CD_t)(void* self, const GUID* rguid, void** out, void* outer);
-static CD_t g_origCreateDevice;
 
 // GUID_SysKeyboard, spelled out so the DLL needs no dinput8 import library.
 // Only the keyboard is hooked: mouse and joystick are different classes with their
@@ -5080,7 +5231,7 @@ static const GUID kSysKeyboard =
 
 typedef HRESULT (WINAPI *SCL_t)(void* self, HWND w, DWORD flags);
 typedef LRESULT (__fastcall *wk_wndproc_fn)(void* obj, void* edx, UINT msg, WPARAM wp, LPARAM lp);
-static SCL_t g_origSCL;
+static uintptr_t g_wkWndProc;   // this build's FUN_009D4BD9, set before its slot is swapped
 static int g_wkThread, g_wkLogged, g_wkProcHooked = -1;
 static void* volatile g_wkKeyboard;   // the keyboard the game created last
 
@@ -5090,29 +5241,31 @@ static LRESULT __fastcall wk_window_proc(void* obj, void* edx, UINT msg, WPARAM 
     if (msg >= WM_KEYFIRST && msg <= WM_KEYLAST &&
         *(volatile LONG*)((char*)obj + WK_INPUT_MODE) == 3)
         return 0;
-    return ((wk_wndproc_fn)(uintptr_t)WK_WNDPROC)(obj, edx, msg, wp, lp);
+    return ((wk_wndproc_fn)g_wkWndProc)(obj, edx, msg, wp, lp);
 }
 
 // Slot write in .rdata, aligned and atomic; fingerprinted by the slot value, the procedure's
 // prologue (push ebp; mov ebp,esp; and esp,-8; sub esp,0x64) and its RET 0xC.
 static int wk_hook_window_proc(void)
 {
-    volatile LONG* slot = (volatile LONG*)(uintptr_t)WK_WNDPROC_SLOT;
+    volatile LONG* slot = (volatile LONG*)ga(WK_WNDPROC_SLOT);
+    uintptr_t proc = ga(WK_WNDPROC);
     DWORD old = 0, tmp = 0;
     LONG prev;
 
     if (g_wkProcHooked >= 0) return g_wkProcHooked;
     g_wkProcHooked = 0;
-    if ((uint32_t)*slot != WK_WNDPROC ||
-        !code_matches(WK_WNDPROC, "55 8b ec 83 e4 f8 83 ec 64") ||
-        !code_matches(WK_WNDPROC + 0x2F2, "c2 0c 00") ||
+    if (!slot || !proc || (uint32_t)*slot != (uint32_t)proc ||
+        !code_matches(proc, "55 8b ec 83 e4 f8 83 ec 64") ||
+        !code_matches(proc + 0x2F2, "c2 0c 00") ||
         !VirtualProtect((void*)slot, sizeof(LONG), PAGE_READWRITE, &old)) {
         logf_("input: window procedure not hooked (bytes differ) - the keyboard stays exclusive");
         return 0;
     }
-    prev = InterlockedCompareExchange(slot, (LONG)(uintptr_t)wk_window_proc, (LONG)WK_WNDPROC);
+    g_wkWndProc = proc;
+    prev = InterlockedCompareExchange(slot, (LONG)(uintptr_t)wk_window_proc, (LONG)proc);
     VirtualProtect((void*)slot, sizeof(LONG), old, &tmp);
-    g_wkProcHooked = (uint32_t)prev == WK_WNDPROC;
+    g_wkProcHooked = (uint32_t)prev == (uint32_t)proc;
     logf_("input: window procedure %s", g_wkProcHooked ? "hooked (key messages ignored while DirectInput reads the keyboard)"
                                                        : "not hooked - the keyboard stays exclusive");
     return g_wkProcHooked;
@@ -5153,7 +5306,8 @@ static DWORD WINAPI winkey_thread(LPVOID param)
 
 static HRESULT WINAPI hook_SetCooperativeLevel(void* self, HWND w, DWORD flags)
 {
-    if (!g_origSCL) return E_FAIL;
+    SCL_t orig = (SCL_t)vt_orig(self, 13);
+    if (!orig) return E_FAIL;
     // The slot may be shared with the mouse's class: only the keyboard is changed.
     if (self == g_wkKeyboard && (flags & (WK_DISCL_EXCLUSIVE | WK_DISCL_NOWINKEY)) &&
         wk_hook_window_proc()) {
@@ -5172,27 +5326,339 @@ static HRESULT WINAPI hook_SetCooperativeLevel(void* self, HWND w, DWORD flags)
             if (t) { g_wkThread = 1; CloseHandle(t); }
         }
     }
-    return g_origSCL(self, w, flags);
+    return orig(self, w, flags);
 }
 
 static HRESULT WINAPI hook_CreateDevice(void* self, const GUID* rguid, void** out, void* outer)
 {
-    if (!g_origCreateDevice) return E_FAIL;
-    HRESULT hr = g_origCreateDevice(self, rguid, out, outer);
+    CD_t orig = (CD_t)vt_orig(self, 3);
+    void* from = _ReturnAddress();
+    if (!orig) return E_FAIL;
+    HRESULT hr = orig(self, rguid, out, outer);
+    if (rguid && memcmp(rguid, &kSysKeyboard, sizeof(GUID)) == 0 && (g_kbLogged++ < 4 || FAILED(hr))) {
+        char who[MAX_PATH + 16];
+        crash_where((DWORD)(uintptr_t)from, who, sizeof who);
+        logf_("input: keyboard device created by %s (hr %08lX)", who, (unsigned long)hr);
+    }
     if (SUCCEEDED(hr) && out && *out && rguid && memcmp(rguid, &kSysKeyboard, sizeof(GUID)) == 0) {
-        if (cfg_suppress && patch_vtable(*out, 9, (void*)hook_GetDeviceState, (void**)&g_origGDS))
+        if (cfg_suppress && vt_hook_slot(*out, 9, (void*)hook_GetDeviceState))
             logf_("input: keyboard state filter installed");
         if (cfg_winkeys) {
             static int logged;
 
             g_wkKeyboard = *out;
-            if (patch_vtable(*out, 13, (void*)hook_SetCooperativeLevel, (void**)&g_origSCL) && !logged) {
+            if (vt_hook_slot(*out, 13, (void*)hook_SetCooperativeLevel) && !logged) {
                 logged = 1;
                 logf_("input: keyboard cooperative level hook installed");
             }
         }
     }
     return hr;
+}
+
+// ---- builds and addresses -----------------------------------------------
+// Two builds of 3.5.0.26 are in use and they are not the same binary: Steam's (linked 2013,
+// SteamStub, no ASLR) and GOG's 3.5.0.26g (relinked 2023, not packed, ASLR on, Galaxy.dll
+// instead of steam_api.dll); see docs/fixes/gog-build.md. The build is read from the loaded
+// exe's own header in DllMain: the PE TimeDateStamp and the size of .text, which the
+// SteamStub leaves as they are. Anything else is "unknown" and gets only what needs no
+// game address.
+#define STEAM_TIMESTAMP 0x518B881Cu
+#define STEAM_TEXT_SIZE 0x008A94ADu
+#define GOG_TIMESTAMP   0x644689F9u
+#define GOG_TEXT_SIZE   0x008FC18Du
+
+static DWORD g_buildStamp, g_buildText;
+
+// Every fixed game address above, by its Steam name, with the GOG 3.5.0.26g value at the
+// preferred base 0x00400000 (an RVA for the EF_ and RVA_ names, like their Steam values).
+// 0 = not found on GOG yet, and build_gate() keeps the features that need it off there.
+// Fill a value in only once the site is proven on GOG (docs/fixes/gog-build.md); its byte
+// checks are Steam's and must be made to hold there too. tools/address-table.py copies this
+// column to docs/addresses.md and fails when an address #define has no row here.
+typedef struct { uintptr_t steam, gog; } ga_row;
+static const ga_row k_gog[] = {
+    { EF_RANGE_RVA,          0 },
+    { EF_SHADOW_RVA,         0 },
+    { RVA_SETTINGS,          0 },
+    { VA_CAPTURE_PENDING,    0 },
+    { VA_CAPTURE_QUEUED,     0 },
+    { VA_CNAME_FROM_STR,     0 },
+    { VA_DOOR_FADE_EVENT,    0 },
+    { VA_DOOR_FADE_IN,       0 },
+    { VA_DOOR_FADE_LEN,      0 },
+    { VA_DOOR_FADE_OUT,      0 },
+    { VA_DOOR_INTERIOR_VT,   0 },
+    { VA_DOOR_START,         0 },
+    { VA_DOOR_START_SLOT,    0 },
+    { VA_DOOR_TELEPORT_VT,   0 },
+    { VA_DOOR_TIMER,         0 },
+    { VA_DOOR_TIMER_SLOT,    0 },
+    { VA_EMPTY_STRING,       0 },
+    { VA_FACTS_TIME,         0 },
+    { VA_FADE_IN_EXEC,       0 },
+    { VA_FADE_IN_EXEC_SLOT,  0 },
+    { VA_FADE_OUT_EXEC,      0 },
+    { VA_FADE_OUT_EXEC_SLOT, 0 },
+    { VA_GAME,               0 },
+    { VA_GC,                 0 },
+    { VA_IMAGES_ADD,         0 },
+    { VA_IMAGES_REMOVE,      0 },
+    { VA_IMAGES_VTBL_ADD,    0 },
+    { VA_IMAGE_KEY,          0 },
+    { VA_INDOOR_CMP,         0 },
+    { VA_INDOOR_IMM,         0 },
+    { VA_MAP_FIND,           0 },
+    { VA_MEM_SERIALIZE,      0 },
+    { VA_MEM_SIZE,           0 },
+    { VA_MEM_STREAM,         0 },
+    { VA_PART_GC_CALL,       0 },
+    { VA_PART_REQUEST,       0 },
+    { VA_PART_RUN,           0 },
+    { VA_PART_RUN_CALL,      0 },
+    { VA_PART_SWITCH,        0 },
+    { VA_PART_SWITCH_A,      0 },
+    { VA_PART_SWITCH_B,      0 },
+    { VA_PROV_FORWARD,       0 },
+    { VA_PROV_OPEN,          0 },
+    { VA_PROV_STREAM,        0 },
+    { VA_PROV_VTBL_OPEN,     0 },
+    { VA_RAY_HIT,            0 },
+    { VA_RAY_SLOT,           0 },
+    { VA_RENDER_THREAD,      0 },
+    { VA_SAVELIST,           0 },
+    { VA_SAVELIST_CALL_A,    0 },
+    { VA_SAVELIST_CALL_B,    0 },
+    { VA_STARTVIDEO_CALL,    0 },
+    { VA_STARTVIDEO_LIST,    0 },
+    { VA_STARTVIDEO_STOP,    0 },
+    { VA_STARTVIDEO_TICK,    0 },
+    { VA_STARTVIDEO_VSLOT,   0 },
+    { VA_STEAM_STREAM,       0 },
+    { VA_STREAM_DTOR,        0 },
+    { VA_STR_FADE_OUT,       0 },
+    { VA_UNPACK,             0 },
+    { VA_UNPACK_CALL,        0 },
+    { WF_D3D_DEVICE,         0 },
+    { WF_GAME_WNDPROC,       0 },
+    { WF_PP,                 0 },
+    { WF_RESET_COPY,         0 },
+    { WF_STYLE_SITE,         0 },
+    { WF_VP_TICK,            0 },
+    { WF_VP_TICK_SLOT,       0 },
+    { WF_WRITER_SITE,        0 },
+    { WK_WNDPROC,            0 },
+    { WK_WNDPROC_SLOT,       0 },
+};
+
+static const char* build_name(void)
+{
+    return g_build == BUILD_STEAM ? "Steam 3.5.0.26" : g_build == BUILD_GOG ? "GOG 3.5.0.26g" : "unknown";
+}
+
+// The GOG value of a Steam address or RVA; 0 when it has no row or is not found yet.
+static uintptr_t ga_gog(uintptr_t steam)
+{
+    unsigned i;
+    for (i = 0; i < sizeof k_gog / sizeof k_gog[0]; i++)
+        if (k_gog[i].steam == steam) return k_gog[i].gog;
+    return 0;
+}
+
+// The one accessor for a fixed address: the running build's address for a Steam VA, with the
+// load address applied; 0 when this build does not have it. On Steam it is the VA itself.
+static uintptr_t ga(uintptr_t steam_va)
+{
+    uintptr_t v;
+    if (g_build == BUILD_STEAM) return steam_va + g_delta;
+    if (g_build != BUILD_GOG || !(v = ga_gog(steam_va))) return 0;
+    return v + g_delta;
+}
+
+// The same for an RVA (EF_*, RVA_*): this build's RVA, to be added to g_base; 0 when unknown.
+static uintptr_t ga_rva(uintptr_t steam_rva)
+{
+    if (g_build == BUILD_STEAM) return steam_rva;
+    return g_build == BUILD_GOG ? ga_gog(steam_rva) : 0;
+}
+
+// 1 when the running build has every listed Steam address or RVA (the list ends with 0).
+static int ga_have(uintptr_t first, ...)
+{
+    va_list ap;
+    uintptr_t a;
+    int ok = 1;
+    va_start(ap, first);
+    for (a = first; a; a = va_arg(ap, uintptr_t))
+        if (g_build != BUILD_STEAM && !(g_build == BUILD_GOG && ga_gog(a))) ok = 0;
+    va_end(ap);
+    return ok;
+}
+
+// The build, load address and import slots of the image at `at` (tools/buildprobe maps the
+// real exes this way). Reads only the image's own headers.
+static void build_read(uintptr_t at)
+{
+    const unsigned char* base = (const unsigned char*)at;
+    g_base = at;
+    g_delta = g_base - IMAGE_BASE;
+    g_build = BUILD_UNKNOWN;
+    g_buildStamp = g_buildText = 0;
+    memset(g_imp, 0, sizeof g_imp);
+    __try {
+        const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)base;
+        const IMAGE_NT_HEADERS32* nt;
+        const IMAGE_SECTION_HEADER* sec;
+        WORD i;
+        if (!base || dos->e_magic != IMAGE_DOS_SIGNATURE) return;
+        nt = (const IMAGE_NT_HEADERS32*)(base + dos->e_lfanew);
+        if (nt->Signature != IMAGE_NT_SIGNATURE) return;
+        sec = IMAGE_FIRST_SECTION(nt);
+        g_buildStamp = nt->FileHeader.TimeDateStamp;
+        for (i = 0; i < nt->FileHeader.NumberOfSections; i++)
+            if (!memcmp(sec[i].Name, ".text", 6)) g_buildText = sec[i].Misc.VirtualSize;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return; }
+    if (g_buildStamp == STEAM_TIMESTAMP && g_buildText == STEAM_TEXT_SIZE) g_build = BUILD_STEAM;
+    else if (g_buildStamp == GOG_TIMESTAMP && g_buildText == GOG_TEXT_SIZE) g_build = BUILD_GOG;
+    imports_find();
+}
+
+// DllMain, before any thread starts: witcher2.exe itself.
+static void build_detect(void)
+{
+    build_read((uintptr_t)GetModuleHandleA(NULL));
+}
+
+static int g_gated;   // feature groups build_gate turned off
+
+static void gate_off(const char* tag, const char* what)
+{
+    g_gated++;
+    logf_("%s: not on this build (%s) - %s off", tag, build_name(), what);
+}
+
+// Turns off every switched-on feature whose addresses the running build does not have, with
+// one log line per feature group. On Steam every address is known and nothing changes. Runs
+// in DllMain after load_config, before any feature thread starts and before the script patches
+// are set up. Needs no address itself: crash capture, the OSD, the DirectInput keyboard filter
+// and the interior map files (data). The script patches and the CPU guard need import slots.
+static void build_gate(void)
+{
+    int lod = ga_have(RVA_SETTINGS, 0);
+    int distance = lod && ga_have(EF_RANGE_RVA, EF_SHADOW_RVA, 0);
+    int registry = ga_have(VA_IMAGES_VTBL_ADD, VA_IMAGES_ADD, VA_IMAGES_REMOVE, VA_IMAGE_KEY, 0);
+    int thumbs = registry && g_imp[IMP_STEAM_RS] && g_imp[IMP_D3DX_SAVEMEM];
+    int savetrace = thumbs && ga_have(VA_GAME, VA_CAPTURE_PENDING, VA_CAPTURE_QUEUED, 0);
+    int savelist = registry && ga_have(VA_SAVELIST, VA_SAVELIST_CALL_A, VA_SAVELIST_CALL_B,
+        VA_MAP_FIND, VA_STEAM_STREAM, VA_STREAM_DTOR, VA_PROV_VTBL_OPEN, VA_PROV_OPEN,
+        VA_PROV_STREAM, VA_PROV_FORWARD, VA_MEM_STREAM, VA_MEM_SERIALIZE, VA_MEM_SIZE, 0);
+    int startvideo = ga_have(VA_STARTVIDEO_LIST, VA_STARTVIDEO_CALL, VA_STARTVIDEO_TICK,
+        VA_STARTVIDEO_STOP, VA_STARTVIDEO_VSLOT, 0);
+    int partitions = ga_have(VA_GAME, VA_PART_SWITCH, VA_PART_SWITCH_A, VA_PART_SWITCH_B,
+        VA_PART_RUN, VA_PART_RUN_CALL, VA_PART_GC_CALL, VA_GC, VA_PART_REQUEST, VA_EMPTY_STRING, 0);
+    int indoor = ga_have(VA_INDOOR_CMP, VA_INDOOR_IMM, 0);
+    int doortimer = ga_have(VA_GAME, VA_DOOR_TIMER_SLOT, VA_DOOR_TIMER, VA_DOOR_TELEPORT_VT,
+        VA_DOOR_FADE_EVENT, VA_CNAME_FROM_STR, VA_STR_FADE_OUT, 0);
+    // doors_tick installs the door timer whenever the fades differ from the game's.
+    int doorfades = ga_have(VA_GAME, VA_DOOR_FADE_OUT, VA_DOOR_FADE_IN, VA_DOOR_FADE_LEN,
+        VA_DOOR_START_SLOT, VA_DOOR_START, VA_DOOR_TIMER_SLOT, VA_DOOR_TIMER, 0);
+    int fadeexec = ga_have(VA_FADE_OUT_EXEC_SLOT, VA_FADE_OUT_EXEC, VA_FADE_IN_EXEC_SLOT,
+        VA_FADE_IN_EXEC, 0);
+    int loadtrace = partitions && doortimer && ga_have(VA_UNPACK, VA_UNPACK_CALL,
+        VA_RENDER_THREAD, VA_DOOR_INTERIOR_VT, WF_D3D_DEVICE, WF_PP, RVA_SETTINGS, 0);
+    int window = ga_have(WF_STYLE_SITE, WF_WRITER_SITE, WF_VP_TICK_SLOT, WF_VP_TICK,
+        WF_RESET_COPY, WF_D3D_DEVICE, WF_PP, WF_GAME_WNDPROC, 0);
+    int winkeys = ga_have(WK_WNDPROC_SLOT, WK_WNDPROC, 0);
+    int ray = ga_have(VA_RAY_SLOT, VA_RAY_HIT, 0);
+    int quit = ga_have(VA_FACTS_TIME, 0);
+    // Script patches change data only, through the file hooks; they are tested on both builds.
+    int scripts = g_build != BUILD_UNKNOWN && g_imp[IMP_CREATEFILEW] &&
+                  g_imp[IMP_FINDFIRSTFILEW] && g_imp[IMP_FINDNEXTFILEW];
+
+    if (!lod && (cfg_enforce || cfg_enforce_down || cfg_preset_mode || cfg_hotkeys)) {
+        gate_off("lod", "LOD scales, draw distance presets and their hotkeys");
+        cfg_enforce = cfg_enforce_down = cfg_preset_mode = cfg_hotkeys = 0;
+    }
+    if (!distance && cfg_distance) {
+        gate_off("distance", "visibility and shadow range hooks");
+        cfg_distance = 0;
+    }
+    if (!thumbs && cfg_save_thumbs) {
+        gate_off("saves", "fix_thumbnails");
+        cfg_save_thumbs = 0;
+    }
+    if (!savetrace && cfg_save_trace) {
+        gate_off("diagnostics", "save_trace");
+        cfg_save_trace = 0;
+    }
+    if (!savelist && (cfg_list_leak || cfg_fast_list || cfg_savelist_trace)) {
+        gate_off("saves", "fix_list_leak, fast_list and savelist_trace");
+        cfg_list_leak = cfg_fast_list = cfg_savelist_trace = 0;
+    }
+    if (!startvideo && cfg_skip_intro) {
+        gate_off("startup", "skip_intro");
+        cfg_skip_intro = 0;
+    }
+    if (!partitions && (cfg_keep_outdoors || cfg_keep_interiors || cfg_preload_interiors)) {
+        gate_off("loading", "interiors (keep_outdoors, keep_interiors, preload_interiors, skip_door_gc)");
+        cfg_keep_outdoors = cfg_keep_interiors = cfg_preload_interiors = cfg_skip_door_gc = 0;
+    }
+    if (!indoor && cfg_indoor_outdoors) {
+        if (cfg_keep_outdoors) gate_off("loading", "indoor_outdoors");
+        cfg_indoor_outdoors = 0;
+    }
+    if (!doortimer && cfg_fast_doors) {
+        gate_off("loading", "fast_doors");
+        cfg_fast_doors = 0;
+    }
+    if (!doorfades && (cfg_door_fade != 0.5f || cfg_area_fade != 0.5f)) {
+        gate_off("loading", "door_fade and area_fade (the game's 0.5 s fades stay)");
+        cfg_door_fade = cfg_area_fade = 0.5f;
+    }
+    if ((!fadeexec || !doorfades) && cfg_instant_doors) {
+        if (cfg_keep_interiors || cfg_preload_interiors) gate_off("loading", "instant_doors");
+        cfg_instant_doors = 0;
+    }
+    if (!loadtrace && cfg_load_trace) {
+        gate_off("diagnostics", "load_trace");
+        cfg_load_trace = 0;
+    }
+    if (!window && (cfg_wf_enabled || cfg_window_mode)) {
+        gate_off("window", "borderless, the live full screen switch and the Options rows (window_mode)");
+        cfg_wf_enabled = cfg_window_mode = 0;
+    }
+    if (!winkeys && cfg_winkeys) {
+        gate_off("input", "windows_keys");
+        cfg_winkeys = 0;
+    }
+    if (!ray && cfg_ray_guard) {
+        gate_off("stability", "raycast_guard");
+        cfg_ray_guard = 0;
+    }
+    if (!quit && cfg_quit_guard) {
+        gate_off("stability", "quit_guard");
+        cfg_quit_guard = 0;
+    }
+    // The pause menu's Quit ends the game with an area loaded, which crashes in FactsAdd during
+    // shutdown unless quit_guard is in (docs/fixes/quit-crash.md): the row waits for the guard.
+    if (!quit && cfg_pause_quit && scripts) {
+        gate_off("scriptpatches", "pause_quit (it needs quit_guard)");
+        cfg_pause_quit = 0;
+    }
+    if (!g_imp[IMP_GETPROCAFFINITY] && cfg_cpu32_guard) {
+        gate_off("stability", "cpu32_guard");
+        cfg_cpu32_guard = 0;
+    }
+    if (!scripts && (cfg_book_marker || cfg_continue || cfg_pause_quit || cfg_window_mode ||
+                     cfg_medallion)) {
+        gate_off("scriptpatches", "book_marker, continue, pause_quit, window_mode and medallion");
+        cfg_book_marker = cfg_continue = cfg_pause_quit = cfg_window_mode = cfg_medallion = 0;
+    }
+    if (g_gated && g_build == BUILD_GOG)
+        logf_("build: %d feature group(s) not ported to GOG yet (listed above); the rest runs as configured",
+              g_gated);
+    else if (g_gated)
+        logf_("build: witcher2.exe not recognised - every feature that needs a game address is off");
 }
 
 // ---- proxy plumbing -----------------------------------------------------
@@ -5222,10 +5688,24 @@ HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD ver, REFIID riid, LPVOI
 {
     PFN_Create fn = (PFN_Create)real_proc("DirectInput8Create");
     if (!fn) return E_FAIL;
+    void* from = _ReturnAddress();
     HRESULT hr = fn(hinst, ver, riid, out, outer);
     if (!g_proxyOnly && SUCCEEDED(hr) && out && *out && (cfg_suppress || cfg_winkeys)) {
-        if (patch_vtable(*out, 3, (void*)hook_CreateDevice, (void**)&g_origCreateDevice))
-            logf_("input: CreateDevice hook installed");
+        // Interface A or W and the caller: other modules than the game create DirectInput too.
+        static const GUID iid8A =
+            { 0xBF798030, 0x483A, 0x4DA2, { 0xAA, 0x99, 0x5D, 0x64, 0xED, 0x36, 0x97, 0x00 } };
+        static const GUID iid8W =
+            { 0xBF798031, 0x483A, 0x4DA2, { 0xAA, 0x99, 0x5D, 0x64, 0xED, 0x36, 0x97, 0x00 } };
+        char who[MAX_PATH + 16];
+        void* vt = *(void**)*out;
+        int r = vt_hook_slot(*out, 3, (void*)hook_CreateDevice);
+        if (r == 1 && g_diLogged >= 8) return hr;   // the game recreates it on every switch to play
+        g_diLogged++;
+        crash_where((DWORD)(uintptr_t)from, who, sizeof who);
+        logf_("input: DirectInput8Create (%s) from %s: CreateDevice hook %s on vtable %08X",
+              !riid ? "?" : !memcmp(riid, &iid8W, sizeof(GUID)) ? "W" :
+              !memcmp(riid, &iid8A, sizeof(GUID)) ? "A" : "other", who,
+              r == 2 ? "installed" : r == 1 ? "already there" : "NOT installed", (unsigned)(uintptr_t)vt);
     }
     return hr;
 }
@@ -5296,7 +5776,6 @@ static int host_is_game(void)
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {
-    (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
         g_self = inst;
         DisableThreadLibraryCalls(inst);
@@ -5305,9 +5784,11 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             return TRUE;
         }
         g_mainTid = GetCurrentThreadId();   // DllMain runs on the game's main thread
+        build_detect();
         InitializeCriticalSection(&g_logLock);
         InitializeCriticalSection(&g_thumbLock);
         InitializeCriticalSection(&g_ftLock);
+        InitializeCriticalSection(&g_vtLock);
         g_ftT0 = GetTickCount();
         ini_path();
         load_config();
@@ -5318,7 +5799,21 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             // _SH_DENYWR, not fopen_s (exclusive): the log can be read while the game runs.
             g_log = _fsopen(g_logPath, "w", _SH_DENYWR);
         }
-        logf_("witcher2_enginefix %s loaded (image base 0x%08X)", ENGINEFIX_VERSION, (unsigned)IMAGE_BASE);
+        logf_("witcher2_enginefix %s loaded (image base 0x%08X)", ENGINEFIX_VERSION, (unsigned)g_base);
+        {
+            char missing[200] = "";
+            size_t used = 0;
+            int found = 0, i, n;
+            for (i = 0; i < IMP_COUNT; i++) {
+                if (g_imp[i]) { found++; continue; }
+                n = _snprintf_s(missing + used, sizeof missing - used, _TRUNCATE, " %s", k_imports[i].fn);
+                if (n > 0) used += (size_t)n;
+            }
+            logf_("build: %s (TimeDateStamp %08lX, .text %08lX), delta 0x%08X from 0x%08X; "
+                  "import slots %d/%d found by name%s%s", build_name(), g_buildStamp, g_buildText,
+                  (unsigned)g_delta, (unsigned)IMAGE_BASE, found, IMP_COUNT,
+                  *missing ? ", not imported:" : "", missing);
+        }
         logf_("diagnostics: crash_dump=%d (previous log kept as witcher2_enginefix.prev.log)", cfg_crash_dump);
         // Replaced by the game's static initializer right after; crash_tick re-arms.
         if (cfg_enabled && cfg_crash_dump) g_prevFilter = SetUnhandledExceptionFilter(crash_filter);
@@ -5337,6 +5832,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         if (cfg_preset_mode)
             logf_("presets: default=%s, cycle modifiers=%d VK=%02X (Options > Graphics remembers the level)",
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
+        build_gate();
         // Before the game's own start-up can reach the CPU count.
         if (cfg_enabled && cfg_cpu32_guard && !cpu32_try()) {
             HANDLE h = CreateThread(NULL, 0, cpu32_thread, NULL, 0, NULL);
@@ -5390,13 +5886,19 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     }
     else if (reason == DLL_PROCESS_DETACH) {
         g_running = 0;
-        if (g_log) {
+        // On process exit (reserved != NULL) Windows has already ended every other thread, maybe
+        // one inside logf_ holding the log lock (the worker logs the CRT's filter change during
+        // GOG's shutdown). Waiting for an orphaned lock at that point makes Windows end the
+        // process on the spot, skipping the remaining DLL detach work; so only try the lock and
+        // leave the last lines out when it is taken. Every writer to g_log holds this lock.
+        if (g_log && (!reserved || TryEnterCriticalSection(&g_logLock))) {
             if (g_factsNoWorld)
                 logf_("stability: quit guard: FactsAdd ran without a world %ld time(s), time 0 used",
                       (long)g_factsNoWorld);
             logf_("unloaded");
             fclose(g_log);
             g_log = NULL;
+            if (reserved) LeaveCriticalSection(&g_logLock);
         }
     }
     return TRUE;

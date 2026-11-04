@@ -1,7 +1,7 @@
 @echo off
 rem Unit test for the save-list trace (call-site redirect, counters, memory walk) and the
 rem fast_list lazy save reads in src\enginefix.c.
-rem Linked at 0x400000 with a big zero-filled arena that covers the game addresses.
+rem Linked at 0x10000 with a big zero-filled arena that covers the game addresses.
 rem Compiles the DLL source into a console exe with the builder and its call sites placed at their real addresses; no game needed.
 rem Optional argument: a folder of real .sav files (read only) - each is attached lazily and
 rem compared byte for byte with a full unpack, e.g. the Steam remote folder of app 20920.
@@ -19,5 +19,5 @@ for %%f in (..\..\src\third_party\tinf\*.c) do (
     cl /nologo /O2 /W3 /wd4018 /MT /c "%%f" /Fo..\..\build\ || exit /b 1
     set "TINF=!TINF! ..\..\build\%%~nf.obj"
 )
-cl /nologo /W4 /MT savelisttest.c !SP! !TINF! /Fo..\..\build\ /Fe..\..\build\savelisttest.exe user32.lib gdi32.lib /link /BASE:0x400000 /DYNAMICBASE:NO /FIXED || exit /b 1
+cl /nologo /W4 /MT savelisttest.c !SP! !TINF! /Fo..\..\build\ /Fe..\..\build\savelisttest.exe user32.lib gdi32.lib /link /BASE:0x10000 /DYNAMICBASE:NO /FIXED || exit /b 1
 ..\..\build\savelisttest.exe %*

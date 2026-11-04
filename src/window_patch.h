@@ -32,8 +32,8 @@
 #define WF_RESET_COPY   0x0052D4FEu   // mov ecx,0xE; mov esi,WF_PP (the Reset's parameter copy)
 #define WF_D3D_DEVICE   0x01626788u   // IDirect3DDevice9*
 #define WF_PP           0x016267A0u   // the stored D3DPRESENT_PARAMETERS
-#define WF_PP_HWND      (WF_PP + 0x1C)
-#define WF_PP_WINDOWED  (WF_PP + 0x20)
+#define WF_PP_OFF_HWND      0x1C      // its hDeviceWindow
+#define WF_PP_OFF_WINDOWED  0x20      // its Windowed
 #define WF_GAME_WNDPROC 0x009D237Eu   // W2ViewportClass lpfnWndProc (FUN_009d44e1)
 #define WF_STYLE_FRAMED 0x00C80000u   // caption + system menu, the game's windowed style
 #define WF_STYLE_POPUP  0x80000000u   // WS_POPUP, the game's fullscreen style (without WS_EX_TOPMOST)

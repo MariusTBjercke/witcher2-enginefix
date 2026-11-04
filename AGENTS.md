@@ -115,7 +115,9 @@ Only needed for reverse engineering, not for building.
 
 ## Verified facts (Steam 3.5.0.26, unpacked; re-verify before contradicting)
 
-* No ASLR, image base `0x00400000`: absolute addresses are stable at runtime.
+* No ASLR, image base `0x00400000`: absolute addresses are stable at runtime. GOG 3.5.0.26g has
+  ASLR and other addresses: use `ga()`/`ga_rva()` for every fixed address, never the define
+  itself, and give each new define a `k_gog` row (`docs/fixes/gog-build.md`).
 * Config keys are **UTF-16** strings in `.rdata`. ASCII scans miss every one of them.
 * Section `VirtualAddress` values are **relative to the image base**:
   `VA = 0x400000 + SectionVA + (fileOffset - RawPtr)`. Forgetting `0x400000` still
