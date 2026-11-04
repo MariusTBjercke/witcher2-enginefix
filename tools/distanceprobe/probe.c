@@ -73,7 +73,116 @@ __declspec(naked) static int run_shadow(void* entry, unsigned tier, float d2) {
         ret
     }
 }
+// GOG's range site loads the squared distance from [ESP+0x18] into XMM7 itself, after the
+// replaced instruction; XMM6 holds the compiler's 0.0 there.
+__declspec(naked) static int run_range_gog(void* entry, void* proxy, float d2) {
+    __asm {
+        push ebx
+        push esi
+        push edi
+        mov ecx, [esp+16]
+        mov ebx, [esp+20]
+        mov eax, [esp+24]
+        sub esp, 20h
+        mov [esp+14h], eax          ; [ESP+18h] at the site, after CALL's return address
+        xorps xmm6, xmm6
+        mov esi, 12345678h
+        mov edi, 76543210h
+        call ecx
+        add esp, 20h
+        cmp ebx, [esp+20]
+        jne bad
+        cmp esi, 12345678h
+        jne bad
+        cmp edi, 76543210h
+        jne bad
+        jmp done
+    bad:
+        mov eax, -1
+    done:
+        pop edi
+        pop esi
+        pop ebx
+        ret
+    }
+}
+
+// GOG's shadow site compares with XMM7.
+__declspec(naked) static int run_shadow_gog(void* entry, unsigned tier, float d2) {
+    __asm {
+        push ebx
+        mov ecx, [esp+8]
+        mov eax, [esp+12]
+        movss xmm7, [esp+16]
+        xorps xmm6, xmm6
+        sub esp, 80h
+        mov dword ptr [esp+2ch], 40800000h
+        mov dword ptr [esp+30h], 41c80000h
+        mov dword ptr [esp+34h], 44992000h
+        mov dword ptr [esp+38h], 45992000h
+        mov dword ptr [esp+3ch], 471c4000h
+        mov dword ptr [esp+40h], 49742400h
+        mov ebx, 12345678h
+        call ecx
+        cmp ebx, 12345678h
+        je done
+        mov eax, -1
+    done:
+        add esp, 80h
+        pop ebx
+        ret
+    }
+}
 #pragma warning(pop)
+
+// GOG 3.5.0.26g: its own bytes at its own RVAs, its range bridge, the same shadow bridge.
+static void gog_fixture(unsigned char* proxy) {
+    const uintptr_t range_rva = 0x0060C120u, shadow_rva = 0x0060C4F6u;
+    const SIZE_T span = shadow_rva + 0x1000;
+    unsigned char* base = (unsigned char*)VirtualAlloc(NULL, span,
+        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    unsigned char *range, *shadow;
+    if (!base) { check("GOG fixture allocated", 0); return; }
+    range = base + range_rva;
+    shadow = base + shadow_rva;
+    memcpy(range, ef_range_signature_gog, sizeof ef_range_signature_gog);
+    memcpy(shadow, ef_shadow_signature_gog, sizeof ef_shadow_signature_gog);
+    // The range JBE (at +17, rel32 1D7) lands at +0x1EE; the shadow layout is Steam's.
+    memcpy(range+23, "\xB8\x01\x00\x00\x00\xC3", 6);
+    memcpy(range+0x1ee, "\x31\xC0\xC3", 3);
+    memcpy(shadow+13, "\x0F\xB6\xC0\xC3", 4);
+    memcpy(shadow+18, "\x31\xC0\xC3", 3);
+    *(float*)(proxy+0xf0) = 400.0f;
+    check("GOG: unpatched range fixture rejects 30 units beyond 20",
+        run_range_gog(range, proxy, 900.0f) == 0 && run_range_gog(range, proxy, 399.0f) == 1);
+    check("GOG: unpatched shadow fixture rejects 50 units at tier 35",
+        run_shadow_gog(shadow, 2, 2500.0f) == 0);
+    ef_distance_active = 0;
+    ef_range_rva = range_rva;
+    ef_shadow_rva = shadow_rva;
+    ef_select_build(0);
+    check("GOG: Steam signatures fail closed on GOG bytes",
+        !ef_distance_install(base, span) && range[0] == 0xf3 && shadow[0] == 0xf3);
+    ef_select_build(1);
+    ef_range_sq = ef_shadow_sq = 1.0f;
+    check("GOG: verified sites install", ef_distance_install(base, span));
+    if (!ef_distance_active) return;
+    ef_range_hits = ef_range_rejected = ef_range_admitted = ef_shadow_hits = 0;
+    check("GOG: 1x range keeps inside, boundary and outside",
+        run_range_gog(range, proxy, 399.0f) == 1 && run_range_gog(range, proxy, 400.0f) == 0 &&
+        run_range_gog(range, proxy, 900.0f) == 0);
+    check("GOG: 1x telemetry sees the baseline rejections", ef_range_rejected == 2 && ef_range_admitted == 0);
+    ef_range_sq = 4.0f;
+    check("GOG: 2x range admits 30 units and rejects 40",
+        run_range_gog(range, proxy, 900.0f) == 1 && run_range_gog(range, proxy, 1600.0f) == 0);
+    check("GOG: telemetry compares with the stack distance, not XMM6", ef_range_admitted == 1);
+    check("GOG: proxy threshold is never rewritten", *(float*)(proxy+0xf0) == 400.0f);
+    ef_shadow_sq = 4.0f;
+    check("GOG: 2x shadow admits 50 units at tier 35 and rejects 70",
+        run_shadow_gog(shadow, 2, 2500.0f) == 1 && run_shadow_gog(shadow, 2, 4900.0f) == 0);
+    check("GOG: both bridges executed", ef_range_hits > 0 && ef_shadow_hits > 0);
+    ef_select_build(0);
+}
 
 int main(void) {
     const SIZE_T span = EF_SHADOW_RVA + 0x1000;
@@ -154,6 +263,7 @@ int main(void) {
     check("invalid factors revert to baseline",
         ef_distance_factor(0.0f) == 1.0f && ef_distance_factor(-1.0f) == 1.0f &&
         ef_distance_factor(100.0f) == 1.0f && ef_distance_factor((float)NAN) == 1.0f);
+    gog_fixture(proxy);
     printf("%s: %d failures\n", failures ? "FAILED" : "OK", failures);
     // Process exit releases the test image; no game files are loaded or written.
     return failures ? 1 : 0;

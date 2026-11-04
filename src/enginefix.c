@@ -706,6 +706,7 @@ static void distance_tick(void)
         attempts++;
         ef_range_rva = ga_rva(EF_RANGE_RVA);
         ef_shadow_rva = ga_rva(EF_SHADOW_RVA);
+        ef_select_build(g_build == BUILD_GOG);   // GOG: own bytes and range bridge
         __try {
             const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)base;
             const IMAGE_NT_HEADERS32* pe = (const IMAGE_NT_HEADERS32*)(base + dos->e_lfanew);
@@ -5378,9 +5379,9 @@ static DWORD g_buildStamp, g_buildText;
 // column to docs/addresses.md and fails when an address #define has no row here.
 typedef struct { uintptr_t steam, gog; } ga_row;
 static const ga_row k_gog[] = {
-    { EF_RANGE_RVA,          0 },
-    { EF_SHADOW_RVA,         0 },
-    { RVA_SETTINGS,          0 },
+    { EF_RANGE_RVA,          0x0060C120u },   // CRenderProxy_Mesh distance, 00A0BE2B
+    { EF_SHADOW_RVA,         0x0060C4F6u },
+    { RVA_SETTINGS,          0x021EAEB8u },   // [025EAEB8] -> object 025EAF08, loader 00B40DCD
     { VA_CAPTURE_PENDING,    0 },
     { VA_CAPTURE_QUEUED,     0 },
     { VA_CNAME_FROM_STR,     0 },

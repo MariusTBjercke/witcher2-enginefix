@@ -13,9 +13,9 @@ running exe's import directory.
 
 | Name | Steam | GOG | Note |
 |---|---|---|---|
-| `EF_RANGE_RVA` | `005BB09F` |  |  |
-| `EF_SHADOW_RVA` | `005BB465` |  |  |
-| `RVA_SETTINGS` | `02180E28` |  | 0x02580E28 - IMAGE_BASE |
+| `EF_RANGE_RVA` | `005BB09F` | `0060C120` |  |
+| `EF_SHADOW_RVA` | `005BB465` | `0060C4F6` |  |
+| `RVA_SETTINGS` | `02180E28` | `021EAEB8` | 0x02580E28 - IMAGE_BASE |
 | `VA_CAPTURE_PENDING` | `0160D0ED` |  |  |
 | `VA_CAPTURE_QUEUED` | `0160D0EE` |  |  |
 | `VA_CNAME_FROM_STR` | `00B28D76` |  | __stdcall (DWORD* out, const wchar_t*), RET 8 |

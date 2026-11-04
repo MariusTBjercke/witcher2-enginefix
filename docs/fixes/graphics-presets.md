@@ -98,6 +98,13 @@ on disk, or `Documents/Witcher 2/Config/User.ini` and `Rendering.ini`.
 
 ## Compatibility, tests and rollback
 
+GOG 3.5.0.26g (0.10.0): the settings pointer is `DAT_025EAEB8` (object `025EAF08`, loader
+`00B40DCD`, which takes `this` in EAX), with the same 50 keys at the same offsets, and the distance
+sites are ported (`render-distance-experiment.md`). So presets, Ctrl+F10 and the distance factors
+run on GOG. The Options > Graphics Draw distance row does not, because it belongs to
+`window_mode`, which waits for the window patches there; without it the startup level is
+`[presets] default` rather than the row's last choice.
+
 Set `[presets] enabled=0` and restart to restore Ctrl+F9 mesh, Ctrl+F10 foliage,
 Ctrl+Shift+F9 visibility and Ctrl+Shift+F10 shadows. All four separate hotkeys
 are inactive in preset mode. Existing ini files without `[presets]` retain their

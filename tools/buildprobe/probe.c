@@ -129,12 +129,30 @@ int main(int argc, char** argv)
     printf("GOG mapped at %08X, delta %08X\n", (unsigned)gog, (unsigned)g_delta);
     check("GOG: detected as GOG 3.5.0.26g", g_build == BUILD_GOG);
     check("GOG: import slots found by name (no SteamRemoteStorage)", slots_match(gog, k_gogSlots));
-    check("GOG: unported addresses read as 0", !ga(VA_GAME) && !ga(WF_PP) && !ga_rva(RVA_SETTINGS) &&
-          !ga_rva(EF_RANGE_RVA) && !ga_have(VA_FACTS_TIME, 0));
+    check("GOG: unported addresses read as 0", !ga(VA_GAME) && !ga(WF_PP) && !ga_have(VA_FACTS_TIME, 0));
+    check("GOG: ported RVAs and the delta", ga_rva(RVA_SETTINGS) == 0x021EAEB8u &&
+          ga_rva(EF_RANGE_RVA) == 0x0060C120u && ga_rva(EF_SHADOW_RVA) == 0x0060C4F6u &&
+          ga_have(RVA_SETTINGS, EF_RANGE_RVA, EF_SHADOW_RVA, 0));
+    // GOG is a DYNAMIC_BASE image: Windows relocates its shared image section once, to the
+    // random base it picked for this file (the one the game gets too), even when this mapping
+    // lands elsewhere. So the getter's operand is the slot at that base: preferred + a 64K step.
+    printf("GOG getter operand %08X (preferred %08X)\n", *(const unsigned*)(gog + 0x24F0),
+           (unsigned)(IMAGE_BASE + ga_rva(RVA_SETTINGS)));
+    check("GOG: the settings getter (004024EF) reads the k_gog slot",
+          *(const unsigned char*)(gog + 0x24EF) == 0xA1 &&
+          ((*(const DWORD*)(gog + 0x24F0) - (IMAGE_BASE + ga_rva(RVA_SETTINGS))) & 0xFFFF) == 0);
+    ef_select_build(1);
+    check("GOG: the GOG distance signatures sit at the k_gog RVAs",
+          !memcmp((const void*)(gog + ga_rva(EF_RANGE_RVA)), ef_range_sig, ef_range_sig_len) &&
+          !memcmp((const void*)(gog + ga_rva(EF_SHADOW_RVA)), ef_shadow_sig, ef_shadow_sig_len));
+    ef_select_build(0);
+    check("GOG: Steam's distance signatures do not", memcmp((const void*)(gog + ga_rva(EF_RANGE_RVA)),
+          ef_range_sig, ef_range_sig_len) && memcmp((const void*)(gog + ga_rva(EF_SHADOW_RVA)),
+          ef_shadow_sig, ef_shadow_sig_len));
     all_on();
     build_gate();
-    check("GOG: LOD, presets, hotkeys and distance off", !cfg_enforce && !cfg_enforce_down &&
-          !cfg_preset_mode && !cfg_hotkeys && !cfg_distance);
+    check("GOG: LOD, presets, hotkeys and distance stay on", cfg_enforce && cfg_enforce_down &&
+          cfg_preset_mode && cfg_hotkeys && cfg_distance);
     check("GOG: save features off", !cfg_save_thumbs && !cfg_save_trace && !cfg_list_leak &&
           !cfg_fast_list && !cfg_savelist_trace);
     check("GOG: doors and interiors off", !cfg_keep_outdoors && !cfg_keep_interiors &&

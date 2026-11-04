@@ -43,6 +43,29 @@ threshold producers, camera-distance adjustments and analysis limitations.
 | 009BB09F / 005BB09F | `MOVSS XMM0,[EBX+F0]` | `F3 0F 10 83 F0 00 00 00 0F 2F C6 0F 86 D2 01 00 00` |
 | 009BB465 / 005BB465 | `MOVSS XMM0,[ESP+EAX*4+30]` | `F3 0F 10 44 84 30 0F 2F C6 76 07 B0 01` |
 
+### GOG 3.5.0.26g (proven statically, seen in game 2026-11-04)
+
+`FUN_00a0be2b` is the same function (stdcall `(proxy, collector)`, `RET 8`, the same prologue,
+reached from CRenderProxy_Mesh vtable `00F696EC` slots 14 and 15 as Steam's from `00EC6CAC`). Both
+sites share page `00A0C000`, no relocation touches them, and no jump lands inside either span.
+
+| VA / RVA | Original load | Fingerprint |
+|---|---|---|
+| 00A0C120 / 0060C120 | `MOVSS XMM0,[EBX+F0]` | `F3 0F 10 83 F0 00 00 00 F3 0F 10 7C 24 18 0F 2F C7 0F 86 D7 01 00 00` |
+| 00A0C4F6 / 0060C4F6 | `MOVSS XMM0,[ESP+EAX*4+30]` | `F3 0F 10 44 84 30 0F 2F C7 76 07 B0 01` |
+
+The replaced instructions are byte-identical; what follows is not. On GOG the squared distance
+is loaded into **XMM7** right after the range site (`MOVSS XMM7,[ESP+18]`), and XMM6 holds the
+compiler's 0.0 (`XORPS XMM6,XMM6` at `00A0C0E7` and `00A0C11D`). Steam loads it into XMM6
+before the site. Returning to site+8 is still right: the game loads XMM7 and compares it with the
+scaled XMM0, so the scaling needs no change. The range bridge's own compares feed only the
+telemetry (`baseline_reject`, `admitted`), so `ef_range_bridge_gog` compares with the stack slot
+`[ESP+1C]` instead (`[ESP+18]` at the site, plus the `pushfd`). The shadow site compares with XMM7
+on GOG, which its bridge never touches, so `ef_shadow_bridge` serves both. Steam's fingerprints
+match nowhere in GOG's `.text`; GOG's match once there and nowhere in Steam's.
+`ef_select_build()` picks the bytes and the range bridge; `tools/distanceprobe` runs a GOG
+fixture (its bytes at its RVAs, distance on the stack, XMM6 = 0) through the real bridges.
+
 The first 8 / 6 bytes are replaced by an E9 relative jump plus NOP padding.
 Compiled x86 naked bridges reproduce the load, multiply XMM0 by factor squared,
 and jump to the original comparison at site+8 / site+6. Other SSE registers,

@@ -114,7 +114,27 @@ delta from `0x00400000` and how many import slots were found.
 What runs on GOG with 0.10.0: the script patches `book_marker`, `continue` and `medallion` (they
 only hook file APIs; `build\sptest.exe test --game "<gog>"` passes), the F9/F10 keyboard filter
 (DirectInput objects, no game address), `cpu32_guard` (an import; GOG's own CPU count code is
-not re-checked), crash capture and the interior map files.
+not re-checked), crash capture and the interior map files. Since the first port (below) also
+LOD, the presets with Ctrl+F10 and the distance hooks.
+
+## Ported addresses
+
+| Steam | GOG | Proof |
+|---|---|---|
+| `RVA_SETTINGS` `02180E28` | `021EAEB8` | getter `004024EF` (`A1 B8 AE 5E 02`), creator `00402517` stores the static object `025EAF08`, exit handler clears it at `004025EB`; loader `00B40DCD` registers the same 50 keys at the same offsets (`graphics-presets.md`, `research.md` §6) |
+| `EF_RANGE_RVA` `005BB09F` | `0060C120` | same function and bytes, distance in XMM7 (`render-distance-experiment.md`) |
+| `EF_SHADOW_RVA` `005BB465` | `0060C4F6` | same, compare with XMM7 |
+
+Seen in game on GOG on 2026-11-04 (`docs/validation/gog-presets-2026-11-04.md`): the settings
+object found at its static address plus the delta, LOD enforced, both distance hooks installed,
+non-zero `baseline_reject`/`admitted`, Ctrl+F10 through all four levels.
+
+## Open
+
+* After a play session on GOG the log ends at the CRT's shutdown filter change without
+  `unloaded`, even with the detach only trying the log lock. The menu-only GOG run and every
+  Steam run end with `unloaded`. The game closes normally (Galaxy logs a normal close, no dump,
+  no error event); whether the DLL's detach runs at all there is not known yet.
 
 Start tests on 2026-11-04 (owner, the same 0.10.0 build on both):
 

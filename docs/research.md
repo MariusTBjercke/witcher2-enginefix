@@ -190,13 +190,19 @@ Field map, all confirmed from the loader's code:
 
 | Offset | Setting | Type | Section |
 |---|---|---|---|
-| `+0x34` | `MeshLodGameplayDownscale` | bool | Rendering |
-| `+0x38` | `CharacterLodGameplayDownscale` | bool | Rendering |
+| `+0x34` | `MeshLodGameplayDownscale` | dword 0/1 (registered as an integer) | Rendering |
+| `+0x38` | `CharacterLodGameplayDownscale` | dword 0/1 (registered as an integer) | Rendering |
 | `+0x68` | `FoliageDistanceScale` | float | Rendering |
 | `+0x6c` | `MeshDistanceScale` | float | Rendering |
 
-The loader uses two register helpers — `0x0041D0FB` (float path, via `FUN_0040861e`
-→ `FUN_00ac23b9`) and `0x004024E3` (bool path, via `FUN_00402600` → `FUN_00ac247d`).
+The loader uses register helpers per type — `0x0041D0FB` (float path, via `FUN_0040861e`
+→ `FUN_00ac23b9`), `0x004024E3` (integer path, writes a dword, via `FUN_00402600` →
+`FUN_00ac247d`) and `0x00403936` (bool path, writes a byte, e.g. `VSync` at `+0x11`). The
+object itself lives in static storage at `0x02580E78`; the getter only creates it once and
+an exit handler (`00402366`) clears the pointer. The frame collector copies the dwords at
+`+0x34`/`+0x38` (`009C02C4`/`009C02D2`). GOG 3.5.0.26g has the same object at `0x025EAF08`,
+pointer `0x025EAEB8`, loader `00B40DCD` with `this` in EAX, and the same 50 keys at the same
+offsets (2026-11-04).
 **Neither helper clamps or validates.** They are generic "get this key's value as
 float/bool" accessors. So there is no evidence of a range check between the ini and
 the in-memory field: whatever the ini says is what the renderer gets.
