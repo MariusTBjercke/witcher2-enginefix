@@ -17,6 +17,7 @@ current version; the entry itself has the proof.
 | [interior-preload.md](interior-preload.md) | Seamless interiors, partitions, occluders | Shipped | `[loading] interiors` |
 | [load-times.md](load-times.md) | Measured load times, faster door fades | Shipped | `[loading] fast_doors`, `door_fade` |
 | [interior-maps.md](interior-maps.md) | Black map in interiors (data files) | Shipped | Delete the map files |
+| [startup-time.md](startup-time.md) | Launch to main menu: FMOD idling on a coarse timer, what is left | Measured on Steam, not released | `[startup] fast_start` |
 | [door-transitions.md](door-transitions.md) | What a door changes on screen: lighting blend, save inside a house, spinner; ground texture circle | In 0.10.0, seen on Steam (DXVK and native D3D9) and GOG | `[loading] door_light_blend`, `preload_street`, `door_spinner` |
 
 ## Distance and graphics

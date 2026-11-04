@@ -44,6 +44,9 @@ What it does:
   black map screen (M) with one huge pin, because the game has no big map for
   them. Loose files under CookedPC\globals\ give each one an upscaled copy of
   its own minimap, so the map shows and zooms the right way.
+- Faster start ([startup] fast_start=1, on by default): removes most of an idle
+  wait of about 11 s while the sound system loads. Measured on one machine: main
+  menu after 6.5 s instead of 16 s. Your gain depends on your disk and system.
 - Skip intro ([startup] skip_intro=1, off by default): starts at the main
   menu without the logo videos and the intro movie (a short black moment
   remains).
@@ -125,6 +128,7 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
   [window]  borderless=0         start-up fallback; Options owns it after
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)
+  [startup] fast_start=1         0 keeps the game's own idle wait while starting
   [stability] raycast_guard=1, cpu32_guard=1, quit_guard=1
                                  0 turns that crash or hang guard off
   [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1,

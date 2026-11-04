@@ -132,6 +132,7 @@ static int cfg_savelist_trace;  // [diagnostics] savelist_trace: time/memory of 
 static int cfg_list_leak = 1;   // [saves] fix_list_leak: free the preview the save list leaks
 static int cfg_fast_list = 1;   // [saves] fast_list: unpack only the save header blocks (2 = every other build)
 static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos before the main menu
+static int cfg_fast_start = 1;  // [startup] fast_start: no idle waiting for FMOD while the game starts
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
 static int cfg_load_trace;      // [diagnostics] load_trace: where loading-screen time goes
 static int cfg_fast_doors = 1;  // [loading] fast_doors: picture back once a house interior is in
@@ -405,6 +406,7 @@ static void load_config(void)
     cfg_list_leak = ini_int("saves", "fix_list_leak", 1);
     cfg_fast_list = ini_int("saves", "fast_list", 1);
     cfg_skip_intro = ini_int("startup", "skip_intro", 0);
+    cfg_fast_start = ini_int("startup", "fast_start", 1);
     cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
     cfg_load_trace = ini_int("diagnostics", "load_trace", 0);
     cfg_fast_doors = ini_int("loading", "fast_doors", 1);
@@ -6257,6 +6259,111 @@ static DWORD WINAPI window_init_thread(LPVOID param)
     return 0;
 }
 
+// [startup] fast_start=1. While FMOD loads the music system the whole process idles for ~11 s, in
+// FMOD's polling sleeps. Its file layer waits for each read from the file thread in a Sleep(10) loop
+// (fmodex.dll 100140D1), and the main thread waits for a free async slot in another one
+// (fmod_event.dll 10036261), and a Sleep(1) lasts 15.6 ms until something raises the timer around
+// the time the game window opens. So: a 1 ms timer from the start, and Sleep(1) for those waits until
+// the window is there. See docs/fixes/startup-time.md. The timer is held until the process ends: the
+// running game has a 0.5 ms timer anyway, from a request that is not ours.
+static DWORD g_startMainTid;              // DllMain runs on the game's main thread
+static volatile LONG g_startDone;         // the game window is there: FMOD's sleeps stay as they are
+static volatile LONG g_startCutEvent, g_startCutEx;
+static VOID (WINAPI *g_realFmodSleep)(DWORD);
+
+static VOID WINAPI hook_FmodEventSleep(DWORD ms)
+{
+    if (ms == 10 && !g_startDone && GetCurrentThreadId() == g_startMainTid) {
+        InterlockedIncrement(&g_startCutEvent);
+        ms = 1;
+    }
+    g_realFmodSleep(ms);
+}
+
+static VOID WINAPI hook_FmodExSleep(DWORD ms)
+{
+    if (ms == 10 && !g_startDone) {
+        InterlockedIncrement(&g_startCutEx);
+        ms = 1;
+    }
+    g_realFmodSleep(ms);
+}
+
+static void fmod_sleep_cb(void* ctx, const char* dll, const char* fn, uintptr_t slot)
+{
+    if (!_stricmp(dll, "kernel32.dll") && !strcmp(fn, "Sleep")) *(uintptr_t*)ctx = slot;
+}
+
+static int fmod_sleep_hook(const char* module, void* hook)
+{
+    HMODULE mod = NULL;
+    uintptr_t slot = 0;
+    int i;
+
+    for (i = 0; i < 2000 && g_running && !mod; i++) {
+        mod = GetModuleHandleA(module);
+        if (!mod) Sleep(5);
+    }
+    if (!mod) { logf_("startup: %s not loaded after 10 s - its waits stay as they are", module); return 0; }
+    imports_walk((const unsigned char*)mod, fmod_sleep_cb, &slot);
+    return patch_import_slot("startup", "kernel32.dll", "Sleep", slot, hook, (void**)&g_realFmodSleep);
+}
+
+// Hooks FMOD's two Sleep imports, and ends the shortening when the game window appears.
+static void fast_start_fmod(void)
+{
+    DWORD t0 = GetTickCount();
+    int ex = fmod_sleep_hook("fmodex.dll", (void*)hook_FmodExSleep);
+    int ev = fmod_sleep_hook("fmod_event.dll", (void*)hook_FmodEventSleep);
+    int i;
+
+    if (!ex && !ev) return;
+    for (i = 0; i < 12000 && g_running; i++) {
+        HWND w = FindWindowW(L"W2ViewportClass", NULL);
+        DWORD pid = 0;
+        if (w) GetWindowThreadProcessId(w, &pid);
+        if (w && pid == GetCurrentProcessId()) break;
+        Sleep(5);
+    }
+    InterlockedExchange(&g_startDone, 1);
+    logf_("startup: fast_start: FMOD waits of 10 ms cut to 1 ms until the game window, after %lu ms: fmodex %ld, fmod_event %ld",
+          GetTickCount() - t0, g_startCutEx, g_startCutEvent);
+}
+
+static double timed_sleep1_ms(void)
+{
+    LARGE_INTEGER f, a, b;
+
+    QueryPerformanceFrequency(&f);
+    QueryPerformanceCounter(&a);
+    Sleep(1);
+    QueryPerformanceCounter(&b);
+    return (double)(b.QuadPart - a.QuadPart) * 1000.0 / (double)f.QuadPart;
+}
+
+static DWORD WINAPI fast_start_thread(LPVOID param)
+{
+    typedef UINT (WINAPI *timeBeginPeriod_t)(UINT);
+    HMODULE winmm;
+    timeBeginPeriod_t begin;
+    double before, after;
+    UINT res;
+
+    (void)param;
+    winmm = LoadLibraryW(L"winmm.dll");
+    begin = winmm ? (timeBeginPeriod_t)(void*)GetProcAddress(winmm, "timeBeginPeriod") : NULL;
+    if (!begin) {
+        logf_("startup: timeBeginPeriod not found - fast_start off");
+        return 0;
+    }
+    before = timed_sleep1_ms();
+    res = begin(1);
+    after = timed_sleep1_ms();
+    logf_("startup: fast_start: timeBeginPeriod(1) = %u, Sleep(1) took %.1f ms before, %.1f ms after", res, before, after);
+    fast_start_fmod();
+    return 0;
+}
+
 static DWORD WINAPI worker(LPVOID param)
 {
     (void)param;
@@ -7055,7 +7162,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("distance config: experimental=%d visibility=%.2fx shadow=%.2fx",
               cfg_distance, cfg_visibility, cfg_shadow_range);
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
-        logf_("startup: skip_intro=%d", cfg_skip_intro);
+        logf_("startup: skip_intro=%d fast_start=%d", cfg_skip_intro, cfg_fast_start);
         logf_("diagnostics: file_trace=%d load_trace=%d", cfg_file_trace, cfg_load_trace);
         logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
@@ -7084,6 +7191,11 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                 if (cfg_skip_intro) {
                     h = CreateThread(NULL, 0, startvideo_thread, NULL, 0, NULL);
                     if (h) CloseHandle(h); else logf_("startup: CreateThread failed - skip_intro off");
+                }
+                if (cfg_fast_start) {
+                    g_startMainTid = GetCurrentThreadId();
+                    h = CreateThread(NULL, 0, fast_start_thread, NULL, 0, NULL);
+                    if (h) CloseHandle(h); else logf_("startup: CreateThread failed - fast_start off");
                 }
             }
             if (cfg_file_trace) {
