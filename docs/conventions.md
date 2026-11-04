@@ -31,8 +31,10 @@ branch only for an experiment that may be thrown away.
 
 ## Fixes and evidence
 
-- Every runtime patch gets a `docs/fixes/` entry: symptom, addresses, original
-  bytes or calls, how it was verified, how to turn it off.
+- Every runtime patch gets a `docs/fixes/` entry, listed in `docs/fixes/README.md`:
+  symptom, addresses, original bytes or calls, how it was verified, how to turn it off.
+- A new fixed address is a `#define`; `tools/address-table.py` keeps `docs/addresses.md`.
+- Run `tools/check-repo.ps1` before committing.
 - In-game results and probe output go to `docs/validation/`.
 - Plans, status and handoffs are personal notes in `docs/plans/` and `docs/local/`, both
   git-ignored. Tracked files must not point at them.

@@ -10,8 +10,8 @@ Sibling project with the same architecture:
 
 1. This file.
 2. `docs/research.md` - binary, packing, config system, settings object, pitfalls.
-3. The `docs/fixes/*.md` entry for the area you touch (`save-previews.md`,
-   `graphics-presets.md`, `render-distance-experiment.md`, ...).
+3. `docs/fixes/README.md`, then the entry for the area you touch. Mapped addresses per build
+   are in `docs/addresses.md`.
 4. If they exist on this machine (git-ignored, see "Personal notes" below): the newest
    `docs/local/handoff-*.md`, then `docs/plans/progress.json` for open and deferred items.
 
@@ -26,6 +26,7 @@ Sibling project with the same architecture:
 | Version | `ENGINEFIX_VERSION` (+ `_BIN`) in `src/version.h` = top entry of `CHANGELOG.md` |
 | Release zip | `tools/package-release.ps1` -> `dist/Witcher2EngineFix-<version>.zip` |
 | Validation evidence | `docs/validation/` |
+| Repo checks (no CI here) | `tools/check-repo.ps1`, `-Game "<game>"` adds the offline tests |
 
 ## Paths
 
@@ -141,6 +142,32 @@ Only needed for reverse engineering, not for building.
 * The live CDB save-preview trace is **disabled**: the game crashed on its first
   software breakpoint at VA `009B6BC5` with `STATUS_WX86_BREAKPOINT` (`4000001F`).
   Do not repeat that workflow; see `docs/fixes/save-previews.md`.
+
+## Specialist passes
+
+Project skills live in `.agents/skills/` (read by Codex and other harnesses) and as identical
+copies in `.claude/skills/` (read by Claude Code). Load the one that matches the work before
+starting it; when delegating, name the skill in the subagent's prompt. Each skill ends with a
+ready delegation prompt.
+
+| Skill | Load it when |
+| --- | --- |
+| `w2-game-re` | finding or proving something inside `witcher2.exe`, on Steam or GOG |
+| `w2-script-patch` | changing `src/scriptpatches`, the overlay or UI movies, or a script compile error |
+| `w2-runtime-test` | installing a build, asking for an in-game test, reading its log or dump |
+| `w2-review` | a change looks finished, before commit or release |
+| `w2-release` | preparing a version, the zip, GitHub and Nexus |
+| `w2-skill-set` | deciding where new knowledge goes, or changing these skills and agents |
+
+Claude Code also has subagents in `.claude/agents/` that preload those skills: `w2-re-analyst`
+(read-only reverse engineering, keeps Ghidra output out of the conversation) and `w2-reviewer`.
+They are read when a session starts.
+
+- Edit skills in `.agents/skills/` only, then run `tools\sync-agent-skills.ps1` (`-Check` reports
+  drift and exits 1).
+- A skill routes and reminds; facts belong in `docs/` and rules in this file. `w2-skill-set`
+  decides where something new goes.
+- Subagents report; they do not commit.
 
 ## Conventions
 
