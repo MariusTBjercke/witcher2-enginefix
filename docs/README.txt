@@ -108,6 +108,8 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
   [window]  borderless=0         start-up fallback; Options owns it after
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)
+  [stability] raycast_guard=1, cpu32_guard=1, quit_guard=1
+                                 0 turns that crash or hang guard off
   [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1,
                   medallion=1
                                  0 turns that one off
@@ -125,5 +127,8 @@ A mod that ships its own globals\map_scales.csv conflicts with the interior
 maps; the one copied last wins.
 
 Tested on Steam 3.5.0.26, Windows 11, with and without DXVK.
+Steam only for now: the GOG version is a separately compiled build, where
+the engine fixes skip themselves and the save fixes do not apply. GOG
+support is being worked on for a later version.
 License: MIT (LICENSE_Witcher2EngineFix.txt; it also lists the third-party
 tinf inflate library inside the DLL). Not affiliated with CD PROJEKT RED.

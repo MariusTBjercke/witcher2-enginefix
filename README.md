@@ -51,8 +51,9 @@ The higher levels cost GPU time. They do not change how far away the game spawns
 
 ## Requirements
 
-- The Witcher 2: Assassins of Kings - Enhanced Edition, **3.5.0.26**. Tested on **Steam** (Windows 11), with both DXVK and the game's native Direct3D 9.
-- The save-preview fix works when saves go through Steam storage (the default for the Steam version). GOG has not been tested. The renderer hooks check the exact game code before they patch anything; on another build they skip themselves and say so in the log.
+- The Witcher 2: Assassins of Kings - Enhanced Edition, **3.5.0.26 on Steam**. Tested on Windows 11, with both DXVK and the game's native Direct3D 9.
+- **Steam only for now.** The GOG version (3.5.0.26g) is a separate build from 2023: its code was recompiled, so the engine fixes do not find what they look for and skip themselves, and the save fixes need Steam storage. GOG support is being worked on for a later version; see [docs/fixes/gog-build.md](docs/fixes/gog-build.md).
+- The save-preview fix works when saves go through Steam storage (the default for the Steam version). The engine hooks check the exact game code before they patch anything; on another build they skip themselves and say so in the log.
 
 ## Installation
 
