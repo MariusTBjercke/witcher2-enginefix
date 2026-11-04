@@ -102,6 +102,9 @@ button says "to the main menu" in every language, so the two buttons cannot be c
   is clean in TW2 is part of the in-game test: after quitting this way, Windows Event Log
   (Application, source "Application Error", `witcher2.exe`) must show no fault at that time.
   If it does, the fallback is to exit to the main menu first and quit when it opens.
+  It does crash, which the Event Log could not show (the game's own exception filter swallows
+  it); the crash capture found it on 2026-11-04 in `FactsAdd` during shutdown. Fixed with
+  `[stability] quit_guard`, see `docs/fixes/quit-crash.md`.
 
 ## Verification so far (2026-10-30, copies of the owner's files)
 

@@ -50,6 +50,7 @@ means not found yet; see `docs/fixes/gog-build.md`.
 | `VA_DOOR_TIMER_SLOT` | `00EF01BC` |  | streaming door OnTimer |
 | `VA_EMPTY_STRING` | `0160FBA0` |  | the game's empty String, its usual loading-screen argument |
 | `VA_ENGINE` | `01404950` |  |  |
+| `VA_FACTS_TIME` | `0099871E` |  | mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game |
 | `VA_FADE_IN_EXEC` | `009DC2C3` |  |  |
 | `VA_FADE_IN_EXEC_SLOT` | `00E7C394` |  |  |
 | `VA_FADE_OUT_EXEC` | `009DC316` |  |  |

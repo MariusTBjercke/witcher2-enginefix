@@ -137,6 +137,7 @@ static int cfg_wf_dpi = 1;      // [window] dpi_aware: DPI awareness when border
 static int cfg_crash_dump = 1;  // [diagnostics] crash_dump: 0 off, 1 log + minidump, 2 full dump
 static int cfg_ray_guard = 1;   // [stability] raycast_guard: a ray cast that hits freed physics misses it
 static int cfg_cpu32_guard = 1; // [stability] cpu32_guard: no endless CPU count on 32+ logical processors
+static int cfg_quit_guard = 1;  // [stability] quit_guard: FactsAdd without a world (quitting) does not crash
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
 
@@ -370,6 +371,7 @@ static void load_config(void)
     cfg_crash_dump = ini_int("diagnostics", "crash_dump", 1);
     cfg_ray_guard = ini_int("stability", "raycast_guard", 1);
     cfg_cpu32_guard = ini_int("stability", "cpu32_guard", 1);
+    cfg_quit_guard = ini_int("stability", "quit_guard", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -4066,6 +4068,81 @@ static void ray_guard_tick(void)
     logf_("stability: ray cast guard installed (collector slot %08X)", (unsigned)VA_RAY_SLOT);
 }
 
+// ---- quit guard ---------------------------------------------------------
+// [stability] quit_guard=1. Quitting with an area loaded (the pause menu's Quit calls
+// QuitApplication, 009A25AE -> 00AA5F3A, which only sets the engine's exit flag) tears the world
+// down while entities still get their interaction-deactivated script event (FUN_00ad84cb ->
+// FUN_005167ea). A handler that calls FactsAdd there crashed the game: the native (FUN_009986bd,
+// registered as "FactsAdd" in FUN_00998ae9) reads the default of its time argument from
+// *(*([01404950]+0x90)+8), and +0x90 is NULL by then (00998724, read of 0x8; three dumps on
+// 2026-11-04). The read becomes a call to facts_time_stub, which returns the same value while
+// the pointers are there and 0 when one is NULL. Only EAX and the flags change, as before; the
+// code after it reads no flags. See docs/fixes/quit-crash.md.
+#define VA_FACTS_TIME 0x0099871Eu   // mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game
+
+static volatile LONG g_factsNoWorld;   // times FactsAdd ran without a world
+
+__declspec(naked) static void facts_time_stub(void)
+{
+    __asm {
+        test eax, eax
+        jz no_world
+        mov eax, dword ptr [eax + 0x90]
+        test eax, eax
+        jz no_world
+        mov eax, dword ptr [eax + 8]
+        ret
+    no_world:
+        lock inc dword ptr [g_factsNoWorld]
+        xor eax, eax
+        ret
+    }
+}
+
+static void quit_guard_tick(void)
+{
+    static const char* const orig = "8b 80 90 00 00 00 8b 40 08 89 45 f8";
+    static int done, tries;
+    unsigned char code[9];
+    pb_range range;
+    HANDLE peers[256];
+    unsigned count = 0;
+    DWORD old = 0, tmp = 0;
+    void* site = (void*)(uintptr_t)VA_FACTS_TIME;
+    int64_t delta = (int64_t)(uintptr_t)facts_time_stub - (int64_t)(VA_FACTS_TIME + 5);
+
+    if (done || !cfg_quit_guard) return;
+    if (!code_matches(VA_FACTS_TIME, orig)) {
+        if (++tries >= 50) {
+            done = 1;
+            logf_("stability: FactsAdd not recognised at %08X - quit guard off", (unsigned)VA_FACTS_TIME);
+        }
+        return;
+    }
+    done = 1;
+    if (delta < INT32_MIN || delta > INT32_MAX) return;   // the call must be reachable
+    code[0] = 0xE8;
+    *(uint32_t*)(code + 1) = (uint32_t)(int32_t)delta;
+    memset(code + 5, 0x90, 4);
+    range.start = (const unsigned char*)site;
+    range.len = (unsigned)sizeof code;
+    if (!pb_stop_peers(peers, &count, &range, 1)) {
+        logf_("stability: could not stop the game's threads to patch FactsAdd - quit guard off");
+        return;
+    }
+    if (!code_matches(VA_FACTS_TIME, orig) ||
+        !VirtualProtect(site, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
+        pb_resume_peers(peers, count);
+        logf_("stability: FactsAdd changed while patching - quit guard off");
+        return;
+    }
+    memcpy(site, code, sizeof code);
+    VirtualProtect(site, sizeof code, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), site, sizeof code);
+    pb_resume_peers(peers, count);
+    logf_("stability: quit guard installed (FactsAdd time default at %08X)", (unsigned)VA_FACTS_TIME);
+}
+
 // ---- crash capture ------------------------------------------------------
 // The game's own top-level filter (installed by the static initializer at 00930D99,
 // handler 00930D4A) is `xor eax,eax; inc eax; ret 4`: EXCEPTION_EXECUTE_HANDLER, so a
@@ -4899,6 +4976,7 @@ static DWORD WINAPI worker(LPVOID param)
         }
         crash_tick();
         ray_guard_tick();
+        quit_guard_tick();
         osd_pump();
         dd_tick();
         apply_lod();
@@ -5291,7 +5369,14 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     }
     else if (reason == DLL_PROCESS_DETACH) {
         g_running = 0;
-        if (g_log) { logf_("unloaded"); fclose(g_log); g_log = NULL; }
+        if (g_log) {
+            if (g_factsNoWorld)
+                logf_("stability: quit guard: FactsAdd ran without a world %ld time(s), time 0 used",
+                      (long)g_factsNoWorld);
+            logf_("unloaded");
+            fclose(g_log);
+            g_log = NULL;
+        }
     }
     return TRUE;
 }

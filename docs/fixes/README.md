@@ -48,5 +48,6 @@ current version; the entry itself has the proof.
 |---|---|---|---|
 | [crash-capture.md](crash-capture.md) | Crash log and dump, silent exit | Shipped | `[diagnostics] crash_dump` |
 | [crash-raycast-stale-body.md](crash-raycast-stale-body.md) | Crash leaving the Flotsam inn | Shipped | `[stability] raycast_guard` |
+| [quit-crash.md](quit-crash.md) | Crash while quitting with an area loaded (`FactsAdd`) | In 0.9.0 | `[stability] quit_guard` |
 | [cpu32-hang.md](cpu32-hang.md) | No window on 32 or more threads | In 0.9.0, not run on such a CPU | `[stability] cpu32_guard` |
 | [gog-build.md](gog-build.md) | How GOG differs and what a port needs | Research | |

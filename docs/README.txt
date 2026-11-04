@@ -27,6 +27,10 @@ What it does:
   Win+D); a Windows key tapped on its own still does not open Start.
 - Crash guard: a physics ray cast against an object that was just unloaded
   (seen once leaving the Flotsam inn) no longer closes the game.
+- Clean quit: Quit in the pause menu no longer crashes the game while it
+  shuts down (nobody saw it, but each quit left a crash dump).
+- 32-thread CPUs: on a CPU with 32 or more logical processors the game now
+  starts; its own CPU count never ended there.
 - Crash capture: a crash is logged with a small dump next to the log, so it
   can be reported.
 - Graphics presets: Ctrl+F10 cycles baseline / high / ultra / extreme. Each
