@@ -1,9 +1,9 @@
 # The GOG build
 
 GOG `3.5.0.26g`, looked at on 2026-11-04 after a player ported the mod to it on their own
-(`interiors=2` crashes for them, `interiors=1` works). 0.9.0 is Steam only. From 0.10.0 the DLL
-detects the build and runs the parts that need no game address on GOG; the engine fixes follow
-one area at a time.
+(`interiors=2` crashes for them, `interiors=1` works). 0.9.0 is Steam only. 0.10.0 detects the
+build and supports GOG with every feature: each fixed address has a GOG value, and each hook
+whose calling convention differs there has its own stub (below).
 
 ## How it differs from Steam
 

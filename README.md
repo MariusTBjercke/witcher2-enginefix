@@ -13,7 +13,7 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Graphics presets** | One hotkey, **Ctrl+F10**, cycles baseline / high / ultra / extreme. Each level sets mesh LOD distance, foliage distance, the hard mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. Starts at `extreme`. The same levels are a **Draw distance** row in Options > Graphics (no on-screen text there), which the game remembers between sessions. | on (extreme) |
 | **LOD values that stick** | The game's `MeshDistanceScale`/`FoliageDistanceScale` are held at the preset values, also after the options menu rewrites them, and the two "gameplay LOD downscale" flags are kept off. | on |
 | **Black map in interiors** | In 25 interior map entries (temples, inns, Loredo's house, towers and other houses) the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
-| **Seamless interiors** | Walk into houses, shops and inns without a fade. The game unloaded the outdoors around you at every door and loaded it again on the way out, behind ~2.2 s of black. Now the outdoors stays loaded (visible through the windows), the area's interiors load with the area so open doors show the real rooms, and a house door takes a few hundredths of a second. Doors that change area (the Flotsam gate) keep a short fade. `[loading] interiors` (2 preload, 1 load on first visit, 0 the game's doors), `door_fade`, `area_fade`. | on |
+| **Seamless interiors** | Walk into houses, shops and inns without a fade. The game unloaded the outdoors around you at every door and loaded it again on the way out, behind ~2.2 s of black. Now the outdoors stays loaded (visible through the windows), the area's interiors load with the area so open doors show the real rooms, and a house door takes a few hundredths of a second. The indoor lighting blends in over 1 s instead of jumping, and the loading spinner stays hidden. Doors that change area (the Flotsam gate) keep a short fade. With less than ~1.3 GB of address space free, interiors load on their first visit instead (memory guard). `[loading] interiors` (2 preload, 1 load on first visit, 0 the game's doors), `door_fade`, `area_fade`. | on |
 | **Faster save list** | To show the Load/Save list (and at game start) the game unpacked every save in full to read a few header values. The mod unpacks only the parts the list reads, in memory: about 2.5x faster with 120 saves, same list. Loading a save is unchanged. `[saves] fast_list`. | on |
 | **Crash guard** | A physics ray cast that meets an object that was just unloaded (seen once when walking out of the Flotsam inn) misses it instead of closing the game. `[stability] raycast_guard`. | on |
 | **Clean quit** | Quit in the pause menu (or any quit with an area loaded) crashed the game while it shut down: a script recorded a quest fact after the world was gone. Nobody saw it, but each quit left a crash dump. The mod gives that fact time 0 instead. `[stability] quit_guard`. | on |
@@ -51,18 +51,31 @@ The higher levels cost GPU time. They do not change how far away the game spawns
 
 ## Requirements
 
-- The Witcher 2: Assassins of Kings - Enhanced Edition, **3.5.0.26 on Steam**. Tested on Windows 11, with both DXVK and the game's native Direct3D 9.
-- **Steam only for now.** The GOG version (3.5.0.26g) is a separate build from 2023: its code was recompiled, so the engine fixes do not find what they look for and skip themselves, and the save fixes need Steam storage. GOG support is being worked on for a later version; see [docs/fixes/gog-build.md](docs/fixes/gog-build.md).
-- The save-preview fix works when saves go through Steam storage (the default for the Steam version). The engine hooks check the exact game code before they patch anything; on another build they skip themselves and say so in the log.
+- The Witcher 2: Assassins of Kings - Enhanced Edition, **3.5.0.26 on Steam or 3.5.0.26g on GOG** (since 0.10.0). Tested on Windows 11, with both DXVK and the game's native Direct3D 9.
+- **[DXVK](https://github.com/doitsujin/dxvk/releases), strongly recommended**, and at 4K a must: without it the game runs out of memory there, with or without this mod. See "DXVK" below.
+- The GOG version is a separate build from 2023, recompiled with other addresses and ASLR. The DLL tells the two apart at start and uses each build's own addresses; every feature works on both. On GOG the save previews are written next to the save in `Documents\Witcher 2\gamesaves` (GOG has no Steam storage), and the save list has no leak to fix. See [docs/fixes/gog-build.md](docs/fixes/gog-build.md).
+- The engine hooks check the exact game code before they patch anything; on another build they skip themselves and say so in the log.
+
+### DXVK
+
+The game is a 32-bit program, so it has 4 GB of address space at most. With the game's own Direct3D 9, every texture also takes room there. At 4K, loading a save inside the Flotsam inn left the game at 2.6 GB, and it ran out of memory and crashed within a minute, with or without this mod and whatever the texture budget or draw distance. DXVK keeps the textures on the graphics card: the same load stays around 1.4 GB, with room to spare for the preloaded interiors. Lower resolutions leave more room (not measured).
+
+1. Download a DXVK release from <https://github.com/doitsujin/dxvk/releases> and open the archive.
+2. Copy `x32\d3d9.dll` (the 32-bit one) into the game's `bin\` folder, next to `witcher2.exe`.
+3. If the game hangs after a while with DXVK (a GPU reset, Vulkan "device lost"), create `bin\dxvk.conf` with the line `dxvk.enableDescriptorHeap = False`. That fixed it on the owner's PC (DXVK 3.1.1, NVIDIA RTX 5070 Ti), where the hang came with or without this mod.
+
+Delete `bin\d3d9.dll` to go back to the game's own Direct3D 9.
 
 ## Installation
 
 1. Download `Witcher2EngineFix-<version>.zip` from [Nexus Mods](https://www.nexusmods.com/witcher2/mods/1200) or [GitHub Releases](https://github.com/MariusTBjercke/witcher2-enginefix/releases).
 2. Extract it into the game folder (the one that holds `bin\` and `CookedPC\`), so that `dinput8.dll` ends up next to `witcher2.exe` in `bin\`, for example
-   `...\steamapps\common\the witcher 2\bin\dinput8.dll`
-3. Start the game as usual (through Steam and the launcher).
+   `...\steamapps\common\the witcher 2\bin\dinput8.dll` (Steam) or
+   `...\GOG Galaxy\Games\The Witcher 2\bin\dinput8.dll` (GOG)
+3. Recommended: add DXVK (see "DXVK" above).
+4. Start the game as usual (through Steam or GOG Galaxy and the launcher).
 
-To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix x.y.z loaded` (the version you installed) and later show `distance: hooks installed` and `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1`. After a new save, the log says `thumbnail: wrote ..._640x360.bmp`.
+To check that it works, open `bin\witcher2_enginefix.log` after starting the game. It should begin with `witcher2_enginefix x.y.z loaded` (the version you installed), then a `build:` line naming Steam 3.5.0.26 or GOG 3.5.0.26g, and later show `distance: hooks installed` and, on Steam, `saves: ISteamRemoteStorage ... FileWrite hooked; thumbnail fix=1` (on GOG `saves: local save folder ... - thumbnail fix on`). After a new save on Steam, the log says `thumbnail: wrote ..._640x360.bmp`; on GOG only when the game missed its own preview.
 
 | File | Purpose |
 |---|---|
@@ -91,6 +104,8 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[loading] interiors` | 2 | 1 loads each interior on its first visit (short fade then), 0 restores the game's doors |
 | `[loading] fast_doors`, `door_fade`, `area_fade` | 1, 0.05, 0.25 | fade lengths for house doors and area changes; `fast_doors=0` and 0.5 restore the game's timing |
 | `[loading] door_light_blend` | 1.0 | seconds the lighting takes to change at a house door without a fade; 0 switches at once as the game does |
+| `[loading] preload_street`, `door_spinner` | 1, 0 | a save made inside a house also loads its street; the loading spinner stays hidden on doors without a fade |
+| `[loading] preload_memory_mb`, `door_memory_mb` | 1280, 1024 | memory guard: preloaded interiors load only while this much address space is free; below the second, a door is the game's own again; 0 turns each off |
 | `[stability] raycast_guard` | 1 | 0 turns the ray-cast crash guard off |
 | `[stability] cpu32_guard` | 1 | 0 lets the game run its own CPU count (hangs on 32 or more logical processors) |
 | `[stability] quit_guard` | 1 | 0 lets the shutdown after Quit crash again (it only leaves a dump) |
@@ -113,7 +128,8 @@ The ini file itself documents every key, including the legacy separate hotkeys (
 The pause-menu Quit confirmation currently needs one click before it
 responds to hover. The button still works; this is a known minor issue.
 
-- **DXVK, strongly recommended at 4K**: the game is a 32-bit program, so it has 4 GB of address space at most. With the game's own Direct3D 9, every texture also takes room there. At 4K on the launcher's highest settings, loading a save inside the Flotsam inn took 1.7 GB at the main menu and 2.6 GB after the load, and the game ran out of memory within a minute. That happened even though this mod loaded nothing extra (its preload stops below 1280 MB free), and whatever the texture budget or draw distance. With DXVK, which keeps textures on the graphics card, the same load stays around 1.3 GB. Lower resolutions leave more room (not measured yet). One owner setup (DXVK 3.1.1, RTX 5070 Ti) hit a GPU reset (Vulkan device lost) in the same place, with or without this mod; if the game hangs that way, set `dxvk.enableDescriptorHeap = False` in `dxvk.conf` (DXVK then uses its descriptor-buffer binding; one run of about 8 minutes with 8 doors at the inn had no GPU reset, where every run before hung within minutes) or try another DXVK version. See [docs/fixes/door-transitions.md](docs/fixes/door-transitions.md), "Memory". The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen.
+- **DXVK, strongly recommended** (see "DXVK" under Requirements): the game is a 32-bit program, so it has 4 GB of address space at most. With the game's own Direct3D 9, every texture also takes room there. At 4K on the launcher's highest settings, loading a save inside the Flotsam inn took 1.7 GB at the main menu and 2.6 GB after the load, and the game ran out of memory within a minute. That happened even though this mod loaded nothing extra (its preload stops below 1280 MB free, `[loading] preload_memory_mb`), and whatever the texture budget or draw distance. With DXVK, which keeps textures on the graphics card, the same load stays around 1.3-1.4 GB. Lower resolutions leave more room (not measured yet). One owner setup (DXVK 3.1.1, RTX 5070 Ti) hit a GPU reset (Vulkan device lost) in the same place, with or without this mod; if the game hangs that way, set `dxvk.enableDescriptorHeap = False` in `dxvk.conf` (DXVK then uses its descriptor-buffer binding; one run of about 8 minutes with 8 doors at the inn had no GPU reset, where every run before hung within minutes) or try another DXVK version. See [docs/fixes/door-transitions.md](docs/fixes/door-transitions.md), "Memory". The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen.
+- **GOG**: supported since 0.10.0, with the same features and settings. On GOG the log ends with `exit: CorExitProcess(0) ...` instead of `unloaded`: the .NET runtime in the process (most likely from the Galaxy overlay) ends the game before the DLL's own exit call. That is a normal quit.
 - **Borderless window**: only in windowed mode (Full screen off) and best at the desktop resolution; at a lower resolution it is a centered frameless window at that size, and it always sits on the primary monitor. Windowed mode may lose the device gamma ramp (Brightness/Gamma), and the game may behave differently in the background than in full screen; both are properties of the game's windowed mode, not of the patch.
 - **Other `dinput8.dll` mods**: only one `dinput8.dll` can sit in `bin\`. This mod loads the system `dinput8.dll` itself.
 - **Script mods**: a mod that replaces `base_scripts.dzip` is fine; the patches go into whatever copy is there. Mods installed as user content (`Documents\Witcher 2\UserContent`, listed in `Config\UserContent.ini`) can carry their own scripts, which the game uses instead of `base_scripts.dzip`'s; the patches then go into those copies. If a mod's copy of a file is too different for a patch, that one feature stays off and the game starts without it (`witcher2_enginefix.log` says which).

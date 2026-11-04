@@ -1,6 +1,6 @@
 WITCHER 2 ENGINE FIX
 Draw-distance, save-preview, interior-map and quality-of-life fixes for The Witcher 2: Assassins of Kings -
-Enhanced Edition (3.5.0.26)
+Enhanced Edition (3.5.0.26 on Steam, 3.5.0.26g on GOG)
 https://github.com/MariusTBjercke/witcher2-enginefix
 =========================================================================
 
@@ -94,9 +94,22 @@ is on GitHub (link above) if you prefer to build the DLL yourself.
 Install:
 Extract the zip into the game folder (the one with bin\ and CookedPC\), so
 that dinput8.dll ends up in bin\ next to witcher2.exe, e.g.
-  ...\steamapps\common\the witcher 2\bin\dinput8.dll
+  ...\steamapps\common\the witcher 2\bin\dinput8.dll              (Steam)
+  ...\GOG Galaxy\Games\The Witcher 2\bin\dinput8.dll              (GOG)
 Start the game as usual. bin\witcher2_enginefix.log should begin with
-"witcher2_enginefix x.y.z loaded" (x.y.z is this version).
+"witcher2_enginefix x.y.z loaded" (x.y.z is this version), then a "build:"
+line naming Steam 3.5.0.26 or GOG 3.5.0.26g.
+
+DXVK (strongly recommended, at 4K a must):
+The game is 32-bit (4 GB at most), and with its own Direct3D 9 every
+texture also takes room there. At 4K it runs out of memory and crashes
+soon after loading a save in Flotsam, with or without this mod. DXVK keeps
+the textures on the graphics card.
+1. Download DXVK from https://github.com/doitsujin/dxvk/releases
+2. Copy x32\d3d9.dll (the 32-bit one) into bin\ next to witcher2.exe.
+3. If the game then hangs after a while (GPU reset, "device lost"), create
+   bin\dxvk.conf with the line: dxvk.enableDescriptorHeap = False
+Delete bin\d3d9.dll to go back to the game's own Direct3D 9.
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
@@ -107,6 +120,8 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
                                  0 restores the game's doors
   [loading] fast_doors=1         0 restores the game's door timing
   [loading] door_light_blend=1.0 0 switches the lighting at once at doors
+  [loading] preload_memory_mb=1280, door_memory_mb=1024
+                                 memory guard for the preloaded interiors
   [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
   [window]  borderless=0         start-up fallback; Options owns it after
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)
@@ -128,14 +143,13 @@ own maps are inside pack0.dzip). Nothing else needs undoing.
 A mod that ships its own globals\map_scales.csv conflicts with the interior
 maps; the one copied last wins.
 
-Tested on Steam 3.5.0.26, Windows 11, with and without DXVK.
-Playing at 4K: install DXVK (d3d9.dll in bin). The game is 32-bit (4 GB at
-most), and with its own Direct3D 9 every texture also takes room there; at
-4K it can run out of memory after loading a save, with or without this mod.
-DXVK keeps the textures on the graphics card. The seamless interiors stop
-preloading when less than 1280 MB is free ([loading] preload_memory_mb).
-Steam only for now: the GOG version is a separately compiled build, where
-the engine fixes skip themselves and the save fixes do not apply. GOG
-support is being worked on for a later version.
+Tested on Steam 3.5.0.26 and GOG 3.5.0.26g, Windows 11, with and without
+DXVK. The seamless interiors stop preloading when less than 1280 MB is free
+([loading] preload_memory_mb); see DXVK above.
+GOG: every feature works there too. Save previews go next to the save in
+Documents\Witcher 2\gamesaves, and the save list has no leak to fix. The
+log ends with "exit: CorExitProcess(0)" instead of "unloaded": the .NET
+runtime in the process (most likely the Galaxy overlay) ends the game
+first. That is a normal quit.
 License: MIT (LICENSE_Witcher2EngineFix.txt; it also lists the third-party
 tinf inflate library inside the DLL). Not affiliated with CD PROJEKT RED.
