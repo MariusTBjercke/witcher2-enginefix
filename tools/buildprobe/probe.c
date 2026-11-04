@@ -69,6 +69,8 @@ static void all_on(void)
     for (i = 0; i < SWITCHES; i++) *k_switches[i] = 1;
     cfg_door_fade = 0.05f;
     cfg_area_fade = 0.25f;
+    cfg_door_light_blend = 1.0f;
+    cfg_door_spinner = 0;   // 0 = the spinner hidden on instant doors (the feature on)
     g_gated = 0;
 }
 
@@ -138,15 +140,16 @@ int main(int argc, char** argv)
     build_gate();
     for (same = 1, i = 0; i < SWITCHES; i++) same &= before[i] == *k_switches[i];
     check("Steam: the gate changes no switch", same && g_gated == 0 &&
-          cfg_door_fade == 0.05f && cfg_area_fade == 0.25f);
+          cfg_door_fade == 0.05f && cfg_area_fade == 0.25f && cfg_door_light_blend == 1.0f &&
+          !cfg_door_spinner);
 
     // GOG 3.5.0.26g
     build_read(gog);
     printf("GOG mapped at %08X, delta %08X\n", (unsigned)gog, (unsigned)g_delta);
     check("GOG: detected as GOG 3.5.0.26g", g_build == BUILD_GOG);
     check("GOG: import slots found by name (no SteamRemoteStorage)", slots_match(gog, k_gogSlots));
-    check("GOG: unported addresses read as 0", !ga(VA_SAVELIST) && !ga(VA_IMAGES_ADD) &&
-          !ga_have(VA_PROV_OPEN, 0));
+    check("GOG: unported addresses read as 0", !ga(VA_SAVELIST) && !ga(VA_ENV_STAB_CALL) &&
+          !ga_have(VA_SPINNER_EXEC, 0));
     check("GOG: ported RVAs and the delta", ga_rva(RVA_SETTINGS) == 0x021EAEB8u &&
           ga_rva(EF_RANGE_RVA) == 0x0060C120u && ga_rva(EF_SHADOW_RVA) == 0x0060C4F6u &&
           ga_have(RVA_SETTINGS, EF_RANGE_RVA, EF_SHADOW_RVA, 0));
@@ -253,6 +256,14 @@ int main(int argc, char** argv)
               code_matches(ga(VA_UNPACK), "55 8b ec 8b 4d 08 0f b6 01 c1 e8 05") &&
               *(const unsigned char*)u == 0xE8 && u + 5 + *(const LONG*)(u + 1) == ga(VA_UNPACK));
     }
+    {
+        uintptr_t lc = ga(VA_LAYER_LOAD_CALL);
+        check("GOG: the per-layer load (stdcall info, ctx; RET 8) and its one call (memory guard)",
+              code_matches(lc - 14, "8d 45 d4 50 ff 75 ec 89 5d d4 c6 45 d8 01 e8 f3") &&
+              lc + 5 + *(const LONG*)(lc + 1) == ga(VA_LAYER_LOAD) &&
+              code_matches(ga(VA_LAYER_LOAD), "55 8b ec 83 ec 0c 53 8b 5d 08 56 57 33 ff c6 43") &&
+              code_matches(ga(VA_LAYER_LOAD) + 0x85, "c2 08 00"));
+    }
     check("GOG: the game global is written after 'Initializing Game...' (00AFB1DC)",
           *(const unsigned char*)(gog + 0x6FB1DC) == 0xA3 &&
           ((*(const DWORD*)(gog + 0x6FB1DD) - (DWORD)(ga(VA_GAME) - g_delta)) & 0xFFFF) == 0);
@@ -265,6 +276,8 @@ int main(int argc, char** argv)
     check("GOG: doors and interiors stay on", cfg_keep_outdoors && cfg_keep_interiors &&
           cfg_preload_interiors && cfg_skip_door_gc && cfg_indoor_outdoors && cfg_fast_doors &&
           cfg_instant_doors && cfg_door_fade == 0.05f && cfg_area_fade == 0.25f);
+    check("GOG: door_light_blend and the hidden spinner off (not ported)",
+          cfg_door_light_blend == 0.0f && cfg_door_spinner == 1);
     check("GOG: window, window_mode rows, Windows keys stay on", cfg_wf_enabled && cfg_window_mode && cfg_winkeys);
     check("GOG: load_trace stays on", cfg_load_trace);
     check("GOG: skip_intro, raycast and quit guards stay on", cfg_skip_intro && cfg_ray_guard && cfg_quit_guard);

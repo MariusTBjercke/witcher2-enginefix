@@ -19,8 +19,9 @@ What it does:
 - Seamless interiors: houses, shops and inns without a fade. The outdoors stays loaded
   (visible through the windows), the area's interiors load with the area, so
   open doors show the real rooms, and a door takes a few hundredths of a
-  second without a fade instead of ~2.2 s. Doors that change area (the gate
-  into Flotsam) keep a short fade.
+  second without a fade instead of ~2.2 s. The lighting blends over 1 s
+  instead of jumping. Doors that change area (the gate into Flotsam) keep a
+  short fade.
 - Display mode in Options > Graphics: full screen, borderless window or
   windowed, switched at once without a restart.
 - Snipping Tool and Windows keys work in game (Win+Shift+S, Print Screen,
@@ -105,6 +106,7 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [loading] interiors=2          1 loads each interior on its first visit,
                                  0 restores the game's doors
   [loading] fast_doors=1         0 restores the game's door timing
+  [loading] door_light_blend=1.0 0 switches the lighting at once at doors
   [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
   [window]  borderless=0         start-up fallback; Options owns it after
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)
@@ -127,6 +129,11 @@ A mod that ships its own globals\map_scales.csv conflicts with the interior
 maps; the one copied last wins.
 
 Tested on Steam 3.5.0.26, Windows 11, with and without DXVK.
+Playing at 4K: install DXVK (d3d9.dll in bin). The game is 32-bit (4 GB at
+most), and with its own Direct3D 9 every texture also takes room there; at
+4K it can run out of memory after loading a save, with or without this mod.
+DXVK keeps the textures on the graphics card. The seamless interiors stop
+preloading when less than 1280 MB is free ([loading] preload_memory_mb).
 Steam only for now: the GOG version is a separately compiled build, where
 the engine fixes skip themselves and the save fixes do not apply. GOG
 support is being worked on for a later version.

@@ -142,6 +142,11 @@ static int cfg_instant_doors = 1; // [loading] instant_doors: no fade on a house
 static int cfg_indoor_outdoors = 1; // [loading] indoor_outdoors: keep drawing terrain/grass behind kept doors
 static int cfg_preload_interiors = 1; // [loading] preload_interiors: load every building interior with the area
 static int cfg_keep_interiors = 1; // [loading] keep_interiors: a visited house interior stays loaded, no fake rooms back
+static float cfg_door_light_blend = 1.0f; // [loading] door_light_blend: seconds the lighting blends over at an instant door (0 = game: at once)
+static int cfg_preload_street = 1; // [loading] preload_street: a save inside a house also loads its street
+static int cfg_door_spinner;    // [loading] door_spinner: 1 = the loading spinner also on instant doors (game)
+static int cfg_preload_memory_mb = 1280; // [loading] preload_memory_mb: preloaded layers load only while this much address space is free (0 = no limit)
+static int cfg_door_memory_mb = 1024;    // [loading] door_memory_mb: less free than this at a door -> the game's own door (0 = never)
 static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
 static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
 static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
@@ -413,6 +418,14 @@ static void load_config(void)
     cfg_indoor_outdoors = ini_int("loading", "indoor_outdoors", 1);
     cfg_skip_door_gc = ini_int("loading", "skip_door_gc", 1);
     cfg_instant_doors = ini_int("loading", "instant_doors", 1);
+    cfg_door_light_blend = ini_float("loading", "door_light_blend", 1.0f);
+    if (cfg_door_light_blend < 0.0f || cfg_door_light_blend > 5.0f) cfg_door_light_blend = 1.0f;
+    cfg_preload_street = ini_int("loading", "preload_street", 1);
+    cfg_door_spinner = ini_int("loading", "door_spinner", 0);
+    cfg_preload_memory_mb = ini_int("loading", "preload_memory_mb", 1280);
+    if (cfg_preload_memory_mb < 0 || cfg_preload_memory_mb > 3500) cfg_preload_memory_mb = 1280;
+    cfg_door_memory_mb = ini_int("loading", "door_memory_mb", 1024);
+    if (cfg_door_memory_mb < 0 || cfg_door_memory_mb > 3500) cfg_door_memory_mb = 1024;
     if (cfg_door_fade < 0.05f || cfg_door_fade > 2.0f) cfg_door_fade = 0.5f;
     cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
     cfg_continue = ini_int("scriptpatches", "continue", 1);
@@ -2835,6 +2848,14 @@ static void ko_pair_put(DWORD* set, int* n, const wchar_t* from, const wchar_t* 
     set[*n < KO_PAIRS ? (*n)++ : (KO_PAIRS - 1)] = ko_pair(from, to);
 }
 
+static void ko_pair_del(DWORD* set, int* n, const wchar_t* from, const wchar_t* to)
+{
+    DWORD h = ko_pair(from, to);
+    int i;
+    for (i = 0; i < *n; i++)
+        if (set[i] == h) { set[i] = set[--*n]; return; }
+}
+
 static int ko_pair_known(const wchar_t* from, const wchar_t* to) { return ko_pair_in(g_koPairs, g_koPairCount, from, to); }
 static void ko_pair_add(const wchar_t* from, const wchar_t* to) { ko_pair_put(g_koPairs, &g_koPairCount, from, to); }
 
@@ -3248,6 +3269,240 @@ static void kp_walk(const void* group, int depth, kp_collect_t* t)
     for (i = 0; infos && n < 100000 && i < n; i++) kp_walk(read_ptr(infos + i), depth + 1, t);
 }
 
+// A partition's own layer groups, the way the game loads them: FUN_00a83097 resolves each
+// group path (FUN_00b059d9) and takes that group's own layer infos only (FUN_00b0582e with
+// "recursive" 0), so a layer belongs to a group when its file sits directly in the group's
+// folder. Used for the street of a save inside a house and for the check before a door goes
+// without a fade (docs/fixes/door-transitions.md).
+#define KS_GROUPS 128
+static wchar_t g_ksGroup[KS_GROUPS][200];
+static int     g_ksGroups;
+
+static DWORD ks_count(const void* node)
+{
+    DWORD n = node ? (DWORD)(uintptr_t)read_ptr((const char*)node + 0x78) : 0;
+    return n < 10000 ? n : 0;
+}
+
+static void ks_take_groups(const void* node)
+{
+    const char* groups = node ? (const char*)read_ptr((const char*)node + 0x74) : NULL;
+    DWORD n = ks_count(node), j;
+    g_ksGroups = 0;
+    for (j = 0; groups && j < n && g_ksGroups < KS_GROUPS; j++) {
+        pt_text(groups + 0x10 * j, g_ksGroup[g_ksGroups], 200);
+        if (g_ksGroup[g_ksGroups][0]) g_ksGroups++;
+    }
+}
+
+// Does the layer file sit directly in one of g_ksGroup's folders?
+static int ks_in_groups(const wchar_t* path)
+{
+    int g;
+    for (g = 0; g < g_ksGroups; g++) {
+        size_t n = wcslen(g_ksGroup[g]);
+        const wchar_t* hit;
+        for (hit = wcsistr(path, g_ksGroup[g]); hit; hit = wcsistr(hit + 1, g_ksGroup[g]))
+            if ((hit == path || hit[-1] == L'\\') && hit[n] == L'\\' && !wcschr(hit + n + 1, L'\\')) return 1;
+    }
+    return 0;
+}
+
+// What a kept door would still have to load for these groups: layer infos not loaded or
+// loading, without what a door swaps or skips anyway. With `out`, they are collected too.
+typedef struct { void** out; DWORD added, max, missing; } ks_walk_t;
+
+static void ks_walk(const void* group, int depth, ks_walk_t* t)
+{
+    void** infos;
+    DWORD n, i;
+    if (!group || depth > 40) return;
+    infos = (void**)read_ptr((const char*)group + 0x90);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x94);
+    for (i = 0; infos && n < 100000 && i < n; i++) {
+        void* info = read_ptr(infos + i);
+        wchar_t path[260];
+        int c;
+        if (!info || read_ptr((char*)info + 0x38) || read_ptr((char*)info + 0x5C)) continue;
+        pt_text((char*)info + 0x68, path, 260);
+        if (!ks_in_groups(path)) continue;
+        c = ko_class(info);
+        if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
+        t->missing++;
+        if (t->out && t->added < t->max) t->out[t->added++] = info;
+    }
+    infos = (void**)read_ptr((const char*)group + 0x80);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x84);
+    for (i = 0; infos && n < 100000 && i < n; i++) ks_walk(read_ptr(infos + i), depth + 1, t);
+}
+
+// The street of an interior partition: the sibling that clearly has the most groups of its
+// own (Flotsam 51 against at most 18, Binduga 32 against 2-3, the prologue village's
+// `outside` 7 against 1-2). NULL when `target` is that street itself, has children of its
+// own, or no sibling stands out (Act 2's buildings hang under their street instead).
+static void* ks_street(void* world, const wchar_t* target)
+{
+    void* node = kp_find(world, target);
+    void* parent = node ? read_ptr((char*)node + 0x60) : NULL;
+    void** kids = parent ? (void**)read_ptr((char*)parent + 0x64) : NULL;
+    DWORD k = parent ? (DWORD)(uintptr_t)read_ptr((char*)parent + 0x68) : 0, i, best = 0, second = 0;
+    void* street = NULL;
+    if (!node || read_ptr((char*)node + 0x68)) return NULL;
+    for (i = 0; kids && k < 10000 && i < k; i++) {
+        void* c = read_ptr(kids + i);
+        DWORD n = ks_count(c);
+        if (!c) continue;
+        if (n > best) { second = best; best = n; street = c; }
+        else if (n > second) second = n;
+    }
+    if (!street || street == node || best < 5 || best < 2 * second) return NULL;
+    return street;
+}
+
+// Kept-door check: how many layers of `target`'s own groups are still to load.
+static DWORD ks_missing(void* world, const wchar_t* target)
+{
+    ks_walk_t t;
+    memset(&t, 0, sizeof t);
+    ks_take_groups(kp_find(world, target));
+    if (g_ksGroups) ks_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &t);
+    return t.missing;
+}
+
+// ---- memory guard for kept and preloaded layers ----------------------------------
+// docs/fixes/door-transitions.md, "Memory". The game is a 32-bit process (4 GB with LAA).
+// With the system's Direct3D 9 the managed textures keep a copy in the process: loading the
+// Flotsam inn save took 1.74 -> 2.81 GB with every interior and the street preloaded, and the
+// texture streaming then ran the process out of address space (owner, 2026-11-04 15:18: a
+// NULL from the renderer's allocator at 009CB57D, 3.4 GB). DXVK keeps them on the GPU (1.07 ->
+// 1.33 GB for the same load). So what the DLL adds on top of the game is held to the address
+// space left:
+//  - an area load's preloaded layers (interiors, a house's street) go to the end of the job's
+//    last bucket, after the area's own layers; the per-layer load FUN_00a5ac6c (EDI = layer
+//    info, one stack argument, RET 4; its only call is 00A91709 in FUN_00a91600) goes through
+//    layer_load_stub, which skips a preloaded layer once less than preload_memory_mb is free.
+//    Those houses then load on their first visit, with a fade (the door check, ks_missing);
+//  - a door that starts with less than door_memory_mb free is the game's own door: the game's
+//    job unloads the outdoors around it, its GC runs, and the door fades.
+// Without the per-layer hook (a build it is not ported to) the preload is skipped as a whole
+// when less than preload_memory_mb + KM_COARSE_MB is free before the load.
+#define VA_LAYER_LOAD_CALL  0x00A91709u   // call FUN_00a5ac6c in FUN_00a91600, its only caller
+#define VA_LAYER_LOAD       0x00A5AC6Cu
+#define KM_COARSE_MB        1024
+#define KM_SET              1024          // preloaded layers watched per load
+#define KM_ORIG             8192          // the job's own load list, sorted
+
+static void* g_kmSet[KM_SET];
+static void* g_kmOrig[KM_ORIG];
+static int   g_kmCount;
+static volatile int g_kmActive;
+static DWORD g_kmLoaded, g_kmSkipped, g_kmFreeMin;
+static uintptr_t g_layerLoad;   // this build's FUN_00a5ac6c
+static int g_layerHooked;
+static int g_koMemLow;          // the door in progress was left to the game for memory
+
+// Free user address space of the process, in MB (cheap: no address space walk).
+static DWORD ko_free_mb(void)
+{
+    MEMORYSTATUSEX ms;
+    ms.dwLength = sizeof ms;
+    return GlobalMemoryStatusEx(&ms) ? (DWORD)(ms.ullAvailVirtual >> 20) : 0xFFFFFFFFu;
+}
+
+// 0 = skip this layer's load: a preloaded layer while too little address space is left.
+static int __stdcall kp_layer_ok(void* info)
+{
+    DWORD freeMb;
+    if (!g_kmActive || !g_kmCount || !info) return 1;
+    if (!bsearch(&info, g_kmSet, g_kmCount, sizeof(void*), kp_cmp)) return 1;
+    freeMb = ko_free_mb();
+    if (freeMb < g_kmFreeMin) g_kmFreeMin = freeMb;
+    if (freeMb < (DWORD)cfg_preload_memory_mb) {
+        g_kmSkipped++;
+        return 0;
+    }
+    g_kmLoaded++;
+    return 1;
+}
+
+// Replaces `call FUN_00a5ac6c` at 00A91709. EDI (the layer info) is kept for the original; a
+// skipped load returns 0 and pops its one argument, as the original does.
+__declspec(naked) static void layer_load_stub(void)
+{
+    __asm {
+        push eax
+        push ecx
+        push edx
+        push edi
+        call kp_layer_ok
+        test eax, eax
+        pop edx
+        pop ecx
+        pop eax
+        jz skip
+        jmp dword ptr [g_layerLoad]
+    skip:
+        xor eax, eax
+        ret 4
+    }
+}
+
+// GOG's FUN_00a5ac6c is 00AAE95E, the same code with the info in EBX: stdcall (info, ctx),
+// RET 8. Its one call, 00AE5D66 in the bucket loader 00AE5C5A, pushes ctx and then the info.
+__declspec(naked) static void layer_load_stub_gog(void)
+{
+    __asm {
+        push eax
+        push ecx
+        push edx
+        push dword ptr [esp + 16]         ; the layer info, the first argument
+        call kp_layer_ok
+        test eax, eax
+        pop edx
+        pop ecx
+        pop eax
+        jz skip
+        jmp dword ptr [g_layerLoad]
+    skip:
+        xor eax, eax
+        ret 8
+    }
+}
+
+// .text is decrypted by the SteamStub: retried from doors_tick until the fingerprint holds.
+static int layer_install(void)
+{
+    uintptr_t call = ga(VA_LAYER_LOAD_CALL);
+    if (g_layerHooked) return 1;
+    if (!call || !code_matches(call - 14, by_build("8b 7d ec 8d 45 d4 50 89 5d d4 c6 45 d8 01 e8 5e 95 fc ff",
+                                                   "8d 45 d4 50 ff 75 ec 89 5d d4 c6 45 d8 01 e8 f3 8b fc ff")))
+        return 0;
+    g_layerLoad = ga(VA_LAYER_LOAD);
+    g_layerHooked = patch_call(call, g_layerLoad,
+                               g_build == BUILD_GOG ? (void*)layer_load_stub_gog : (void*)layer_load_stub);
+    logf_("preload: per-layer load %s - preloaded layers stop below %d MB of free address space",
+          g_layerHooked ? "hooked" : "NOT hooked", cfg_preload_memory_mb);
+    return 1;
+}
+
+// The layers this load added (out[0..n)) that the job did not list itself go into g_kmSet:
+// the area's own layers always load, whatever the memory.
+static void km_watch(void* const* own[], const LONG ownN[], int buckets, void* const* out, DWORD n)
+{
+    int no = 0, b;
+    LONG i;
+    DWORD k;
+    g_kmCount = 0;
+    g_kmLoaded = g_kmSkipped = 0;
+    g_kmFreeMin = 0xFFFFFFFFu;
+    for (b = 0; b < buckets; b++)
+        for (i = 0; own[b] && i < ownN[b] && no < KM_ORIG; i++) g_kmOrig[no++] = own[b][i];
+    qsort(g_kmOrig, no, sizeof(void*), kp_cmp);
+    for (k = 0; k < n && g_kmCount < KM_SET; k++)
+        if (out[k] && !bsearch(&out[k], g_kmOrig, no, sizeof(void*), kp_cmp)) g_kmSet[g_kmCount++] = out[k];
+    qsort(g_kmSet, g_kmCount, sizeof(void*), kp_cmp);
+}
+
 // Occluders on a kept door. Occluders are invisible blocks the renderer uses to skip what is
 // hidden behind a building. A door into a Flotsam building unloads the town's occluders
 // (`marketplace\occluders`, `occluders\flotsam_outside`) and the way out loads them back; with
@@ -3372,18 +3627,25 @@ static void __stdcall hook_PartRun(void* job)
     void* savedData[5];
     LONG savedN[5];
     LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
-    int on = 0, area = 0, filter;
+    int on = 0, area = 0, filter, coarseSkip = 0;
     LONGLONG tRun;
     void* world = read_ptr((char*)job);
+    void** kmBase = NULL;
+    DWORD kmN = 0;
     if (cfg_load_trace) pt_job("sync", job);
     g_ptGcSkipped = 0;
     g_ptGcUs = 0;
     if (nb < 0 || nb > 5 || unloadN < 0 || unloadN > KO_LIST || (unloadN && !unloadData) || (nb && !buckets)) nb = -1;
     if (nb >= 0) {
-        on = cfg_keep_outdoors && ko_allowed(job);
+        // A door left to the game for memory (g_koMemLow, hook_DoorStart) runs the game's job:
+        // it unloads the outdoors and the other interiors, and its GC runs.
+        on = cfg_keep_outdoors && !g_koMemLow && ko_allowed(job);
         area = cfg_preload_interiors && (g_ptMode == 1 || (g_ptMode == 4 && !ko_same_folder(g_ptFrom, g_ptTo)));
     }
-    filter = nb >= 0 && (on || cfg_preload_interiors);
+    filter = nb >= 0 && (on || (cfg_preload_interiors && !g_koMemLow));
+    if (area && !g_layerHooked && cfg_preload_memory_mb &&
+        ko_free_mb() < (DWORD)(cfg_preload_memory_mb + KM_COARSE_MB))
+        coarseSkip = 1;
     if (area && g_ptMode == 1) g_kpSetCount = 0;
     if (nb >= 0 && !cfg_preload_interiors && (g_ptMode == 1 || (g_ptMode == 4 && !ko_same_folder(g_ptFrom, g_ptTo))))
         g_koPairCount = g_koSlowCount = 0;
@@ -3418,7 +3680,11 @@ static void __stdcall hook_PartRun(void* job)
                 else
                     g_koLoadOut[b][m++] = d[i];
             }
-            if (area && b == nb - 1) {
+            if (area && b == nb - 1 && coarseSkip) {
+                logf_("preload: only %lu MB of address space free before the load - nothing preloaded "
+                      "(interiors load on their first visit)", ko_free_mb());
+                g_koPreloaded = 1;
+            } else if (area && b == nb - 1) {
                 kp_collect_t t;
                 t.out = &g_koLoadOut[b][m];
                 t.added = 0;
@@ -3437,7 +3703,28 @@ static void __stdcall hook_PartRun(void* job)
                     t.added += f.added;
                     logf_("preload: %lu interior layers from the partition tree, %lu more by folder name", tree, f.added);
                 }
+                // A save (or a script's LoadWorldPartition) inside a house: its street's own
+                // layers were not part of the load, so the first way out loaded them on the
+                // spot without a fade (Flotsam inn: 49 layers, 391 ms). Load them now, without
+                // what a door swaps; the loader skips a layer listed twice (FUN_00a91600, +0x38).
+                if (g_ptMode == 1 && cfg_preload_street) {
+                    void* street = ks_street(world, g_ptTo);
+                    if (street) {
+                        ks_walk_t s;
+                        wchar_t nm[96];
+                        memset(&s, 0, sizeof s);
+                        s.out = t.out + t.added;
+                        s.max = t.max - t.added;
+                        ks_take_groups(street);
+                        ks_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &s);
+                        t.added += s.added;
+                        logf_("preload: '%ls' is inside '%ls' - its %lu layers load now too (%d groups of its own)",
+                              g_ptTo, pt_text((char*)street + 0x04, nm, 96), s.added, g_ksGroups);
+                    }
+                }
                 added = (LONG)t.added;
+                kmBase = t.out;
+                kmN = t.added;
                 g_koPreloaded = 1;
                 if (cfg_load_trace) pt_layers("preload", t.out, t.added, PT_MAX_NAMES - 400);
                 m += added;
@@ -3448,11 +3735,23 @@ static void __stdcall hook_PartRun(void* job)
         }
     }
     g_koSkipGc = on && cfg_skip_door_gc;
+    // Preloaded layers come last in the job and load only while the address space allows.
+    if (kmN && g_layerHooked && cfg_preload_memory_mb) {
+        km_watch((void* const**)savedData, savedN, nb, kmBase, kmN);
+        g_kmActive = 1;
+    }
     tRun = qpc_us();
     if (g_build == BUILD_GOG) part_run_orig_gog(job);
     else ((PartRun_t)g_partRun)(job);
     tRun = qpc_us() - tRun;
     g_koSkipGc = 0;
+    if (g_kmActive) {
+        g_kmActive = 0;
+        logf_("preload: %lu of %d preloaded layers loaded, %lu left for their first visit (free address space "
+              "at the lowest %lu MB, floor %d MB)", g_kmLoaded, g_kmCount, g_kmSkipped,
+              g_kmFreeMin == 0xFFFFFFFFu ? ko_free_mb() : g_kmFreeMin, cfg_preload_memory_mb);
+    }
+    g_koMemLow = 0;
     if (filter) {
         *(void**)((char*)job + 0x0C) = unloadData;
         *(LONG*)((char*)job + 0x10) = unloadN;
@@ -3511,6 +3810,10 @@ static void __stdcall hook_PartRun(void* job)
     if (on && tRun / 1000 >= KO_SLOW_MS) {
         ko_pair_put(g_koSlow, &g_koSlowCount, g_ptFrom, g_ptTo);
         logf_("doors: '%ls' -> '%ls' took %lu ms - it keeps its fade", g_ptFrom, g_ptTo, (DWORD)(tRun / 1000));
+    } else if (on && ko_pair_in(g_koSlow, g_koSlowCount, g_ptFrom, g_ptTo)) {
+        // A first visit can be slow (what it loaded then stays loaded): fast now, no fade again.
+        ko_pair_del(g_koSlow, &g_koSlowCount, g_ptFrom, g_ptTo);
+        logf_("doors: '%ls' -> '%ls' took %lu ms now - no fade again", g_ptFrom, g_ptTo, (DWORD)(tRun / 1000));
     }
 }
 
@@ -3830,6 +4133,208 @@ static void fade_exec_install(void)
           g_fadeExecHooked ? "on" : "off");
 }
 
+// ---- door lighting and the loading spinner ----------------------------------
+// door_light_blend (docs/fixes/door-transitions.md). An interior's lighting is an area
+// environment (CAreaEnvironmentComponent; Flotsam's are in environments\interior_city) in a
+// layer the door's partition loads or unloads. The environment manager (world+0x2B8) blends
+// area environments over their activation/deactivation times, but CDPR set those to 0 for
+// most interiors, and every door task ends in FUN_0095db81, which re-tests the areas and then
+// calls Stabilize (FUN_00a74fbf, EAX = manager, at 0095DC5E) to finish every blend at once.
+// Behind the game's fade nobody saw it; on an instant door the street turned into the
+// interior look (no sun, far plane 26-386 m, depth of field) and, leaving, the room into the
+// outdoor look, in one frame. For KO_LIGHT_MS after an instant door starts:
+//  - every area activation gets at least door_light_blend seconds both ways: FUN_00a75014
+//    (stdcall, 9 args, RET 0x24; arg 3 isGlobal, arg 7 -> {priority, activation,
+//    deactivation}) has one caller, 00A367CB in FUN_00a36748, whose call goes to a stub;
+//  - the manager's active non-global entries (array +0x1BB0, count +0x1BB4, stride 0x1BCC;
+//    deactivation +0x08, isGlobal +0x1BC8) get at least that fade-out time when the door
+//    starts, so the interior's environment fades out when the door unloads its layer (the
+//    entry keeps its own copy of the parameters);
+//  - the door's Stabilize call is skipped; the manager's tick (FUN_00a78346) advances the
+//    blends and drops finished entries every frame anyway.
+// Doors with a fade and area changes keep the game's behaviour.
+//
+// door_spinner=0: the door task and the partition job show the loading spinner (render
+// command vtable 00E7C07C, show byte +0x08, execute slot 3 = 009DC3F1 -> FUN_009d1b60,
+// `00_loading.swf`). An instant door has nothing to wait for, so for KO_SPINNER_MS after one
+// starts a "show" command is dropped on the render thread; "hide" always runs.
+#define VA_ENV_ADD_CALL       0x00A367CBu   // call FUN_00a75014 in FUN_00a36748, its only caller
+#define VA_ENV_ADD            0x00A75014u
+#define VA_ENV_STAB_CALL      0x0095DC5Eu   // call FUN_00a74fbf in FUN_0095db81 (door re-evaluation)
+#define VA_ENV_STAB           0x00A74FBFu
+#define VA_SPINNER_EXEC_SLOT  0x00E7C088u   // loading spinner command vtable 00E7C07C, slot 3
+#define VA_SPINNER_EXEC       0x009DC3F1u
+#define OFF_WORLD_ENVMGR      0x2B8
+#define KO_LIGHT_MS           4000
+#define KO_SPINNER_MS         2000
+#define KO_MISSING_MAX        16            // more layers than this to load: no instant door
+
+typedef void (__fastcall *SpinnerExec_t)(void* cmd, void* edx);
+static volatile DWORD g_koInstantTick;   // GetTickCount() | 1 when the last door went without a fade
+static uintptr_t g_envAdd, g_envStab, g_spinnerExec;   // this build's originals
+static int g_lightHooked, g_spinnerHooked;
+static volatile LONG g_spinnerDropped;
+
+static int ko_instant_recent(DWORD ms)
+{
+    DWORD t = g_koInstantTick;
+    return t && GetTickCount() - t < ms;
+}
+
+static int ko_light_on(void)
+{
+    return g_lightHooked && cfg_door_light_blend > 0.0f && ko_instant_recent(KO_LIGHT_MS);
+}
+
+static char* ko_env_manager(void)
+{
+    void* game = read_ptr((void*)ga(VA_GAME));
+    void* world = game ? read_ptr((char*)game + 0x40) : NULL;
+    return world ? (char*)read_ptr((char*)world + OFF_WORLD_ENVMGR) : NULL;
+}
+
+// The manager's entries; NULL when the array does not look right.
+static char* ko_env_entries(char* mgr, DWORD* count)
+{
+    char* e = mgr ? (char*)read_ptr(mgr + 0x1BB0) : NULL;
+    DWORD n = mgr ? (DWORD)(uintptr_t)read_ptr(mgr + 0x1BB4) : 0;
+    *count = 0;
+    if (!e || n > 64 || (n && !range_readable(e, (size_t)n * 0x1BCC))) return NULL;
+    *count = n;
+    return e;
+}
+
+// At an instant door: active non-global environments fade out over at least door_light_blend.
+static int ko_light_deactivation(void)
+{
+    DWORD n, i;
+    char* e = ko_env_entries(ko_env_manager(), &n);
+    int raised = 0;
+    float d;
+    for (i = 0; e && i < n; i++) {
+        char* en = e + i * 0x1BCC;
+        if (en[0x1BC8]) continue;
+        if (read_f32(en + 0x08, &d) && d < cfg_door_light_blend && write_f32(en + 0x08, cfg_door_light_blend))
+            raised++;
+    }
+    return raised;
+}
+
+// Called from env_add_stub before FUN_00a75014 runs; `times` is the caller's
+// {priority, activation, deactivation} on its stack.
+static void __stdcall env_add_adjust(DWORD isGlobal, float* times)
+{
+    float v;
+    if (!ko_light_on() || (isGlobal & 0xFF) || !times) return;
+    if (read_f32(times + 1, &v) && v < cfg_door_light_blend) write_f32(times + 1, cfg_door_light_blend);
+    if (read_f32(times + 2, &v) && v < cfg_door_light_blend) write_f32(times + 2, cfg_door_light_blend);
+}
+
+// Replaces `call FUN_00a75014` at 00A367CB: after 3 saved registers the return address is at
+// [esp+12] and argument N at [esp+12+4N].
+__declspec(naked) static void env_add_stub(void)
+{
+    __asm {
+        push eax
+        push ecx
+        push edx
+        mov eax, [esp + 12 + 4 * 7]
+        push eax
+        mov eax, [esp + 4 + 12 + 4 * 3]
+        push eax
+        call env_add_adjust
+        pop edx
+        pop ecx
+        pop eax
+        jmp dword ptr [g_envAdd]
+    }
+}
+
+// The door's Stabilize: skipped (1) while an instant door's lighting blends; logs the blends.
+static int __cdecl env_stab_skip(void)
+{
+    char line[400];
+    size_t used = 0;
+    DWORD n, i, shown = 0;
+    char* e;
+    if (!ko_light_on()) return 0;
+    e = ko_env_entries(ko_env_manager(), &n);
+    for (i = 0; e && i < n && shown < 6; i++) {
+        char* en = e + i * 0x1BCC;
+        wchar_t nm[48];
+        float f = 0, r = 0;
+        if (en[0x1BC8]) continue;
+        read_f32(en + 0x1BB0, &f);
+        read_f32(en + 0x1BB4, &r);
+        pt_text(en + 0x1BA0, nm, 48);
+        if (used < sizeof line - 1)
+            used += (size_t)_snprintf_s(line + used, sizeof line - used, _TRUNCATE, " '%ls' %ld at %.2f (%+.2f/s)",
+                                        nm, (LONG)(uintptr_t)read_ptr(en), f, r);
+        shown++;
+    }
+    logf_("doors: lighting blends over %.2f s instead of switching at once -%s", cfg_door_light_blend,
+          used ? line : " no area environment active");
+    return 1;
+}
+
+// Replaces `call FUN_00a74fbf` at 0095DC5E. EAX (the manager) is kept for the original.
+__declspec(naked) static void env_stab_stub(void)
+{
+    __asm {
+        push eax
+        push ecx
+        push edx
+        call env_stab_skip
+        test eax, eax
+        pop edx
+        pop ecx
+        pop eax
+        jnz skip
+        jmp dword ptr [g_envStab]
+    skip:
+        ret
+    }
+}
+
+static void __fastcall hook_SpinnerExec(void* cmd, void* edx)
+{
+    unsigned char show = 1;
+    __try { show = *((const unsigned char*)cmd + 8); } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    if (show && !cfg_door_spinner && ko_instant_recent(KO_SPINNER_MS)) {
+        InterlockedIncrement(&g_spinnerDropped);
+        return;
+    }
+    ((SpinnerExec_t)g_spinnerExec)(cmd, edx);
+}
+
+// .text is decrypted by the SteamStub: retried from doors_tick until the fingerprints hold.
+static int light_install(void)
+{
+    uintptr_t addCall = ga(VA_ENV_ADD_CALL), stabCall = ga(VA_ENV_STAB_CALL);
+    int a, b;
+    if (g_lightHooked) return 1;
+    if (!addCall || !stabCall ||
+        !code_matches(addCall - 9, "51 8d 8e c0 01 00 00 51 50 e8 44 e8 03 00") ||
+        !code_matches(stabCall - 14, "a1 50 49 40 01 8b 40 40 8b 80 b8 02 00 00 e8 5c 73 11 00"))
+        return 0;
+    g_envAdd = ga(VA_ENV_ADD);
+    g_envStab = ga(VA_ENV_STAB);
+    a = patch_call(addCall, g_envAdd, (void*)env_add_stub);
+    b = a && patch_call(stabCall, g_envStab, (void*)env_stab_stub);
+    g_lightHooked = a && b;
+    logf_("doors: environment activation %s, door Stabilize %s - door_light_blend %s (%.2f s)",
+          a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked", g_lightHooked ? "on" : "off", cfg_door_light_blend);
+    return 1;
+}
+
+static void spinner_install(void)
+{
+    g_spinnerExec = ga(VA_SPINNER_EXEC);
+    g_spinnerHooked = slot_swap(ga(VA_SPINNER_EXEC_SLOT), g_spinnerExec, (void*)hook_SpinnerExec);
+    logf_("doors: loading spinner command %s - no spinner on instant doors%s",
+          g_spinnerHooked ? "hooked" : "NOT hooked", g_spinnerHooked ? "" : " not possible");
+}
+
 static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
 {
     g_koDoorPosOk = read_f32((char*)door + OFF_NODE_POS, &g_koDoorPos[0]) &&
@@ -3846,11 +4351,37 @@ static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
     nt = part_folder(to);
     area = from[0] && to[0] && (nf != nt || _wcsnicmp(from, to, nf));
     g_doorFade = area ? cfg_area_fade : cfg_door_fade;
+    g_koInstantTick = 0;
+    // Little address space left: this door is the game's own (hook_PartRun lets its job unload
+    // the outdoors and the other interiors), behind the area fade (docs/fixes/door-transitions.md).
+    g_koMemLow = 0;
+    if (!area && cfg_keep_outdoors && cfg_door_memory_mb) {
+        DWORD freeMb = ko_free_mb();
+        if (freeMb < (DWORD)cfg_door_memory_mb) {
+            g_koMemLow = 1;
+            g_doorFade = cfg_area_fade;
+            logf_("doors: '%ls' -> '%ls' with only %lu MB of address space free - the game's door "
+                  "(the outdoors unloads), %.2f s fades", from, to, freeMb, g_doorFade);
+        }
+    }
     if (area) logf_("doors: '%ls' -> '%ls' changes area - %.2f s fades", from, to, g_doorFade);
+    else if (g_koMemLow) {}
     else if (cfg_instant_doors && g_fadeExecHooked && cfg_keep_outdoors && !ko_pair_in(g_koSlow, g_koSlowCount, from, to) &&
              ((cfg_preload_interiors && g_koPreloaded) || (cfg_keep_interiors && ko_pair_known(from, to)))) {
-        g_doorFade = KO_NO_FADE;
-        logf_("doors: '%ls' -> '%ls' is loaded - no fade", from, to);
+        // The door decides before its job exists: count what the target's own groups still
+        // have to load (a save inside a house left its street out; 49 layers took 391 ms).
+        DWORD missing = ks_missing(world, to);
+        if (missing > KO_MISSING_MAX) {
+            g_doorFade = cfg_area_fade;
+            logf_("doors: '%ls' -> '%ls' still has %lu layers to load - %.2f s fades", from, to, missing, g_doorFade);
+        } else {
+            int raised;
+            g_doorFade = KO_NO_FADE;
+            g_koInstantTick = GetTickCount() | 1;
+            raised = ko_light_on() ? ko_light_deactivation() : 0;
+            logf_("doors: '%ls' -> '%ls' is loaded - no fade (%lu to load%s%s)", from, to, missing,
+                  raised ? ", lighting fades out slowly" : "", g_spinnerDropped ? ", spinner hidden" : "");
+        }
     }
     return ((DoorStart_t)g_doorStart)(door, edx, part);
 }
@@ -3876,13 +4407,30 @@ static void door_start_install(void)
 // Worker tick: the door slots at once, the fade sites once the SteamStub has decrypted .text.
 static void doors_tick(void)
 {
-    static int fades_done, tries, partTries, indoorTries;
+    static int fades_done, tries, partTries, indoorTries, lightTries, spinnerTried, layerTries;
+    if (cfg_preload_interiors && cfg_preload_memory_mb && ga(VA_LAYER_LOAD_CALL) && layerTries >= 0 && layerTries < 1000) {
+        if (layer_install()) layerTries = -1;
+        else if (++layerTries == 1000)
+            logf_("preload: per-layer load not recognised - the preload is skipped below %d MB free instead",
+                  cfg_preload_memory_mb + KM_COARSE_MB);
+    }
     if (cfg_indoor_outdoors && cfg_keep_outdoors && indoorTries >= 0 && indoorTries < 1000) {
         if (indoor_patch()) { logf_("doors: indoor partitions keep drawing terrain and grass (indoor_outdoors=1)"); indoorTries = -1; }
         else if (++indoorTries == 1000) logf_("doors: indoor draw check not recognised - indoor_outdoors off");
     }
     if ((cfg_keep_outdoors || cfg_preload_interiors) && partTries < 1000 && !pt_install() && ++partTries == 1000)
         logf_("partition: switch not recognised - keep_outdoors off");
+    // Both only matter on instant doors (docs/fixes/door-transitions.md).
+    if (cfg_instant_doors && cfg_keep_outdoors && (cfg_keep_interiors || cfg_preload_interiors)) {
+        if (cfg_door_light_blend > 0.0f && lightTries >= 0 && lightTries < 1000) {
+            if (light_install()) lightTries = -1;
+            else if (++lightTries == 1000) logf_("doors: environment calls not recognised - door_light_blend off");
+        }
+        if (!cfg_door_spinner && !spinnerTried) {
+            spinnerTried = 1;
+            spinner_install();
+        }
+    }
     if (!cfg_fast_doors && cfg_door_fade == 0.5f && cfg_area_fade == 0.5f) return;
     door_timer_install("doors");
     if (fades_done || tries > 500) return;
@@ -5752,6 +6300,10 @@ static const ga_row k_gog[] = {
     { VA_DOOR_TIMER,         0x005AF658u },
     { VA_DOOR_TIMER_SLOT,    0x00D7A4CCu },   // CStreamingDoor vtable 00D7A394, slot 78
     { VA_EMPTY_STRING,       0x01680110u },   // pushed by the request callers
+    { VA_ENV_ADD,            0 },
+    { VA_ENV_ADD_CALL,       0 },
+    { VA_ENV_STAB,           0 },
+    { VA_ENV_STAB_CALL,      0 },
     { VA_FACTS_TIME,         0x0050B0A9u },   // in FactsAdd 0050B044 ("FactsAdd" 00D441D4)
     { VA_FADE_IN_EXEC,       0x00A2D789u },
     { VA_FADE_IN_EXEC_SLOT,  0x00F1F3CCu },   // CRenderCommand_ScreenFadeIn vtable 00F1F3C0 + 0x0C
@@ -5765,6 +6317,8 @@ static const ga_row k_gog[] = {
     { VA_IMAGE_KEY,          0 },
     { VA_INDOOR_CMP,         0x00A11286u },   // in the frame setup 00A11181
     { VA_INDOOR_IMM,         0x00A11295u },
+    { VA_LAYER_LOAD,         0x00AAE95Eu },   // stdcall (info, ctx), RET 8 on GOG
+    { VA_LAYER_LOAD_CALL,    0x00AE5D66u },   // in the bucket loader 00AE5C5A ("Loading layer '%s'...")
     { VA_MAP_FIND,           0 },
     { VA_MEM_SERIALIZE,      0 },
     { VA_MEM_SIZE,           0 },
@@ -5791,6 +6345,8 @@ static const ga_row k_gog[] = {
     { VA_STARTVIDEO_STOP,    0x00509D26u },   // thiscall on GOG
     { VA_STARTVIDEO_TICK,    0x0050A01Eu },
     { VA_STARTVIDEO_VSLOT,   0x00D43FB0u },   // CVideoInstance vtable 00D43F3C + 0x74
+    { VA_SPINNER_EXEC,       0 },
+    { VA_SPINNER_EXEC_SLOT,  0 },
     { VA_STEAM_STREAM,       0 },
     { VA_STREAM_DTOR,        0 },
     { VA_STR_FADE_OUT,       0x00D7A328u },
@@ -5976,6 +6532,15 @@ static void build_gate(void)
     if ((!fadeexec || !doorfades) && cfg_instant_doors) {
         if (cfg_keep_interiors || cfg_preload_interiors) gate_off("loading", "instant_doors");
         cfg_instant_doors = 0;
+    }
+    // Both act on instant doors only; without them they have nothing to do.
+    if (!ga_have(VA_GAME, VA_ENV_ADD_CALL, VA_ENV_ADD, VA_ENV_STAB_CALL, VA_ENV_STAB, 0) && cfg_door_light_blend > 0.0f) {
+        if (cfg_instant_doors) gate_off("loading", "door_light_blend");
+        cfg_door_light_blend = 0.0f;
+    }
+    if (!ga_have(VA_SPINNER_EXEC_SLOT, VA_SPINNER_EXEC, 0) && !cfg_door_spinner) {
+        if (cfg_instant_doors) gate_off("loading", "the hidden spinner on instant doors (door_spinner)");
+        cfg_door_spinner = 1;
     }
     if (!loadtrace && cfg_load_trace) {
         gate_off("diagnostics", "load_trace");
@@ -6183,7 +6748,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d", cfg_skip_intro);
         logf_("diagnostics: file_trace=%d load_trace=%d", cfg_file_trace, cfg_load_trace);
-        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d)", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors);
+        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",

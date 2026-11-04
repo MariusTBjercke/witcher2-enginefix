@@ -30,6 +30,10 @@ running exe's import directory.
 | `VA_DOOR_TIMER` | `0095DB00` | `005AF658` |  |
 | `VA_DOOR_TIMER_SLOT` | `00EF01BC` | `00D7A4CC` | streaming door OnTimer |
 | `VA_EMPTY_STRING` | `0160FBA0` | `01680110` | the game's empty String, its usual loading-screen argument |
+| `VA_ENV_ADD` | `00A75014` |  |  |
+| `VA_ENV_ADD_CALL` | `00A367CB` |  | call FUN_00a75014 in FUN_00a36748, its only caller |
+| `VA_ENV_STAB` | `00A74FBF` |  |  |
+| `VA_ENV_STAB_CALL` | `0095DC5E` |  | call FUN_00a74fbf in FUN_0095db81 (door re-evaluation) |
 | `VA_FACTS_TIME` | `0099871E` | `0050B0A9` | mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game |
 | `VA_FADE_IN_EXEC` | `009DC2C3` | `00A2D789` |  |
 | `VA_FADE_IN_EXEC_SLOT` | `00E7C394` | `00F1F3CC` |  |
@@ -43,6 +47,8 @@ running exe's import directory.
 | `VA_IMAGE_KEY` | `00B30E9F` |  | stdcall key = ImageKey(String* name) |
 | `VA_INDOOR_CMP` | `009C0223` | `00A11286` | cmp byte [eax+0xAC],0 / jz / cmp dword [eax+0xA8],1 |
 | `VA_INDOOR_IMM` | `009C0232` | `00A11295` |  |
+| `VA_LAYER_LOAD` | `00A5AC6C` | `00AAE95E` |  |
+| `VA_LAYER_LOAD_CALL` | `00A91709` | `00AE5D66` | call FUN_00a5ac6c in FUN_00a91600, its only caller |
 | `VA_MAP_FIND` | `004A4A03` |  | bool Find(EAX = map, key*, out*), ret 8 |
 | `VA_MEM_SERIALIZE` | `00ABF380` |  | its slot 1 |
 | `VA_MEM_SIZE` | `00ABF379` |  | its slot 3 |
@@ -64,6 +70,8 @@ running exe's import directory.
 | `VA_SAVELIST` | `009A49B9` |  | stdcall void BuildSaveList(panel) |
 | `VA_SAVELIST_CALL_A` | `009A5175` |  | E8 rel32, startup / main menu |
 | `VA_SAVELIST_CALL_B` | `009A524F` |  | E8 rel32, GUI request |
+| `VA_SPINNER_EXEC` | `009DC3F1` |  |  |
+| `VA_SPINNER_EXEC_SLOT` | `00E7C088` |  | loading spinner command vtable 00E7C07C, slot 3 |
 | `VA_STARTVIDEO_CALL` | `009B588F` | `00509EF7` | E8 rel32 in 009B581C (after mov eax,esi) |
 | `VA_STARTVIDEO_LIST` | `009A2190` | `00509DF5` | builds the startup list, EAX = player object |
 | `VA_STARTVIDEO_STOP` | `009A1F2E` | `00509D26` | ends the current movie, ESI = player |
