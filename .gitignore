@@ -11,6 +11,7 @@ dist/
 # Game binaries and third-party tools: never commit (see AGENTS.md, Research setup)
 tools/ghidra-inputs/
 tools/steamless/
+tools/presentmon/
 
 # Runtime logs, dumps and save data (validation logs are kept on purpose)
 *.log
