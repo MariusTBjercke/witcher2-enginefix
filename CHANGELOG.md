@@ -15,7 +15,7 @@ versions are not separate Nexus releases.
 
 - `cpu32_guard` (0.9.0) is now confirmed: a player with a 32-thread CPU reports that the game starts, with the log line `cpu32: 32 logical processors seen`.
 
-Seen in game with DXVK, on Steam and GOG: Shadow quality at all three levels, and the plants. On Steam the row and the plants on Extreme against Vanilla; on GOG the row, Ctrl+Shift+F10 and the start at Ultra. Not verified: the frame cost of High, Ultra and the plant distances, and Shadow quality without DXVK, where a larger shadow map adds to a 32-bit process that is already short of memory. Picking a new level while the shadow map still switches is fixed after those runs (it reported a refusal and kept the old size); that fix has run offline only.
+Seen in game with DXVK, on Steam and GOG: Shadow quality at all three levels, and the plants. On Steam the row and the plants on Extreme against Vanilla; on GOG the row, Ctrl+Shift+F10 and the start at Ultra. Not verified: the frame cost of High, Ultra and the plant distances, and Shadow quality without DXVK, where a larger shadow map adds to a 32-bit process that is already short of memory. Picking a new level while the shadow map still switches reported a refusal and kept the old size in the first GOG run; fixed, and seen working in a second GOG run.
 
 ## 0.10.0
 

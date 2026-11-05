@@ -298,7 +298,8 @@ Native Direct3D 9 was not run with a larger atlas.
 Ctrl+Shift+F10 switch every level, about 3.4 s per atlas change; owner: seemed to work fine. That log also showed a defect:
 pressing the hotkey again during a switch ended in `atlas switch refused`, with the on-screen text to restart and the old size
 kept, because the end of a switch took any Want other than Now for a refused Reset. Now `g_shadowAllocRan` tells them apart, and a level
-picked meanwhile gets its own switch on the next frame (`shadow_switch_end`). That fix has run in `distanceprobe` only.
+picked meanwhile gets its own switch on the next frame (`shadow_switch_end`). Second GOG run, same day: rapid hotkey presses during
+switches, no refusal, and the atlas ends at the level's size. The hotkey is polled about every 120 ms, so a very quick double tap can count once.
 
 What the code says about a larger atlas:
 

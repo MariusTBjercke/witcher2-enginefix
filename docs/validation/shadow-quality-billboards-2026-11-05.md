@@ -68,10 +68,26 @@ GOG 3.5.0.26g with DXVK, no loose meshes in `CookedPC`, an ini from before Shado
 
 The `refused` line is the defect in `docs/fixes/npc-streaming-sun-shadows.md`, fixed after this run: the hotkey was pressed while a switch was running.
 
+Second run with the fix, the DLL of the `v0.11.0` tag. Owner: a quick double tap stepped once, three taps went from Vanilla to Ultra, and it looked normal. No `refused` line, no new crash dump:
+
+```
+18:30:54.072 shadows: vanilla, zones 7 / 24 / 64 m, atlas 1024, filter 1.00 (hotkey)
+18:30:54.436 shadows: high, zones 12 / 24 / 64 m, atlas 2048, filter 0.60 (hotkey)
+18:30:54.918 shadows: ultra, zones 12 / 24 / 64 m, atlas 4096, filter 0.50 (hotkey)
+18:30:57.565 shadows: atlas switched to 2048 per cascade
+18:30:58.046 shadows: ultra, zones 12 / 24 / 64 m, atlas 4096, filter 0.50 (hotkey)
+18:31:01.296 shadows: atlas switched to 4096 per cascade
+18:31:07.191 shadows: high, zones 12 / 24 / 64 m, atlas 2048, filter 0.60 (hotkey)
+18:31:07.676 shadows: ultra, zones 12 / 24 / 64 m, atlas 4096, filter 0.50 (hotkey)
+18:31:10.683 shadows: atlas switched to 2048 per cascade
+18:31:13.811 shadows: atlas switched to 4096 per cascade
+18:31:18.913 exit: CorExitProcess(0) from witcher2.EXE+0x343F48 on thread 17792 (the main thread)
+```
+
 ## Not covered
 
 - Frame cost: no measurement, and the owner did not report on it.
 - The Shadow quality hotkey on Steam (seen on GOG).
-- The fix for a level picked during a switch: `distanceprobe` only.
+- The fix for a level picked during a switch on Steam (seen on GOG).
 - Native Direct3D 9 with a larger shadow map.
 - Which copy of the plant files the game loads with that mod installed. The hook logs only the last proxy.
