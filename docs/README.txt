@@ -34,10 +34,16 @@ What it does:
   starts; its own CPU count never ended there.
 - Crash capture: a crash is logged with a small dump next to the log, so it
   can be reported.
-- Graphics presets: Ctrl+F10 cycles baseline / high / ultra / extreme. Each
-  level sets mesh LOD, foliage distance, mesh visibility and mesh-shadow
-  distance together, shown on screen. Starts at extreme. The same levels are
-  a Draw distance row in Options > Graphics; the game remembers that choice.
+- Graphics presets: Ctrl+F10 cycles vanilla / high / ultra / extreme. Each
+  level sets mesh LOD, foliage distance, mesh visibility, mesh-shadow distance
+  and the distance where plants turn into flat pictures together, shown on
+  screen. Starts at extreme. The same levels are a Draw distance row in
+  Options > Graphics; the game remembers that choice. Mesh LOD and plants are
+  set when an object is created, so load a save to compare those.
+- Shadow quality: a row in Options > Graphics (vanilla, high, ultra), also
+  Ctrl+Shift+F10. High and ultra remove the hard line in the shadows on the
+  ground 10-14 m ahead of Geralt and sharpen them, for more video memory.
+  Switches live, with a pause of 2-3 s. Starts at vanilla, the game's own.
 - The LOD values stay put when the options menu rewrites them.
 - Ctrl/Alt+F9/F10 never trigger a quick load. Plain F9 still quick-loads.
 - Interior maps: 25 interiors (temples, inns, Loredo's house, towers) had a
@@ -118,6 +124,7 @@ Delete bin\d3d9.dll to go back to the game's own Direct3D 9.
 
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
+  [shadows] quality=vanilla      vanilla, high or ultra; enabled=0 removes it
   [saves]   fix_thumbnails=1     0 turns the save-preview fix off
   [saves]   fix_list_leak=1      0 turns the save-list leak fix off
   [saves]   fast_list=1          0 unpacks every save in full for the list

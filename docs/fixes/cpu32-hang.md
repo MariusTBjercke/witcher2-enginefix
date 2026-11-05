@@ -42,5 +42,5 @@ yet, a small thread retries for up to 3 s. The log says
 
 ## Status
 
-Found by reading the code. **Not yet run on a 32-thread CPU**; the owner's machine has 20. The
-path the hook selects is the one the reporter's affinity change already proved.
+Found by reading the code; the owner's machine has 20 threads. The reporter confirmed it on their 32-thread CPU
+(Nexus, 2026-11-04): the game starts, and the log has `cpu32: 32 logical processors seen`.

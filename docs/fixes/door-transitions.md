@@ -33,7 +33,8 @@ The vanilla door hid it behind ~2 s of black.
    **Stabilize** (`0095DC5E`), finishing every blend at once. Skipping that one call for kept doors
    and giving interior areas a minimum blend time turns the snap into a cross-fade. Preloading the
    environment layer alone does not help (it is small, and its areas reach 3-6 m into the street).
-3. **Ground circle: no distance setting exists.** The terrain detail fades by mip level in the
+3. **Ground circle: no setting for the texture; a sharp line ahead of Geralt is a sun-shadow seam** (see
+   "Ground texture circle"). The terrain detail fades by mip level in the
    terrain pixel shader, from screen-space derivatives; depth of field can look similar. See
    "Ground texture circle".
 
@@ -223,7 +224,12 @@ the shipped 0.05 s fade it would be about two-thirds black. Not tried in game.
 
 ## Ground texture circle
 
-Not a door issue, and there is no distance to raise.
+Not a door issue. **Correction, 2026-11-04:** this section covers the ground texture only, which has
+no distance to raise. The owner then reproduced a sharp chevron-shaped line ahead of Geralt. It is the seam at the end of the
+first sun-shadow cascade, and Shadow quality High and Ultra remove it. See
+[the visible cutoff](npc-streaming-sun-shadows.md#the-visible-cutoff-past-the-last-cascade-2026-11-04-static).
+Plants turning flat a few metres ahead are a third thing: see "Plant billboards" in
+[graphics-presets.md](graphics-presets.md). Which of these a player means by "low-res circle" is not established.
 
 * **No terrain distance setting.** The ini key table (UTF-16 at `00E44454`-`00E44FAC`,
   `[Viewport]`, `[Rendering]`, `[TextureStreaming]`, `[Engine]`) has no terrain key; no UTF-16

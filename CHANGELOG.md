@@ -4,6 +4,19 @@ Development and GitHub release history. The first Nexus Mods upload is 0.5.0,
 with all earlier fixes included in one initial Nexus changelog entry; earlier
 versions are not separate Nexus releases.
 
+## 0.11.0
+
+- **Shadow quality**: a new row in Options > Graphics (Vanilla, High, Ultra), and Ctrl+Shift+F10 in game (`[shadows]`). The sun's shadows come in three zones with no blending between them, and the end of the first zone, at 7 m, drew a hard line on the ground about 10-14 m ahead of Geralt, with visibly stronger shadows inside it. High and Ultra move that end to 12 m, where the line no longer shows, with a shadow map of 2048 or 4096 pixels per zone instead of 1024 and a narrower filter for sharper edges. Everything switches live; a new shadow map size takes 2-3 s while the game recreates its graphics resources. **Vanilla is the default**, so nothing changes until a player picks another level. The choice is stored in `Documents\Witcher 2\Config\User.ini` (`EngineFixShadowQuality`) and wins over `[shadows] quality`. `[shadows] enabled=0` removes the feature. The patched scripts are rebuilt once (`OV_CACHE_LAYOUT` 11). See `docs/fixes/npc-streaming-sun-shadows.md`.
+- **Plants keep their detail further away**: a plant swaps its mesh for a flat picture (a billboard) at the distance in its file, often 4-15 m. The mesh LOD distances follow the draw distance level but this one did not, so a plant went from its best mesh straight to the flat picture a few metres away, also on Extreme. The levels now scale it too: high 1.5x, ultra 2x, extreme 3x, vanilla the game's own (`[preset.*] billboard_scale`). It stops at 75% of the distance where the plant is hidden, so the plant still ends through its billboard. Set when a plant is created, so after changing level, load a save to see it. See `docs/fixes/graphics-presets.md`, "Plant billboards".
+- The Draw distance row and the ini call the game's own values **Vanilla** in every language, as the new row does (it was "default" in the menu and `baseline` in the ini). An older ini's `default=baseline` and `[preset.baseline]` still work.
+- Faster start (`[startup] fast_start=1`, default): the game sat idle for about 11 s while the sound system loaded, waiting on a coarse timer. Most of that wait is gone: main menu after 6.5 s instead of 16 s on the machine measured. See `docs/fixes/startup-time.md`.
+- Save previews load about ten times faster (`[saves] light_previews=1`, default): the game scaled each one up with a full set of smaller copies, 17.6 ms per save. 165 saves took 2.9 s and now take under 0.3 s.
+- The preset text no longer shows at startup, where it could float over the launcher or the desktop. It shows only when the player changes the level; the startup level is in the log.
+
+- `cpu32_guard` (0.9.0) is now confirmed: a player with a 32-thread CPU reports that the game starts, with the log line `cpu32: 32 logical processors seen`.
+
+Seen in game with DXVK, on Steam and GOG: Shadow quality at all three levels, and the plants. On Steam the row and the plants on Extreme against Vanilla; on GOG the row, Ctrl+Shift+F10 and the start at Ultra. Not verified: the frame cost of High, Ultra and the plant distances, and Shadow quality without DXVK, where a larger shadow map adds to a 32-bit process that is already short of memory. Picking a new level while the shadow map still switches is fixed after those runs (it reported a refusal and kept the old size); that fix has run offline only.
+
 ## 0.10.0
 
 - **GOG 3.5.0.26g is supported**, with every feature and setting of the Steam version. The entries below say how each part was ported. Seen in game on GOG: the presets and distance hooks, the window patches, the doors and interiors with the light blend and the hidden spinner, the memory guard's doors, the saves and the exit. Steam: a regression run of the final build was clean (`docs/validation/steam-regression-c0b0652-2026-11-04.md`).

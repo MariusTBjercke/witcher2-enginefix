@@ -10,7 +10,8 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 |---|---|---|
 | **Missing save previews** | New saves showed a purple/blue gradient instead of a screenshot in the Load menu. The game asks for the screenshot and saves in the same frame, and the finished image arrives about a frame too late, so the game drops it. The mod writes that image next to the save under the name the game expects, and makes the menu reload a QuickSave's picture right away instead of after a restart. Old saves cannot get their picture back. | on |
 | **Save list memory leak** | Each time the Load/Save menu built its list, the game read every save's preview again and leaked it when the menu already had that picture: ~0.9 MB per save per menu open, kept until you quit. With many saves that adds up to hundreds of MB and is a likely cause of crashes once saves pile up. The mod frees it. Nothing is deleted and saves are not limited. | on |
-| **Graphics presets** | One hotkey, **Ctrl+F10**, cycles baseline / high / ultra / extreme. Each level sets mesh LOD distance, foliage distance, the hard mesh visibility cutoff and the mesh-shadow distance together, with an on-screen readout. Starts at `extreme`. The same levels are a **Draw distance** row in Options > Graphics (no on-screen text there), which the game remembers between sessions. | on (extreme) |
+| **Graphics presets** | One hotkey, **Ctrl+F10**, cycles vanilla / high / ultra / extreme. Each level sets mesh LOD distance, foliage distance, the hard mesh visibility cutoff, the mesh-shadow distance and the distance where plants turn into flat pictures together, with an on-screen readout. Starts at `extreme`. The same levels are a **Draw distance** row in Options > Graphics (no on-screen text there), which the game remembers between sessions. | on (extreme) |
+| **Shadow quality** | The sun's shadows come in three zones with no blending between them, and the end of the first one drew a hard line on the ground about 10-14 m ahead of Geralt. A **Shadow quality** row in Options > Graphics, or **Ctrl+Shift+F10**, picks Vanilla, High or Ultra. High and Ultra move that end out until the line no longer shows and sharpen the shadows, for more video memory. Switches live, with a pause of 2-3 s while the shadow map is recreated. `[shadows]`. | on (vanilla) |
 | **LOD values that stick** | The game's `MeshDistanceScale`/`FoliageDistanceScale` are held at the preset values, also after the options menu rewrites them, and the two "gameplay LOD downscale" flags are kept off. | on |
 | **Black map in interiors** | In 25 interior map entries (temples, inns, Loredo's house, towers and other houses) the map screen (M) was black with one huge pin, because the game has no big map for them. The zip ships loose files that give each of these areas a 2048x2048 upscale of its own minimap, so the map shows and zooms the right way. | on (files) |
 | **Seamless interiors** | Walk into houses, shops and inns without a fade. The game unloaded the outdoors around you at every door and loaded it again on the way out, behind ~2.2 s of black. Now the outdoors stays loaded (visible through the windows), the area's interiors load with the area so open doors show the real rooms, and a house door takes a few hundredths of a second. The indoor lighting blends in over 1 s instead of jumping, and the loading spinner stays hidden. Doors that change area (the Flotsam gate) keep a short fade. With less than ~1.3 GB of address space free, interiors load on their first visit instead (memory guard). `[loading] interiors` (2 preload, 1 load on first visit, 0 the game's doors), `door_fade`, `area_fade`. | on |
@@ -41,12 +42,20 @@ Details: [dll-script-patches.md](docs/fixes/dll-script-patches.md), [shop-book-r
 
 ### Preset values
 
-| Preset | Mesh LOD | Foliage | Mesh visibility | Mesh shadow |
-|---|---:|---:|---:|---:|
-| baseline (the game's own) | 1 | 1 | 1 | 1 |
-| high | 2 | 2 | 1.5 | 1.5 |
-| ultra | 4 | 3 | 2 | 2 |
-| extreme | 8 | 5 | 3 | 3 |
+| Preset | Mesh LOD | Foliage | Mesh visibility | Mesh shadow | Plant billboards |
+|---|---:|---:|---:|---:|---:|
+| vanilla (the game's own) | 1 | 1 | 1 | 1 | 1 |
+| high | 2 | 2 | 1.5 | 1.5 | 1.5 |
+| ultra | 4 | 3 | 2 | 2 | 2 |
+| extreme | 8 | 5 | 3 | 3 | 3 |
+
+Visibility and mesh shadows change at once. Mesh LOD and plant billboards are set when an object is created, so load a save to compare those after changing level.
+
+| Shadow quality | First zone ends at | Shadow map per zone | Shadow filter |
+|---|---:|---:|---:|
+| vanilla (the game's own) | 7 m | 1024 | 1 |
+| high | 12 m | 2048 | 0.6 |
+| ultra | 12 m | 4096 | 0.5 |
 
 The higher levels cost GPU time. They do not change how far away the game spawns characters (that is a separate system, see [docs/fixes/npc-streaming-sun-shadows.md](docs/fixes/npc-streaming-sun-shadows.md)).
 
@@ -96,9 +105,12 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 |---|---|---|
 | `[general] enabled` | 1 | 0 turns off everything the DLL does (input still forwarded); the map files are removed separately |
 | `[general] log` | 1 | 0 stops writing `witcher2_enginefix.log` |
-| `[presets] default` | extreme | Startup level: baseline, high, ultra or extreme |
+| `[presets] default` | extreme | Startup level: vanilla, high, ultra or extreme |
 | `[presets] cycle` | Ctrl+F10 | Hotkey that cycles the levels (F9/F10 with Ctrl or Alt) |
-| `[preset.<name>]` | see table | Your own values per level |
+| `[preset.<name>]` | see table | Your own values per level: `mesh_scale`, `foliage_scale`, `visibility_scale`, `shadow_scale`, `billboard_scale` |
+| `[shadows] quality` | vanilla | Start level: vanilla, high or ultra. A choice in Options > Graphics is stored in the game's User.ini and wins over this |
+| `[shadows] enabled`, `cycle` | 1, Ctrl+Shift+F10 | 0 removes Shadow quality; the hotkey that cycles its levels |
+| `[shadows.high]`, `[shadows.ultra]` | see table | Your own values per level: `first_distance`, `seam_distance`, `sun_distance`, `atlas`, `filter` |
 | `[saves] fix_thumbnails` | 1 | 0 turns the save-preview fix off |
 | `[saves] fix_list_leak` | 1 | 0 turns the save-list leak fix off |
 | `[saves] fast_list` | 1 | 0 lets the game unpack every save in full for the Load/Save list |
@@ -116,7 +128,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[window] borderless` | 0 | 1 starts borderless (Full screen off, desktop resolution). After the first use, Options > Graphics owns the setting; it is stored in the game's User.ini |
 | `[window] enabled` | 1 | 0 turns the window patches, the live switch and the menu channel off |
 | `[window] dpi_aware` | 1 | Make the process DPI-aware when borderless starts on |
-| `[scriptpatches] book_marker`, `continue`, `pause_quit`, `window_mode`, `medallion` | 1, 1, 1, 1, 1 | 0 turns that script patch off (the cache is rebuilt); `window_mode` is the Display mode and Draw distance rows |
+| `[scriptpatches] book_marker`, `continue`, `pause_quit`, `window_mode`, `medallion` | 1, 1, 1, 1, 1 | 0 turns that script patch off (the cache is rebuilt); `window_mode` is the Display mode, Draw distance and Shadow quality rows |
 | `[osd] enabled`, `size`, `ms` | 1, 34, 2500 | On-screen readout; 34 px suits 4K, 22 px 1080p |
 | `[diagnostics] save_trace` | 0 | 1 logs the save-preview path (Steam writes, screenshot encoding) |
 | `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
@@ -131,7 +143,7 @@ The ini file itself documents every key, including the legacy separate hotkeys (
 The pause-menu Quit confirmation currently needs one click before it
 responds to hover. The button still works; this is a known minor issue.
 
-- **DXVK, strongly recommended** (see "DXVK" under Requirements): the game is a 32-bit program, so it has 4 GB of address space at most. With the game's own Direct3D 9, every texture also takes room there. At 4K on the launcher's highest settings, loading a save inside the Flotsam inn took 1.7 GB at the main menu and 2.6 GB after the load, and the game ran out of memory within a minute. That happened even though this mod loaded nothing extra (its preload stops below 1280 MB free, `[loading] preload_memory_mb`), and whatever the texture budget or draw distance. With DXVK, which keeps textures on the graphics card, the same load stays around 1.3-1.4 GB. Lower resolutions leave more room (not measured yet). One owner setup (DXVK 3.1.1, RTX 5070 Ti) hit a GPU reset (Vulkan device lost) in the same place, with or without this mod; if the game hangs that way, set `dxvk.enableDescriptorHeap = False` in `dxvk.conf` (DXVK then uses its descriptor-buffer binding; one run of about 8 minutes with 8 doors at the inn had no GPU reset, where every run before hung within minutes) or try another DXVK version. See [docs/fixes/door-transitions.md](docs/fixes/door-transitions.md), "Memory". The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen.
+- **DXVK, strongly recommended** (see "DXVK" under Requirements): the game is a 32-bit program, so it has 4 GB of address space at most. With the game's own Direct3D 9, every texture also takes room there. At 4K on the launcher's highest settings, loading a save inside the Flotsam inn took 1.7 GB at the main menu and 2.6 GB after the load, and the game ran out of memory within a minute. That happened even though this mod loaded nothing extra (its preload stops below 1280 MB free, `[loading] preload_memory_mb`), and whatever the texture budget or draw distance. With DXVK, which keeps textures on the graphics card, the same load stays around 1.3-1.4 GB. Lower resolutions leave more room (not measured yet). One owner setup (DXVK 3.1.1, RTX 5070 Ti) hit a GPU reset (Vulkan device lost) in the same place, with or without this mod; if the game hangs that way, set `dxvk.enableDescriptorHeap = False` in `dxvk.conf` (DXVK then uses its descriptor-buffer binding; one run of about 8 minutes with 8 doors at the inn had no GPU reset, where every run before hung within minutes) or try another DXVK version. See [docs/fixes/door-transitions.md](docs/fixes/door-transitions.md), "Memory". The on-screen readout is a small topmost window, so it shows in borderless and DXVK full screen but not in true exclusive full screen. Without DXVK, Shadow quality High and Ultra add to that same memory (not measured), so use them with DXVK.
 - **GOG**: supported since 0.10.0, with the same features and settings. On GOG the log ends with `exit: CorExitProcess(0) ...` instead of `unloaded`: the .NET runtime in the process (most likely from the Galaxy overlay) ends the game before the DLL's own exit call. That is a normal quit.
 - **Borderless window**: only in windowed mode (Full screen off) and best at the desktop resolution; at a lower resolution it is a centered frameless window at that size, and it always sits on the primary monitor. Windowed mode may lose the device gamma ramp (Brightness/Gamma), and the game may behave differently in the background than in full screen; both are properties of the game's windowed mode, not of the patch.
 - **Other `dinput8.dll` mods**: only one `dinput8.dll` can sit in `bin\`. This mod loads the system `dinput8.dll` itself.

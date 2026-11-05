@@ -68,6 +68,8 @@ static uintptr_t ga(uintptr_t steam_va);
 static uintptr_t ga_rva(uintptr_t steam_rva);
 static const char* build_name(void);
 static int patch_call(uintptr_t at, uintptr_t target, void* hook);
+static int code_matches(uintptr_t at, const char* hex);
+static int wf_user_ini_shadow_quality(void);
 
 static HINSTANCE g_self;
 static FILE*     g_log;
@@ -110,17 +112,57 @@ static float cfg_visibility = 1.0f, cfg_shadow_range = 1.0f;
 static int   cfg_vk_visibility = VK_F9, cfg_vk_shadow_range = VK_F10;
 static int   cfg_mod_visibility = EF_MOD_CTRL | EF_MOD_SHIFT;
 static int   cfg_mod_shadow_range = EF_MOD_CTRL | EF_MOD_SHIFT;
+static int   cfg_cascade = 1;   // [shadows] enabled: the Shadow quality levels
+static int   cfg_vk_shadow = VK_F10, cfg_mod_shadow = EF_MOD_CTRL | EF_MOD_SHIFT;
 
 typedef struct {
     const char* name;
-    float mesh, foliage, visibility, shadow;
+    float first, seam, far_end;     // where the three sun shadow zones end
+    int atlas;                      // shadow map pixels per zone
+    float filter;                   // filter width, 1 = the game's
+} shadow_level;
+#define SHADOW_LEVELS 3
+static const shadow_level k_shadow_levels[SHADOW_LEVELS] = {
+    { "vanilla", 7.0f, 24.0f, 64.0f, 1024, 1.0f },  // the game's own values
+    { "high",    12.0f, 24.0f, 64.0f, 2048, 0.6f },
+    { "ultra",   12.0f, 24.0f, 64.0f, 4096, 0.5f }
+};
+static shadow_level cfg_shadow[SHADOW_LEVELS];
+static int g_shadow;
+static volatile LONG g_shadowAtlasWant = 1024;  // the size of the level in use
+static volatile LONG g_shadowAtlasNow = 1024;   // the size the renderer has
+static volatile LONG g_shadowMenu = -1;         // the options row's choice, for the worker
+static volatile LONG g_shadowSync;              // 1: write the level into the game's config
+static volatile LONG g_shadowStage;             // the viewport tick is switching the atlas
+static volatile LONG g_shadowResult;            // 1 switched, -1 refused
+static volatile LONG g_shadowAllocRan;          // this switch's Reset reached the allocator
+static int g_shadowLive;                        // the viewport tick and the allocator are hooked
+
+// The switch's Reset is over. A level picked during it leaves Want and Now apart, and the next frame
+// starts another switch; only a Reset that never reached the allocator was refused.
+static void shadow_switch_end(void)
+{
+    if (g_shadowAllocRan) {
+        InterlockedExchange(&g_shadowResult, 1);
+    } else {                        // no asking again every frame
+        InterlockedExchange(&g_shadowAtlasWant, g_shadowAtlasNow);
+        InterlockedExchange(&g_shadowResult, -1);
+    }
+    InterlockedExchange(&g_shadowStage, 0);
+}
+
+#define VA_BILLBOARD_SHOW 0x009BC8AFu   // movss xmm0,[edi+100h] in 009BC894, which adds a mesh's billboard level
+
+typedef struct {
+    const char* name;
+    float mesh, foliage, visibility, shadow, billboard;
 } quality_preset;
 #define PRESET_COUNT 4
 static const quality_preset k_presets[PRESET_COUNT] = {
-    { "baseline", 1.0f, 1.0f, 1.0f, 1.0f },
-    { "high",     2.0f, 2.0f, 1.5f, 1.5f },
-    { "ultra",    4.0f, 3.0f, 2.0f, 2.0f },
-    { "extreme",  8.0f, 5.0f, 3.0f, 3.0f }
+    { "vanilla", 1.0f, 1.0f, 1.0f, 1.0f, 1.0f },
+    { "high",     2.0f, 2.0f, 1.5f, 1.5f, 1.5f },
+    { "ultra",    4.0f, 3.0f, 2.0f, 2.0f, 2.0f },
+    { "extreme",  8.0f, 5.0f, 3.0f, 3.0f, 3.0f }
 };
 static quality_preset cfg_presets[PRESET_COUNT];
 static int cfg_preset_mode, g_preset = PRESET_COUNT - 1;
@@ -320,6 +362,7 @@ static void select_preset(int index)
     cfg_visibility = p->visibility; cfg_shadow_range = p->shadow;
     ef_range_sq = p->visibility * p->visibility;
     ef_shadow_sq = p->shadow * p->shadow;
+    ef_billboard_factor = p->billboard;
 }
 
 static float preset_float(const char* section, const char* key, float def, int distance)
@@ -347,10 +390,23 @@ static void load_presets(void)
         quality_preset* p = &cfg_presets[i];
         p->name = def->name;
         sprintf_s(section, sizeof section, "preset.%s", def->name);
-        p->mesh = preset_float(section, "mesh_scale", def->mesh, 0);
-        p->foliage = preset_float(section, "foliage_scale", def->foliage, 0);
-        p->visibility = preset_float(section, "visibility_scale", def->visibility, 1);
-        p->shadow = preset_float(section, "shadow_scale", def->shadow, 1);
+        p->mesh = def->mesh;
+        p->foliage = def->foliage;
+        p->visibility = def->visibility;
+        p->shadow = def->shadow;
+        p->billboard = ef_billboard_value(preset_float(section, "billboard_scale", def->billboard, 0), def->billboard);
+        if (i == 0) {
+            // Vanilla was called baseline up to 0.10.0: an older ini still counts.
+            p->mesh = preset_float("preset.baseline", "mesh_scale", p->mesh, 0);
+            p->foliage = preset_float("preset.baseline", "foliage_scale", p->foliage, 0);
+            p->visibility = preset_float("preset.baseline", "visibility_scale", p->visibility, 1);
+            p->shadow = preset_float("preset.baseline", "shadow_scale", p->shadow, 1);
+            if (!_stricmp(name, "baseline")) g_preset = i;
+        }
+        p->mesh = preset_float(section, "mesh_scale", p->mesh, 0);
+        p->foliage = preset_float(section, "foliage_scale", p->foliage, 0);
+        p->visibility = preset_float(section, "visibility_scale", p->visibility, 1);
+        p->shadow = preset_float(section, "shadow_scale", p->shadow, 1);
         if (!_stricmp(name, def->name)) g_preset = i;
     }
     GetPrivateProfileStringA("presets", "cycle", "Ctrl+F10", key, sizeof key, g_ini);
@@ -364,6 +420,55 @@ static void load_presets(void)
     cfg_enforce = 1;
     cfg_distance = 1;
     select_preset(g_preset);
+}
+
+static void shadow_select(int level)
+{
+    const shadow_level* l = &cfg_shadow[level];
+    g_shadow = level;
+    ef_cascade_set(l->first, l->seam, l->far_end);
+    ef_filter_factor = l->filter;
+    InterlockedExchange(&g_shadowAtlasWant, l->atlas);
+}
+
+static float shadow_field(const char* section, const char* key, float def, float low, float high)
+{
+    float v = ini_float(section, key, def);
+    return v >= low && v <= high ? v : def;
+}
+
+// The ini's levels; each field falls back to the level's built-in value. Vanilla is always the game's.
+static void load_shadow_config(void)
+{
+    char name[32], key[64];
+    cfg_cascade = ini_int("shadows", "enabled", 1);
+    GetPrivateProfileStringA("shadows", "quality", "vanilla", name, sizeof name, g_ini);
+    g_shadow = 0;
+    for (int i = 0; i < SHADOW_LEVELS; i++) {
+        const shadow_level* def = &k_shadow_levels[i];
+        shadow_level* l = &cfg_shadow[i];
+        *l = *def;
+        if (i > 0) {
+            char section[48];
+            int atlas;
+            sprintf_s(section, sizeof section, "shadows.%s", def->name);
+            l->first = shadow_field(section, "first_distance", def->first, 7.0f, 128.0f);
+            l->seam = shadow_field(section, "seam_distance", def->seam, 24.0f, 256.0f);
+            l->far_end = shadow_field(section, "sun_distance", def->far_end, 64.0f, 512.0f);
+            l->filter = shadow_field(section, "filter", def->filter, 0.25f, 1.0f);
+            atlas = ini_int(section, "atlas", def->atlas);
+            l->atlas = ef_cascade_atlas(atlas) == atlas ? atlas : def->atlas;
+        }
+        if (!_stricmp(name, def->name)) g_shadow = i;
+    }
+    shadow_select(g_shadow);
+    GetPrivateProfileStringA("shadows", "cycle", "Ctrl+Shift+F10", key, sizeof key, g_ini);
+    parse_hotkey(key, "Ctrl+Shift+F10", &cfg_vk_shadow, &cfg_mod_shadow);
+    // As for the presets: the input filter protects only F9/F10 with Ctrl or Alt.
+    if ((cfg_vk_shadow != VK_F9 && cfg_vk_shadow != VK_F10) ||
+        !(cfg_mod_shadow & (EF_MOD_CTRL | EF_MOD_ALT))) {
+        cfg_vk_shadow = VK_F10; cfg_mod_shadow = EF_MOD_CTRL | EF_MOD_SHIFT;
+    }
 }
 
 static void load_config(void)
@@ -393,6 +498,8 @@ static void load_config(void)
     parse_hotkey(buf, "Ctrl+Shift+F9", &cfg_vk_visibility, &cfg_mod_visibility);
     GetPrivateProfileStringA("distance", "cycle_shadow", "Ctrl+Shift+F10", buf, sizeof buf, g_ini);
     parse_hotkey(buf, "Ctrl+Shift+F10", &cfg_vk_shadow_range, &cfg_mod_shadow_range);
+
+    load_shadow_config();
 
     cfg_osd      = ini_int("osd", "enabled", 1);
     cfg_osd_ms   = ini_int("osd", "ms", 2500);
@@ -685,9 +792,9 @@ static void poll_hotkeys(void)
             select_preset((g_preset + 1) % PRESET_COUNT);
             apply_lod();
             InterlockedExchange(&g_ddSync, 1);   // the Draw distance row follows the hotkey
-            logf_("preset: %s mesh=%.2f foliage=%.2f visibility=%.2fx shadow=%.2fx; distance_active=%d",
+            logf_("preset: %s mesh=%.2f foliage=%.2f visibility=%.2fx shadow=%.2fx billboards=%.2fx; distance_active=%d",
                   cfg_presets[g_preset].name, cfg_mesh, cfg_foliage,
-                  cfg_visibility, cfg_shadow_range, ef_distance_active);
+                  cfg_visibility, cfg_shadow_range, ef_billboard_factor, ef_distance_active);
             preset_show();
         }
         preset_down = pressed;
@@ -786,6 +893,12 @@ static void distance_tick(void)
         }
         logf_("distance: hooks installed at RVA %08X / %08X; visibility=%.2fx shadow=%.2fx",
               (unsigned)ef_range_rva, (unsigned)ef_shadow_rva, cfg_visibility, cfg_shadow_range);
+        if (cfg_preset_mode) {
+            if (ef_billboard_install((unsigned char*)ga(VA_BILLBOARD_SHOW)))
+                logf_("billboards: hook installed, factor %.2fx", ef_billboard_factor);
+            else
+                logf_("billboards: install refused, plants keep the game's billboard distance");
+        }
         last_stats = now;
     }
     if (cfg_hotkeys) poll_distance_hotkeys();
@@ -797,8 +910,168 @@ static void distance_tick(void)
         if (range_hits || shadow_hits)
             logf_("distance stats: mesh=%ld shadow=%ld baseline_reject=%ld admitted=%ld (%.2fx/%.2fx)",
                   range_hits, shadow_hits, rejected, admitted, cfg_visibility, cfg_shadow_range);
+        {
+            LONG new_billboards = InterlockedExchange(&ef_billboard_hits, 0);
+            LONG moved = InterlockedExchange(&ef_billboard_moved, 0);
+            if (new_billboards)
+                logf_("billboards: %ld new proxies, %ld moved; last %.1f m -> %.1f m (%.2fx)", new_billboards, moved,
+                      ef_billboard_last_file, ef_billboard_last_used, ef_billboard_factor);
+        }
         last_stats = now;
     }
+}
+
+// Shadow quality (docs/fixes/npc-streaming-sun-shadows.md, distance_patch.h).
+#define VA_SUN_ATLAS_SIZE       0x009DC72Fu   // mov dword ptr [eax+20h],400h in the renderer constructor 009DC712
+#define VA_SUN_ATLAS_ALLOC      0x00B12E39u   // __stdcall (renderer), RET 4: creates the atlas from +0x20
+#define VA_SUN_ATLAS_CALL       0x009DDC39u   // its call in the device reset 009DDBD3
+#define VA_SUN_POISSON_SET      0x009D0C70u   // sets a pixel constant: EAX device, stack (register, vector), RET 8
+#define VA_SUN_POISSON_CALL     0x00AECA7Au   // its call for vPoissonSamples, in FUN_00AEC932
+#define VA_RENDERER             0x0160C6ECu   // the renderer: +0x20 cascade size, +0x24/+0x28 the atlas
+#define VA_SUN_CASCADE_FIRST    0x009C016Au   // movss xmm0,[00F11340] in SetupRenderFrameCollector 009C011E
+#define VA_SUN_CASCADE_FIRST_LEN 0x00F11340u  // the float 7.0 that loads, shared with other code
+#define VA_SUN_CASCADE_MID      0x009C019Au   // movss xmm0,[00F117B4] in the same function
+#define VA_SUN_CASCADE_MID_LEN  0x00F117B4u   // the float 17.0 that loads, shared with other code
+#define VA_SUN_CASCADE_FAR      0x009C01AAu   // movss xmm0,[00F11328] in the same function
+#define VA_SUN_CASCADE_FAR_LEN  0x00F11328u   // the float 40.0 that loads, shared with other code
+
+static int cascade_pressed(int vk, int mods, int* down)
+{
+    int pressed = (GetAsyncKeyState(vk) & 0x8000) != 0, fire = 0;
+    if (pressed && !*down && mods_held() == mods) {
+        DWORD pid = 0;
+        HWND foreground = GetForegroundWindow();
+        if (foreground) GetWindowThreadProcessId(foreground, &pid);
+        fire = pid == GetCurrentProcessId();
+    }
+    *down = pressed;
+    return fire;
+}
+
+// A new level. The zones and the filter apply on the next frame, the viewport tick switches the atlas.
+static void shadow_change(int level, int from_hotkey)
+{
+    const shadow_level* l = &cfg_shadow[level];
+    shadow_select(level);
+    logf_("shadows: %s, zones %.0f / %.0f / %.0f m, atlas %d, filter %.2f (%s)", l->name,
+          ef_cascade_first(l->first), ef_cascade_seam_end(l->first, l->seam),
+          ef_cascade_far_end(l->first, l->seam, l->far_end), l->atlas, l->filter,
+          from_hotkey ? "hotkey" : "options menu");
+    if (from_hotkey) {
+        osd_show("Shadow quality: %s  (%d/%d)", l->name, level + 1, SHADOW_LEVELS);
+        InterlockedExchange(&g_shadowSync, 1);   // the row follows the hotkey
+    }
+    if (l->atlas != g_shadowAtlasNow && !g_shadowLive) {
+        logf_("shadows: atlas %d applies at the next start", l->atlas);
+        if (from_hotkey) osd_show("Shadow quality: %s, restart for the full effect", l->name);
+    }
+}
+
+static void cascade_tick(void)
+{
+    static DWORD last_attempt;
+    static int attempts, key_down, atlas_logged;
+    LONG menu, result;
+    if (!cfg_cascade) return;
+    if (!atlas_logged) {
+        // What the renderer really got: the proof that the atlas patch came in time.
+        void** slot = (void**)ga(VA_RENDERER);
+        unsigned char* renderer = range_readable(slot, sizeof(void*)) ? (unsigned char*)read_ptr(slot) : NULL;
+        if (renderer && range_readable(renderer + 0x20, 4)) {
+            logf_("shadows: atlas %d per cascade, wanted %ld", *(int*)(renderer + 0x20), g_shadowAtlasWant);
+            atlas_logged = 1;
+        }
+    }
+    if (!ef_cascade_active) {
+        DWORD now = GetTickCount();
+        unsigned char* sites[3];
+        uintptr_t lens[3];
+        settings_view view;
+        HMODULE pinned;
+        int readable = 1;
+        if (attempts >= 30 || (last_attempt && now-last_attempt < 1000) ||
+            !grab_settings(&view)) return;
+        last_attempt = now;
+        attempts++;
+        sites[0] = (unsigned char*)ga(VA_SUN_CASCADE_FIRST);
+        lens[0] = ga(VA_SUN_CASCADE_FIRST_LEN);
+        sites[1] = (unsigned char*)ga(VA_SUN_CASCADE_MID);
+        lens[1] = ga(VA_SUN_CASCADE_MID_LEN);
+        sites[2] = (unsigned char*)ga(VA_SUN_CASCADE_FAR);
+        lens[2] = ga(VA_SUN_CASCADE_FAR_LEN);
+        for (int i = 0; i < 3; i++)
+            if (!range_readable(sites[i], 8) || !range_readable((const void*)lens[i], 4)) readable = 0;
+        // The patched loads must not outlive this DLL if a caller releases its handle.
+        if (!readable || !GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_PIN, (LPCSTR)(uintptr_t)&ef_cascade_len, &pinned) ||
+            !ef_cascade_install(sites, lens)) {
+            if (attempts == 1 || attempts == 30)
+                logf_("shadows: zones install deferred/refused (bytes or thread check), attempt=%d", attempts);
+            return;
+        }
+        logf_("shadows: zones patched at %08X, %08X and %08X", (unsigned)(uintptr_t)sites[0],
+              (unsigned)(uintptr_t)sites[1], (unsigned)(uintptr_t)sites[2]);
+    }
+    menu = InterlockedExchange(&g_shadowMenu, -1);
+    if (menu >= 0 && menu < SHADOW_LEVELS && menu != g_shadow) shadow_change((int)menu, 0);
+    result = InterlockedExchange(&g_shadowResult, 0);
+    if (result > 0) {
+        logf_("shadows: atlas switched to %ld per cascade", g_shadowAtlasNow);
+    } else if (result < 0) {
+        logf_("shadows: atlas switch refused, stays %ld per cascade", g_shadowAtlasNow);
+        osd_show("Shadow quality: restart the game to apply");
+    }
+    // Preset mode only: without it this key is the legacy mesh shadow control.
+    if (cfg_hotkeys && cfg_preset_mode && cascade_pressed(cfg_vk_shadow, cfg_mod_shadow, &key_down))
+        shadow_change((g_shadow + 1) % SHADOW_LEVELS, 1);
+}
+
+// In the device reset, after the old atlas is gone: the size is applied here, on the game's thread,
+// in step with the new atlas, because the per-cascade viewport reads it every frame.
+static void __stdcall shadow_atlas_alloc(void* renderer)
+{
+    LONG want = g_shadowAtlasWant;
+    *(LONG*)((char*)renderer + 0x20) = want;
+    InterlockedExchange(&g_shadowAtlasNow, want);
+    InterlockedExchange(&g_shadowAllocRan, 1);
+    ((void (__stdcall*)(void*))ga(VA_SUN_ATLAS_ALLOC))(renderer);
+}
+
+// Runs before the renderer is constructed, polling until the stub has decrypted the code.
+static DWORD WINAPI shadow_thread(LPVOID param)
+{
+    unsigned char* site = (unsigned char*)ga(VA_SUN_ATLAS_SIZE);
+    int stored = wf_user_ini_shadow_quality();
+    int atlas_left, poisson_left = 1, alloc_left = 1;
+    HMODULE pinned;
+    (void)param;
+    if (stored >= 0 && cfg_wf_enabled && cfg_window_mode) {
+        shadow_select(stored);
+        logf_("shadows: startup=%s (options menu)", cfg_shadow[stored].name);
+    }
+    InterlockedExchange(&g_shadowSync, 1);   // the row opens on the level in use
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                            (LPCSTR)(uintptr_t)shadow_atlas_alloc, &pinned)) {
+        logf_("shadows: could not pin the DLL - the filter and the atlas stay the game's");
+        return 0;
+    }
+    atlas_left = g_shadowAtlasWant != 1024;
+    ef_poisson_target = (void*)ga(VA_SUN_POISSON_SET);
+    for (int i = 0; i < 30000 && (atlas_left || poisson_left || alloc_left); i++) {
+        if (atlas_left && range_readable(site, sizeof ef_atlas_signature) &&
+            ef_atlas_patch(site, (int)g_shadowAtlasWant)) {
+            InterlockedExchange(&g_shadowAtlasNow, g_shadowAtlasWant);
+            atlas_left = 0;
+        }
+        if (poisson_left && patch_call(ga(VA_SUN_POISSON_CALL), ga(VA_SUN_POISSON_SET), (void*)ef_poisson_bridge))
+            poisson_left = 0;
+        if (alloc_left && patch_call(ga(VA_SUN_ATLAS_CALL), ga(VA_SUN_ATLAS_ALLOC), (void*)shadow_atlas_alloc))
+            alloc_left = 0;
+        if (atlas_left || poisson_left || alloc_left) Sleep(1);
+    }
+    logf_("shadows: level %s; atlas at start %ld%s, filter %s, live atlas %s", cfg_shadow[g_shadow].name,
+          g_shadowAtlasNow, atlas_left ? " (patch missed)" : "", poisson_left ? "off" : "on", alloc_left ? "off" : "on");
+    return 0;
 }
 
 // ---- save thumbnails ----------------------------------------------------
@@ -5685,6 +5958,8 @@ static void wf_on_config_write(const wchar_t* section, const wchar_t* key, float
     if (_wcsicmp(key, L"EngineFixDrawDistance") == 0) {
         if (cfg_preset_mode)
             InterlockedExchange(&g_ddMenu, value < 0.5f ? 0 : value < 1.5f ? 1 : value < 2.5f ? 2 : 3);
+    } else if (_wcsicmp(key, L"EngineFixShadowQuality") == 0) {
+        if (cfg_cascade) InterlockedExchange(&g_shadowMenu, value < 0.5f ? 0 : value < 1.5f ? 1 : 2);
     } else if (_wcsicmp(key, L"EngineFixBorderless") == 0) {
         wf_request(value > 0.0f, 1);
     } else if (_wcsicmp(key, L"Fullscreen") == 0) {
@@ -5726,6 +6001,17 @@ static int wf_user_ini_draw_distance(void)
     if (!wf_user_ini_path(path)) return -1;
     v = (int)GetPrivateProfileIntW(L"Rendering", L"EngineFixDrawDistance", -1, path);
     return v >= 0 && v < PRESET_COUNT ? v : -1;
+}
+
+// [Rendering] EngineFixShadowQuality in User.ini: the Shadow quality row's last level, -1 when absent.
+static int wf_user_ini_shadow_quality(void)
+{
+    wchar_t path[MAX_PATH];
+    int v;
+
+    if (!wf_user_ini_path(path)) return -1;
+    v = (int)GetPrivateProfileIntW(L"Rendering", L"EngineFixShadowQuality", -1, path);
+    return v >= 0 && v < SHADOW_LEVELS ? v : -1;
 }
 
 // [Viewport] Width/Height in User.ini: the resolution the launcher's Configurator sets, and the
@@ -5978,6 +6264,37 @@ static char __fastcall wf_vp_tick_hook(void* vp, void* edx)
             wf_real_write(L"User", L"Rendering", L"EngineFixDrawDistance", &level);
         }
     }
+    if (g_shadowSync && GetCurrentThreadId() == g_mainTid && (wf_real_write || wf_real_write_gog) &&
+        InterlockedExchange(&g_shadowSync, 0)) {
+        float level = (float)g_shadow;
+
+        if (wf_real_write_gog) {
+            void* config = read_ptr((void*)ga(WF_CONFIG));
+            if (config) wf_real_write_gog(config, NULL, L"User", L"Rendering", L"EngineFixShadowQuality", &level);
+        } else {
+            wf_real_write(L"User", L"Rendering", L"EngineFixShadowQuality", &level);
+        }
+    }
+    // A new atlas size walks the same machine as a full screen switch, with the mode unchanged:
+    // release, then Reset, where shadow_atlas_alloc applies the size.
+    if (g_shadowStage == 0 && g_shadowLive && g_fsStage == 0 && want < 0 && *state == 0 &&
+        g_shadowAtlasWant != g_shadowAtlasNow) {
+        InterlockedExchange(&g_shadowAllocRan, 0);
+        InterlockedExchange(&g_shadowStage, 1);
+        *state = 1;
+        return real(vp, edx);
+    }
+    if (g_shadowStage) {
+        if (*state != 0 && *state != 2) return real(vp, edx);
+        if (*state == 2) {
+            *state = 3;
+            r = real(vp, edx);
+        } else {
+            r = real(vp, edx);          // the release never happened
+        }
+        shadow_switch_end();
+        return r;
+    }
     if (g_fsStage == 0) {
         if (want < 0 || *state != 0 || wf_engine_fullscreen() < 0) return real(vp, edx);
         if ((*windowed == FALSE) == (want != 0)) {   // already in that mode
@@ -6029,8 +6346,8 @@ static void dd_tick(void)
     if (level < 0 || level >= PRESET_COUNT || level == g_preset) return;
     select_preset((int)level);
     apply_lod();
-    logf_("preset: %s mesh=%.2f foliage=%.2f visibility=%.2fx shadow=%.2fx (options menu)",
-          cfg_presets[g_preset].name, cfg_mesh, cfg_foliage, cfg_visibility, cfg_shadow_range);
+    logf_("preset: %s mesh=%.2f foliage=%.2f visibility=%.2fx shadow=%.2fx billboards=%.2fx (options menu)",
+          cfg_presets[g_preset].name, cfg_mesh, cfg_foliage, cfg_visibility, cfg_shadow_range, ef_billboard_factor);
 }
 
 // Worker tick: the switch results, then the wanted style against the live window.
@@ -6254,6 +6571,7 @@ static DWORD WINAPI window_init_thread(LPVOID param)
                 logf_("window: viewport tick not hooked (bytes differ) - Full screen applies at the next start");
             } else {
                 g_fsHooked = 1;
+                g_shadowLive = 1;
                 logf_("window: viewport tick hooked (Full screen switches at once)");
             }
         }
@@ -6460,6 +6778,7 @@ static DWORD WINAPI worker(LPVOID param)
         if (cfg_wf_enabled) wf_tick();
         if (cfg_hotkeys) poll_hotkeys();
         distance_tick();
+        cascade_tick();
         save_tick();
         doors_tick();
         osd_tick();
@@ -6751,6 +7070,19 @@ typedef struct { uintptr_t steam, gog; } ga_row;
 static const ga_row k_gog[] = {
     { EF_RANGE_RVA,          0x0060C120u },   // CRenderProxy_Mesh distance, 00A0BE2B
     { EF_SHADOW_RVA,         0x0060C4F6u },
+    { VA_BILLBOARD_SHOW,     0x00A0D95Fu },   // same helper, 00A0D945, called from the proxy constructor 00A0D995
+    { VA_SUN_ATLAS_ALLOC,    0x00B4C301u },   // same function, read and compared
+    { VA_SUN_ATLAS_CALL,     0x00A2F0CDu },   // in the device reset 00A2F067
+    { VA_SUN_POISSON_SET,    0x00A21FF6u },
+    { VA_SUN_POISSON_CALL,   0x00B256E0u },   // in the same loop in 00B2558C
+    { VA_SUN_ATLAS_SIZE,     0x00A2DBEDu },   // same store in GOG's renderer constructor
+    { VA_RENDERER,           0x0167D4DCu },
+    { VA_SUN_CASCADE_FIRST,  0x00A111CDu },   // same interval loop as Steam, loads 00F781F8
+    { VA_SUN_CASCADE_FIRST_LEN, 0x00F781F8u },
+    { VA_SUN_CASCADE_MID,    0x00A111FDu },   // same interval loop as Steam, loads 00F78620
+    { VA_SUN_CASCADE_MID_LEN, 0x00F78620u },
+    { VA_SUN_CASCADE_FAR,    0x00A1120Du },   // same interval loop as Steam, loads 00F781D0
+    { VA_SUN_CASCADE_FAR_LEN, 0x00F781D0u },
     { RVA_SETTINGS,          0x021EAEB8u },   // [025EAEB8] -> object 025EAF08, loader 00B40DCD
     { VA_CAPTURE_PENDING,    0x01169160u },   // cleared in the save writer 004E721B; its setter 004E6F80 is unreachable
     { VA_CAPTURE_QUEUED,     0x01169161u },   // write-only on GOG (no callback reads it)
@@ -6972,6 +7304,12 @@ static void build_gate(void)
     if (!distance && cfg_distance) {
         gate_off("distance", "visibility and shadow range hooks");
         cfg_distance = 0;
+    }
+    if (!lod || !ga_have(VA_SUN_CASCADE_FIRST, VA_SUN_CASCADE_FIRST_LEN, VA_SUN_CASCADE_MID, VA_SUN_CASCADE_MID_LEN,
+                         VA_SUN_CASCADE_FAR, VA_SUN_CASCADE_FAR_LEN, VA_SUN_ATLAS_SIZE, VA_SUN_ATLAS_ALLOC,
+                         VA_SUN_ATLAS_CALL, VA_SUN_POISSON_SET, VA_SUN_POISSON_CALL, VA_RENDERER, 0)) {
+        if (cfg_cascade) gate_off("shadows", "Shadow quality");
+        cfg_cascade = 0;
     }
     if (!thumbs && cfg_save_thumbs) {
         gate_off("saves", "fix_thumbnails");
@@ -7242,6 +7580,11 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                   cfg_presets[g_preset].name, cfg_mod_preset, cfg_vk_preset);
         build_gate();
         if (cfg_enabled) exit_trace_install();
+        // Before the renderer is constructed.
+        if (cfg_enabled && cfg_cascade) {
+            HANDLE h = CreateThread(NULL, 0, shadow_thread, NULL, 0, NULL);
+            if (h) CloseHandle(h); else logf_("shadows: CreateThread failed - stays the game's");
+        }
         // Before the game's own start-up can reach the CPU count.
         if (cfg_enabled && cfg_cpu32_guard && !cpu32_try()) {
             HANDLE h = CreateThread(NULL, 0, cpu32_thread, NULL, 0, NULL);

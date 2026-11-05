@@ -1,7 +1,7 @@
 # Startup time: launch to main menu
 
 Status 2026-11-04: `[startup] fast_start=1` and `[saves] light_previews=1` (both on by default)
-implemented and measured on Steam, not released yet. Measurements: `docs/validation/startup-time-2026-11-04.md`. Target: Steam Enhanced
+measured on Steam, in 0.11.0. Measurements: `docs/validation/startup-time-2026-11-04.md`. Target: Steam Enhanced
 Edition 3.5.0.26 and GOG 3.5.0.26g, which ship the same two FMOD files; one run seen on GOG.
 
 ## Symptom

@@ -15,14 +15,14 @@ default=extreme
 cycle=Ctrl+F10
 ```
 
-| Preset | Mesh LOD | Foliage | Mesh visibility | Mesh shadow gate |
-|---|---:|---:|---:|---:|
-| baseline | 1 | 1 | 1 | 1 |
-| high | 2 | 2 | 1.5 | 1.5 |
-| ultra | 4 | 3 | 2 | 2 |
-| extreme | 8 | 5 | 3 | 3 |
+| Preset | Mesh LOD | Foliage | Mesh visibility | Mesh shadow gate | Plant billboards |
+|---|---:|---:|---:|---:|---:|
+| vanilla (`baseline` up to 0.10.0, still accepted) | 1 | 1 | 1 | 1 | 1 |
+| high | 2 | 2 | 1.5 | 1.5 | 1.5 |
+| ultra | 4 | 3 | 2 | 2 | 2 |
+| extreme | 8 | 5 | 3 | 3 | 3 |
 
-`Ctrl+F10` advances to the next row and wraps from extreme to baseline. An OSD
+`Ctrl+F10` advances to the next row and wraps from extreme to vanilla. An OSD
 shows the name and position. The game must be foreground; only a new physical
 function-key press triggers a change. Holding the key, changing modifiers while
 holding it, or returning focus with it held cannot advance the level.
@@ -32,10 +32,10 @@ controls. These names do not represent measured performance targets. The owner
 confirmed a large improvement with the individual distance controls; the new
 combined interface still needs the normal human game startup/OSD check.
 
-Override each row in `[preset.baseline]`, `[preset.high]`, `[preset.ultra]` or
-`[preset.extreme]`, using `mesh_scale`, `foliage_scale`, `visibility_scale` and
-`shadow_scale`. LOD factors must be finite, greater than 0 and less than 100;
-distance factors must be finite and in [1,4]. Missing or invalid fields use that
+Override each row in `[preset.vanilla]`, `[preset.high]`, `[preset.ultra]` or
+`[preset.extreme]`, using `mesh_scale`, `foliage_scale`, `visibility_scale`,
+`shadow_scale` and `billboard_scale`. LOD factors must be finite, greater than 0 and less
+than 100; distance factors must be finite and in [1,4]; `billboard_scale` in [1,8]. Missing or invalid fields use that
 row's built-in defaults. Invalid preset names use extreme. Names ignore case.
 The supported preset bindings are F9/F10 with Ctrl and/or Alt, optionally Shift;
 other bindings fall back to Ctrl+F10 because only these keys have input filtering.
@@ -44,8 +44,8 @@ Hotkeys never write an ini file or a save. Ini edits are read at startup.
 
 ### Options > Graphics > Draw distance (0.7.1)
 
-The same four levels are a selector row under Display mode (default, high, ultra, extreme,
-in the game's language; "default" is `baseline`, the game's own values). It belongs to the
+The same four levels are a selector row under Display mode (Vanilla, high, ultra, extreme;
+the last three in the game's language, Vanilla in every language; it means the game's own values). It belongs to the
 `[scriptpatches] window_mode` script feature and the window section's config-writer hook
 (`docs/fixes/borderless-window.md`):
 
@@ -95,10 +95,58 @@ retaining the startup selection. `[general] enabled=0` stops the runtime worker.
    2026-11-04: no text at startup, and that line in the log. `Ctrl+F10` was not re-tested; its
    code path is unchanged.
 
-Baseline resets only these four factors to 1; it does not uninstall hooks or
+Vanilla resets only these five factors to 1; it does not uninstall hooks or
 disable gameplay downscale enforcement. Presets do not change UberSampling,
 NPC streaming, sun cascade lengths/resolution, DXVK, save previews, the game exe
 on disk, or `Documents/Witcher 2/Config/User.ini` and `Rendering.ini`.
+
+## Plant billboards
+
+Plants along the roads switch to a flat picture a few metres away on every level, because this one distance was
+outside the presets. Read from the unpacked exe, Steam 3.5.0.26:
+
+* The mesh proxy constructor `009BC8ED` builds the LOD table once, when the proxy is created. Each LOD's
+  distance is `MeshDistanceScale` times the file's value. LODs beyond the scaled billboard distance are dropped.
+* When `AllowBillboards` (settings `+0x64`) is on and the mesh has a `billboardAtlas` (`+0xFC`), the helper
+  `009BC894` adds a billboard level at `billboardShowDistance` (`+0x100`), **not scaled**.
+* `CRenderProxy_Mesh_UpdateDistanceLod` (`009BADE3`) walks the table from the last level down, so that
+  billboard wins as soon as the camera is past it, whatever the LODs before it say. A higher mesh scale therefore
+  makes the step sharper: the plant goes straight from its best LOD to the billboard.
+* Hide distance (`+0xF0`): `(foliage +0x84 * FoliageDistanceScale - 2)^2` for foliage instances, otherwise the
+  larger of `billboardHideDistance^2` and the mesh's auto-hide value.
+
+Shipped vegetation (`pack0.dzip`, 236 meshes under the vegetation paths): 67 have an atlas, mostly with show
+distances of 4-15 m, such as `fern_01` 15, `weed_high_03` 10 and `l04_weed_high_01` 25.
+
+The fix is a bridge on the one `MOVSS` that loads it: `009BC8AF` / GOG `00A0D95F`, 8 bytes replaced, return to
+site+8. The next bytes differ per build and are in the fingerprints; each matches once in its own exe and nowhere
+in the other. Result: `max(file, min(file * billboard_scale, 0.75 * hide))`, so factor 1 is exactly the game's
+value and a plant still ends through its billboard instead of vanishing as a mesh. Refused bytes leave the site
+alone (`billboards: install refused`). Only in preset mode.
+
+Being read once per proxy, a level change reaches new proxies only: existing plants keep theirs until they are
+created again, so load a save after switching. `billboards: N new proxies, M moved; last A m -> B m` in the log
+shows every 5 s what the hook saw. Each extra mesh is a draw of its own where a billboard was batched, so this is
+expected to cost frames in dense forest; the factors are first values, not measured.
+
+The Nexus mod *Extreme Vegetation Rendering Distance* comes in as loose files that remove the atlas, the auto-hide
+distance and the lower LODs from 217 meshes. Whether the game prefers those over the archive is not settled: see
+below.
+
+Seen on Steam, DXVK, with that mod installed (owner, 2026-11-05): plants hold their detail visibly longer on Extreme
+after loading a save. The log agrees: about 3 000 new proxies per load, all moved at 3x (`last 10.0 m -> 30.0 m`),
+none moved at Vanilla, and a save loaded after switching back to Extreme moves them again. The hook logs only the last
+proxy's value, and 10 m also occurs in the few meshes that keep an atlas with the mod, so this shows that this
+plant has a billboard, not which copy of the file the game loads. Frame cost is still open.
+
+Seen on GOG, DXVK, no loose meshes installed (owner, 2026-11-05): 16 359 new proxies at the first load, all moved at 3x (`last 8.0 m -> 24.0 m`), no
+crash. Over five times Steam's count points to the mod's loose files being loaded there, but the two runs used different saves, so it is
+a hint. It also means a player without that mod gets far more plants through this path than the owner's Steam install does.
+
+Switching without a reload would mean scaling the billboard level in `CRenderProxy_Mesh_UpdateDistanceLod`, which
+runs per proxy per frame, or finding the live proxies when the level changes. No refresh function turned up by name
+in the exe (a string search only). Not done: the mesh LOD factor has always needed a reload as well, and only a
+level change is affected, not ordinary play.
 
 ## Compatibility, tests and rollback
 

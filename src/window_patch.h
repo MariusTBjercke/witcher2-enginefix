@@ -105,7 +105,8 @@ static void wf_note_write(const wchar_t* category, const wchar_t* section, const
     if (category && section && key && value && _wcsicmp(category, L"User") == 0 &&
         _wcsicmp(section, L"Rendering") == 0 &&
         (_wcsicmp(key, L"EngineFixBorderless") == 0 || _wcsicmp(key, L"Fullscreen") == 0 ||
-         _wcsicmp(key, L"EngineFixDrawDistance") == 0))
+         _wcsicmp(key, L"EngineFixDrawDistance") == 0 ||
+         _wcsicmp(key, L"EngineFixShadowQuality") == 0))
         wf_on_config_write(section, key, *value);
 }
 

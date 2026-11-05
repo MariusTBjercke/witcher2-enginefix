@@ -184,6 +184,207 @@ static void gog_fixture(unsigned char* proxy) {
     ef_select_build(0);
 }
 
+// The atlas size: only the immediate's second byte changes, and only over the game's bytes.
+static void atlas_fixture(void) {
+    unsigned char* page = (unsigned char*)VirtualAlloc(NULL, 0x1000,
+        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!page) { check("atlas fixture allocated", 0); return; }
+    memcpy(page, ef_atlas_signature, sizeof ef_atlas_signature);
+    page[7] = 0xCC;
+    page[0] = 0x90;
+    check("atlas: other bytes fail closed", !ef_atlas_patch(page, 2048) && page[4] == 0x04);
+    page[0] = 0xC7;
+    check("atlas: 2048 writes one byte", ef_atlas_patch(page, 2048) &&
+        *(uint32_t*)(page + 3) == 2048 && page[0] == 0xC7 && page[7] == 0xCC);
+    check("atlas: a patched site is not patched again", !ef_atlas_patch(page, 4096) && *(uint32_t*)(page + 3) == 2048);
+    memcpy(page, ef_atlas_signature, sizeof ef_atlas_signature);
+    check("atlas: 4096 writes one byte", ef_atlas_patch(page, 4096) && *(uint32_t*)(page + 3) == 4096);
+    check("atlas: only 1024, 2048 and 4096 are accepted",
+        ef_cascade_atlas(1024) == 1024 && ef_cascade_atlas(2048) == 2048 && ef_cascade_atlas(4096) == 4096 &&
+        ef_cascade_atlas(3000) == 1024 && ef_cascade_atlas(0) == 1024 && ef_cascade_atlas(8192) == 1024);
+}
+
+// The Poisson setter's bridge: scales the two used components and hands everything else on.
+static void poisson_fixture(void) {
+    unsigned char* page = (unsigned char*)VirtualAlloc(NULL, 0x1000,
+        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    float vec[4] = { 0.5f, -0.25f, 7.0f, 9.0f };
+    float* vec_ptr = vec;
+    uintptr_t eax_out = 0, esp_before = 0, esp_after = 0;
+    void* bridge = (void*)(uintptr_t)ef_poisson_bridge;
+    if (!page) { check("Poisson fixture allocated", 0); return; }
+    page[0] = 0xC2; page[1] = 0x08; page[2] = 0x00;     // ret 8
+    ef_poisson_target = page;
+#define RUN_POISSON() __asm { \
+        __asm mov esp_before, esp \
+        __asm push vec_ptr \
+        __asm push 72 \
+        __asm mov eax, 12345678h \
+        __asm call bridge \
+        __asm mov eax_out, eax \
+        __asm mov esp_after, esp }
+    ef_filter_factor = 1.0f;
+    RUN_POISSON();
+    check("Poisson: factor 1 leaves the sample alone", vec[0] == 0.5f && vec[1] == -0.25f);
+    check("Poisson: EAX reaches the setter and the stack balances",
+        eax_out == 0x12345678 && esp_before == esp_after);
+    ef_filter_factor = 0.5f;
+    RUN_POISSON();
+    check("Poisson: the factor scales x and y", vec[0] == 0.25f && vec[1] == -0.125f);
+    check("Poisson: z and w are not touched", vec[2] == 7.0f && vec[3] == 9.0f);
+    ef_filter_factor = 1.0f;
+#undef RUN_POISSON
+}
+
+// The billboard distance: the real bytes of both builds, then the bridge with the helper's registers.
+#pragma warning(disable: 4731)   // billboard_run sets EBP on purpose, the bridge reads [EBP+8]
+static float billboard_run(float show, float hide, float factor, uintptr_t* eax_out) {
+    static float proxy[0x100];
+    static unsigned char mesh[0x110];
+    uintptr_t frame[3];
+    uintptr_t frame_ptr = (uintptr_t)frame, mesh_ptr = (uintptr_t)mesh, out_eax = 0;
+    void* bridge = (void*)(uintptr_t)ef_billboard_bridge;
+    float result = 0.0f;
+    frame[2] = (uintptr_t)proxy;
+    proxy[0xF0 / 4] = hide * hide;
+    memcpy(mesh + 0x100, &show, sizeof show);
+    ef_billboard_factor = factor;
+    __asm {
+        mov esi, frame_ptr
+        mov ecx, mesh_ptr
+        mov edx, bridge
+        push ebp
+        mov edi, ecx
+        mov ebp, esi
+        mov eax, 12345678h
+        call edx
+        pop ebp
+        mov out_eax, eax
+        movss result, xmm0
+    }
+    if (eax_out) *eax_out = out_eax;
+    return result;
+}
+static void billboard_fixture(void) {
+    unsigned char* page = (unsigned char*)VirtualAlloc(NULL, 0x1000,
+        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    unsigned char before[sizeof ef_billboard_signature];
+    uintptr_t eax_out = 0;
+    int gog;
+    if (!page) { check("billboard fixture allocated", 0); return; }
+    page[0] = 0xCC;
+    check("billboard: wrong bytes are refused", !ef_billboard_install(page));
+    for (gog = 0; gog < 2; gog++) {
+        ef_select_build(gog);
+        memset(page, 0xCC, 64);
+        memcpy(page, ef_billboard_sig, ef_billboard_sig_len);
+        memcpy(before, page, ef_billboard_sig_len);
+        ef_billboard_active = 0;
+        check("billboard: the build's bytes install", ef_billboard_install(page) == 1);
+        check("billboard: the site is a jump and the rest stays",
+            page[0] == 0xE9 && page[5] == 0x90 && page[7] == 0x90 &&
+            !memcmp(page + 8, before + 8, ef_billboard_sig_len - 8) && ef_billboard_return == page + 8);
+    }
+    ef_select_build(0);
+    // The bridge returns here: a plain ret.
+    page[0x80] = 0xC3;
+    ef_billboard_return = page + 0x80;
+    ef_billboard_hits = ef_billboard_moved = 0;
+    check("billboard: factor 1 is the file's value", billboard_run(10.0f, 100.0f, 1.0f, &eax_out) == 10.0f);
+    check("billboard: EAX survives", eax_out == 0x12345678);
+    check("billboard: factor 1 does not count as moved", ef_billboard_hits == 1 && ef_billboard_moved == 0);
+    check("billboard: the factor scales", billboard_run(10.0f, 100.0f, 3.0f, NULL) == 30.0f);
+    check("billboard: a move is counted", ef_billboard_hits == 2 && ef_billboard_moved == 1);
+    check("billboard: capped at 75% of the hide distance", billboard_run(10.0f, 30.0f, 3.0f, NULL) == 22.5f);
+    check("billboard: never below the file's value", billboard_run(25.0f, 30.0f, 3.0f, NULL) == 25.0f);
+    check("billboard: factor 1 keeps a value above the cap", billboard_run(25.0f, 30.0f, 1.0f, NULL) == 25.0f);
+    check("billboard: scale range", ef_billboard_value(8.0f, 1.0f) == 8.0f && ef_billboard_value(8.5f, 2.0f) == 2.0f &&
+        ef_billboard_value(0.5f, 2.0f) == 2.0f);
+    ef_billboard_factor = 1.0f;
+    ef_billboard_active = 0;
+}
+
+// The sun-shadow sites: the real MOVSS three times, each value stored where the probe can read it.
+static void cascade_fixture(void) {
+    unsigned char* page = (unsigned char*)VirtualAlloc(NULL, 0x1000,
+        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    unsigned char* sites[3];
+    uintptr_t lens[3];
+    float* k;
+    float* out;
+    int i;
+    uint32_t disp;
+    if (!page) { check("cascade fixture allocated", 0); return; }
+    k = (float*)(page + 0x800);
+    out = (float*)(page + 0x810);
+    k[0] = 7.0f; k[1] = 17.0f; k[2] = 40.0f;
+    for (i = 0; i < 3; i++) {
+        sites[i] = page + i * 16;
+        lens[i] = (uintptr_t)&k[i];
+        memcpy(sites[i], "\xF3\x0F\x10\x05", 4);
+        disp = (uint32_t)lens[i];
+        memcpy(sites[i] + 4, &disp, 4);
+        memcpy(sites[i] + 8, "\xF3\x0F\x11\x05", 4);
+        disp = (uint32_t)(uintptr_t)&out[i];
+        memcpy(sites[i] + 12, &disp, 4);
+    }
+    page[48] = 0xC3;
+#define RUN_CASCADES() ((void (*)(void))(uintptr_t)page)()
+#define OUT_IS(a, b, c) (out[0] == (a) && out[1] == (b) && out[2] == (c))
+
+    RUN_CASCADES();
+    check("cascade: unpatched sites load the game's 7, 17 and 40", OUT_IS(7.0f, 17.0f, 40.0f));
+
+    lens[1] = (uintptr_t)&out[1];
+    check("cascade: a different constant address fails closed",
+        !ef_cascade_install(sites, lens) && !ef_cascade_active);
+    lens[1] = (uintptr_t)&k[1];
+    k[2] = 41.0f;
+    check("cascade: one wrong constant leaves all sites alone",
+        !ef_cascade_install(sites, lens) && !ef_cascade_active &&
+        *(uint32_t*)(sites[0] + 4) == (uint32_t)lens[0] && *(uint32_t*)(sites[1] + 4) == (uint32_t)lens[1]);
+    k[2] = 40.0f;
+    sites[2][0] = 0x90;
+    check("cascade: different opcode bytes fail closed", !ef_cascade_install(sites, lens) && !ef_cascade_active);
+    sites[2][0] = 0xF3;
+
+    ef_cascade_set(7.0f, 24.0f, 64.0f);
+    check("cascade: verified sites install", ef_cascade_install(sites, lens));
+    RUN_CASCADES();
+    check("cascade: 7/24/64 m loads the game's 7, 17 and 40", OUT_IS(7.0f, 17.0f, 40.0f));
+    ef_cascade_set(7.0f, 24.0f, 128.0f);
+    RUN_CASCADES();
+    check("cascade: end 128 m loads 104 live and leaves the others", OUT_IS(7.0f, 17.0f, 104.0f));
+    ef_cascade_set(7.0f, 48.0f, 64.0f);
+    RUN_CASCADES();
+    check("cascade: seam 48 m loads 41 and 16 and keeps the 64 m end", OUT_IS(7.0f, 41.0f, 16.0f));
+    ef_cascade_set(14.0f, 24.0f, 64.0f);
+    RUN_CASCADES();
+    check("cascade: first 14 m loads 14 and 10 and keeps 24 and 64 m", OUT_IS(14.0f, 10.0f, 40.0f));
+    ef_cascade_set(24.0f, 24.0f, 64.0f);
+    RUN_CASCADES();
+    check("cascade: first 24 m pushes the seam out to 32 m", OUT_IS(24.0f, 8.0f, 32.0f));
+    ef_cascade_set(48.0f, 24.0f, 64.0f);
+    RUN_CASCADES();
+    check("cascade: first 48 m pushes the seam to 56 m and the end to 72 m", OUT_IS(48.0f, 8.0f, 16.0f));
+    ef_cascade_set(7.0f, 96.0f, 64.0f);
+    RUN_CASCADES();
+    check("cascade: seam 96 m pushes the end out to 112 m", OUT_IS(7.0f, 89.0f, 16.0f));
+    check("cascade: the shared constants are never written", k[0] == 7.0f && k[1] == 17.0f && k[2] == 40.0f);
+    check("cascade: only the disp32s changed",
+        !memcmp(sites[0], "\xF3\x0F\x10\x05", 4) && !memcmp(sites[1], "\xF3\x0F\x10\x05", 4) &&
+        !memcmp(sites[2], "\xF3\x0F\x10\x05", 4) && page[48] == 0xC3);
+    check("cascade: repeat installation is harmless", ef_cascade_install(sites, lens));
+    check("cascade: out-of-range values fall back to the game's",
+        ef_cascade_far(10.0f) == 64.0f && ef_cascade_far(1000.0f) == 64.0f &&
+        ef_cascade_far((float)NAN) == 64.0f && ef_cascade_far(128.0f) == 128.0f &&
+        ef_cascade_seam(7.0f) == 24.0f && ef_cascade_seam((float)NAN) == 24.0f && ef_cascade_seam(48.0f) == 48.0f &&
+        ef_cascade_first(1.0f) == 7.0f && ef_cascade_first((float)NAN) == 7.0f && ef_cascade_first(14.0f) == 14.0f);
+    ef_cascade_set(7.0f, 24.0f, 64.0f);
+#undef RUN_CASCADES
+#undef OUT_IS
+}
+
 int main(void) {
     const SIZE_T span = EF_SHADOW_RVA + 0x1000;
     unsigned char proxy[0x150] = {0};
@@ -264,6 +465,10 @@ int main(void) {
         ef_distance_factor(0.0f) == 1.0f && ef_distance_factor(-1.0f) == 1.0f &&
         ef_distance_factor(100.0f) == 1.0f && ef_distance_factor((float)NAN) == 1.0f);
     gog_fixture(proxy);
+    cascade_fixture();
+    atlas_fixture();
+    poisson_fixture();
+    billboard_fixture();
     printf("%s: %d failures\n", failures ? "FAILED" : "OK", failures);
     // Process exit releases the test image; no game files are loaded or written.
     return failures ? 1 : 0;

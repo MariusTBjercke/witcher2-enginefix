@@ -17,17 +17,17 @@ current version; the entry itself has the proof.
 | [interior-preload.md](interior-preload.md) | Seamless interiors, partitions, occluders | Shipped | `[loading] interiors` |
 | [load-times.md](load-times.md) | Measured load times, faster door fades | Shipped | `[loading] fast_doors`, `door_fade` |
 | [interior-maps.md](interior-maps.md) | Black map in interiors (data files) | Shipped | Delete the map files |
-| [startup-time.md](startup-time.md) | Launch to main menu: FMOD idling on a coarse timer, save preview textures, what is left | Measured on Steam, one run on GOG, not released | `[startup] fast_start`, `[saves] light_previews` |
+| [startup-time.md](startup-time.md) | Launch to main menu: FMOD idling on a coarse timer, save preview textures, what is left | In 0.11.0, measured on Steam, one run on GOG | `[startup] fast_start`, `[saves] light_previews` |
 | [door-transitions.md](door-transitions.md) | What a door changes on screen: lighting blend, save inside a house, spinner; ground texture circle | In 0.10.0, seen on Steam (DXVK and native D3D9) and GOG | `[loading] door_light_blend`, `preload_street`, `door_spinner` |
 
 ## Distance and graphics
 
 | Entry | What it covers | State | Off switch |
 |---|---|---|---|
-| [graphics-presets.md](graphics-presets.md) | The four draw distance levels, Ctrl+F10, the menu row | Shipped | `[presets]` |
+| [graphics-presets.md](graphics-presets.md) | The four draw distance levels, Ctrl+F10, the menu row; plant billboard distance (0.11.0, seen on Steam and GOG) | Shipped | `[presets]`, `billboard_scale` |
 | [lod-distance.md](lod-distance.md) | First pop-in work, LOD multipliers | Background | |
 | [render-distance-experiment.md](render-distance-experiment.md) | Visibility and mesh shadow hooks | Shipped inside the presets | `[preset.*]` |
-| [npc-streaming-sun-shadows.md](npc-streaming-sun-shadows.md) | NPC disappearance, sun shadow quality | Open research | |
+| [npc-streaming-sun-shadows.md](npc-streaming-sun-shadows.md) | NPC disappearance, sun shadow quality and the line where sun shadows end | Shadow quality in 0.11.0, seen on Steam and GOG; rest open research | `[shadows] quality` (vanilla by default), `enabled` |
 | [roadmap-shadows-characters-menus.md](roadmap-shadows-characters-menus.md) | Older roadmap for shadows and characters | Background | |
 | [modern-hardware-options.md](modern-hardware-options.md) | Tuning candidates, shadow keys, frame pacing | Open research | |
 | [quality-audit-2026-10-28.md](quality-audit-2026-10-28.md) | Audit of quality, characters and saves | Background | |
@@ -51,5 +51,5 @@ current version; the entry itself has the proof.
 | [crash-capture.md](crash-capture.md) | Crash log and dump, silent exit | Shipped | `[diagnostics] crash_dump` |
 | [crash-raycast-stale-body.md](crash-raycast-stale-body.md) | Crash leaving the Flotsam inn | Shipped | `[stability] raycast_guard` |
 | [quit-crash.md](quit-crash.md) | Crash while quitting with an area loaded (`FactsAdd`) | In 0.9.0 | `[stability] quit_guard` |
-| [cpu32-hang.md](cpu32-hang.md) | No window on 32 or more threads | In 0.9.0, not run on such a CPU | `[stability] cpu32_guard` |
+| [cpu32-hang.md](cpu32-hang.md) | No window on 32 or more threads | In 0.9.0, confirmed by a player on such a CPU | `[stability] cpu32_guard` |
 | [gog-build.md](gog-build.md) | How GOG differs, build detection, porting an address | In 0.10.0: every feature ported and seen on GOG (2026-11-04) | |

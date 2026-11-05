@@ -16,6 +16,7 @@ running exe's import directory.
 | `EF_RANGE_RVA` | `005BB09F` | `0060C120` |  |
 | `EF_SHADOW_RVA` | `005BB465` | `0060C4F6` |  |
 | `RVA_SETTINGS` | `02180E28` | `021EAEB8` | 0x02580E28 - IMAGE_BASE |
+| `VA_BILLBOARD_SHOW` | `009BC8AF` | `00A0D95F` | movss xmm0,[edi+100h] in 009BC894, which adds a mesh's billboard level |
 | `VA_CAPTURE_PENDING` | `0160D0ED` | `01169160` |  |
 | `VA_CAPTURE_QUEUED` | `0160D0EE` | `01169161` |  |
 | `VA_CNAME_FROM_STR` | `00B28D76` | `00B5E7AC` | __stdcall (DWORD* out, const wchar_t*), RET 8; __thiscall on GOG |
@@ -69,6 +70,7 @@ running exe's import directory.
 | `VA_PROV_VTBL_OPEN` | `00F02B90` |  | Steam provider vtable slot +0x18 |
 | `VA_RAY_HIT` | `0084C750` | `0091F110` |  |
 | `VA_RAY_SLOT` | `00D41A38` | `00E08740` |  |
+| `VA_RENDERER` | `0160C6EC` | `0167D4DC` | the renderer: +0x20 cascade size, +0x24/+0x28 the atlas |
 | `VA_RENDER_THREAD` | `0160D0A4` | `0167DE94` | render thread object while its loop runs |
 | `VA_SAVELIST` | `009A49B9` | `005072D1` | stdcall void BuildSaveList(panel) |
 | `VA_SAVELIST_CALL_A` | `009A5175` | `00507969` | E8 rel32, startup / main menu |
@@ -83,6 +85,17 @@ running exe's import directory.
 | `VA_STEAM_STREAM` | `00F02C2C` |  | vtable of the provider's read stream (0052ADFF) |
 | `VA_STREAM_DTOR` | `0052AFAA` |  | its scalar deleting destructor, slot 0 |
 | `VA_STR_FADE_OUT` | `00EF0050` | `00D7A328` | L"fade_out", the string the handler names its event by |
+| `VA_SUN_ATLAS_ALLOC` | `00B12E39` | `00B4C301` | __stdcall (renderer), RET 4: creates the atlas from +0x20 |
+| `VA_SUN_ATLAS_CALL` | `009DDC39` | `00A2F0CD` | its call in the device reset 009DDBD3 |
+| `VA_SUN_ATLAS_SIZE` | `009DC72F` | `00A2DBED` | mov dword ptr [eax+20h],400h in the renderer constructor 009DC712 |
+| `VA_SUN_CASCADE_FAR` | `009C01AA` | `00A1120D` | movss xmm0,[00F11328] in the same function |
+| `VA_SUN_CASCADE_FAR_LEN` | `00F11328` | `00F781D0` | the float 40.0 that loads, shared with other code |
+| `VA_SUN_CASCADE_FIRST` | `009C016A` | `00A111CD` | movss xmm0,[00F11340] in SetupRenderFrameCollector 009C011E |
+| `VA_SUN_CASCADE_FIRST_LEN` | `00F11340` | `00F781F8` | the float 7.0 that loads, shared with other code |
+| `VA_SUN_CASCADE_MID` | `009C019A` | `00A111FD` | movss xmm0,[00F117B4] in the same function |
+| `VA_SUN_CASCADE_MID_LEN` | `00F117B4` | `00F78620` | the float 17.0 that loads, shared with other code |
+| `VA_SUN_POISSON_CALL` | `00AECA7A` | `00B256E0` | its call for vPoissonSamples, in FUN_00AEC932 |
+| `VA_SUN_POISSON_SET` | `009D0C70` | `00A21FF6` | sets a pixel constant: EAX device, stack (register, vector), RET 8 |
 | `VA_UNPACK` | `0068F3B0` | `007614F0` |  |
 | `VA_UNPACK_CALL` | `0068E8E7` | `007618C7` | call FUN_0068f3b0 in FUN_0068e890 |
 | `WF_CONFIG` | `01608650` | `01679440` | the config manager the writer works on (its ECX on GOG) |

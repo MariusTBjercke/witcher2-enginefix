@@ -7,3 +7,7 @@ w2efDist.PushBack( StrUpperUTF( W2EF_WindowText( 7 ) ) );
 w2efDist.PushBack( StrUpperUTF( W2EF_WindowText( 8 ) ) );
 w2efDist.PushBack( StrUpperUTF( W2EF_WindowText( 9 ) ) );
 InsertMenuSelector( AS_MenuItems, 9202, StrUpperUTF( W2EF_WindowText( 5 ) ), w2efDist, W2EF_DrawDistanceIndex() );
+w2efShadow.PushBack( StrUpperUTF( W2EF_WindowText( 6 ) ) );
+w2efShadow.PushBack( StrUpperUTF( W2EF_WindowText( 7 ) ) );
+w2efShadow.PushBack( StrUpperUTF( W2EF_WindowText( 8 ) ) );
+InsertMenuSelector( AS_MenuItems, 9203, StrUpperUTF( W2EF_WindowText( 10 ) ), w2efShadow, W2EF_ShadowQualityIndex() );

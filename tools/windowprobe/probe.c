@@ -259,6 +259,23 @@ int main(void)
     check("other keys still reach the engine", seen_calls == 3 && seen_key == k_other &&
           seen_value == 2.0f);
     check("other keys are not reported", notified == 0);
+    {
+        // Every options row's key has to pass the filter, or its row silently does nothing.
+        static const wchar_t* const rows[] = {
+            L"EngineFixBorderless", L"Fullscreen", L"EngineFixDrawDistance", L"EngineFixShadowQuality"
+        };
+        float level = 1.0f;
+        unsigned r;
+        for (r = 0; r < sizeof rows / sizeof rows[0]; r++) {
+            notified = 0;
+            notified_key = NULL;
+            wf_note_write(L"User", L"Rendering", rows[r], &level);
+            check("an options row's key is reported", notified == 1 && notified_key == rows[r]);
+        }
+        notified = 0;
+        wf_note_write(L"User", L"Other", rows[3], &level);
+        check("the same key in another section is not reported", notified == 0);
+    }
     check("third call balances the stack", esp_before == esp_after);
 
     // GOG: the thiscall writer keeps its config manager in ECX through the hook and trampoline.

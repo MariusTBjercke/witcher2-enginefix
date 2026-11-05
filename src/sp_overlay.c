@@ -58,7 +58,7 @@ static const wchar_t* const k_carriers[] = {
 // 5 = the Draw distance selector; 6 = the Medallion rows in player.ws and extendedmovable.ws;
 // 7 = the book helpers in their own entry, game\\gui\\w2ef_books.ws; 8 = that entry in CRLF;
 // 9 = scripts taken from user content packages and from the last of duplicate entries.
-#define OV_CACHE_LAYOUT 9
+#define OV_CACHE_LAYOUT 11
 
 // ---- logging -----------------------------------------------------------
 
