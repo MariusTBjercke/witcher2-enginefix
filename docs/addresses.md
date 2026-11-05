@@ -45,6 +45,8 @@ running exe's import directory.
 | `VA_FADE_OUT_EXEC_SLOT` | `00E7C380` | `00F1F3B8` |  |
 | `VA_GAME` | `01404950` | `01475740` | CGame*: +0x40 world, +0xE8 queued world requests, +0x234 cloud flag |
 | `VA_GC` | `00ABD770` | `00B11BA4` |  |
+| `VA_GDS_DTOR` | `00421438` | `00423212` | its scalar deleting destructor, slot 0, thiscall, RET 4 |
+| `VA_GDS_VTBL` | `00E7E264` | `00F21290` | CGameDataStorage vtable (RTTI) |
 | `VA_IMAGES_ADD` | `00B28657` |  | thiscall AddImage(String* name, stream) |
 | `VA_IMAGES_REMOVE` | `00B285C6` |  | thiscall Remove(key) |
 | `VA_IMAGES_VTBL_ADD` | `00EC619C` |  | 00EC6194 + 8 |
@@ -53,6 +55,9 @@ running exe's import directory.
 | `VA_INDOOR_IMM` | `009C0232` | `00A11295` |  |
 | `VA_LAYER_LOAD` | `00A5AC6C` | `00AAE95E` |  |
 | `VA_LAYER_LOAD_CALL` | `00A91709` | `00AE5D66` | call FUN_00a5ac6c in FUN_00a91600, its only caller |
+| `VA_LS_CLEAR_CALL` | `004461C8` | `0044F348` | E8 in the array clear 004461B1 (after mov eax,edi) |
+| `VA_LS_RECORD_FREE` | `00AFE0A2` | `00B37334` | record destructor, EAX = record, plain RET |
+| `VA_LS_REMOVE_CALL` | `00AFE1C3` | `00B3746F` | E8 in the single removal 00AFE12C (after mov eax,edi) |
 | `VA_MAP_FIND` | `004A4A03` |  | bool Find(EAX = map, key*, out*), ret 8 |
 | `VA_MEM_SERIALIZE` | `00ABF380` | `00B138EA` | its slot 1 |
 | `VA_MEM_SIZE` | `00ABF379` | `00B138E3` | its slot 3 |

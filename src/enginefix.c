@@ -206,6 +206,7 @@ static int cfg_exit_trace = 1;  // [diagnostics] exit_trace: log how the game en
 static int cfg_ray_guard = 1;   // [stability] raycast_guard: a ray cast that hits freed physics misses it
 static int cfg_cpu32_guard = 1; // [stability] cpu32_guard: no endless CPU count on 32+ logical processors
 static int cfg_quit_guard = 1;  // [stability] quit_guard: FactsAdd without a world (quitting) does not crash
+static int cfg_storage_leak = 1; // [stability] layer_storage_leak: free the saved NPC states the game drops
 static int g_proxyOnly;         // loaded by another program in bin (Configurator.exe): forward only
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
@@ -553,6 +554,7 @@ static void load_config(void)
     cfg_ray_guard = ini_int("stability", "raycast_guard", 1);
     cfg_cpu32_guard = ini_int("stability", "cpu32_guard", 1);
     cfg_quit_guard = ini_int("stability", "quit_guard", 1);
+    cfg_storage_leak = ini_int("stability", "layer_storage_leak", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -5566,6 +5568,106 @@ static void quit_guard_report(void)
     logf_("stability: quit guard: FactsAdd ran without a world - time 0 used");
 }
 
+// ---- layer storage leak -------------------------------------------------
+// [stability] layer_storage_leak=1. Each layer keeps the state of its entities when they detach,
+// in a "layerStorage" (save block names): an array of 0x1C-byte records, idTag at +0, the state
+// at +0x14 (a CGameDataStorage, 0x14 bytes: vtable, then a TDynArray of the serialized state,
+// ~1-4 KB) and spawn data at +0x18. The record destructor (00AFE0A2, EAX = record, plain RET)
+// frees +0x18 and never +0x14. It runs when the array is cleared (004461B1, from the save load
+// 00AFE9F2 and the storage teardown 00AFE392) and when one spawned entity's record goes
+// (00AFE12C). So every save load leaves all stored states of the world behind. Seen 2026-11-05
+// after five hours: 132 774 storages, 122 699 of them pointed at by nothing (~370 MB), many of
+// them byte-identical copies of the same save. Both calls of the destructor go through
+// ls_record_hook, which deletes the storage with its own destructor (vtable slot 0, flags 1)
+// first. Nothing else frees +0x14: the restore 00AFE3B1 and the save writer 00AFE7C6 only read
+// it. GOG has the same code (00B37334, calls 0044F348 and 00B3746F). See
+// docs/fixes/layer-storage-leak.md.
+#define VA_LS_RECORD_FREE  0x00AFE0A2u   // record destructor, EAX = record, plain RET
+#define VA_LS_CLEAR_CALL   0x004461C8u   // E8 in the array clear 004461B1 (after mov eax,edi)
+#define VA_LS_REMOVE_CALL  0x00AFE1C3u   // E8 in the single removal 00AFE12C (after mov eax,edi)
+#define VA_GDS_VTBL        0x00E7E264u   // CGameDataStorage vtable (RTTI)
+#define VA_GDS_DTOR        0x00421438u   // its scalar deleting destructor, slot 0, thiscall, RET 4
+
+static uintptr_t g_lsRecordFree, g_gdsVtbl, g_gdsDtor;   // this build's, set before the patch
+static volatile LONG g_lsFreed, g_lsFaults;
+static volatile LONG64 g_lsBytes;   // capacity of the freed state buffers
+
+static void __stdcall ls_free_state(unsigned char* rec)
+{
+    __try {
+        void** st = rec ? *(void***)(rec + 0x14) : NULL;
+        if (st && st[0] == (void*)g_gdsVtbl) {
+            LONG cap = *(LONG*)((unsigned char*)st + 0x0C);
+            *(void**)(rec + 0x14) = NULL;
+            ((void (__fastcall*)(void*, void*, int))g_gdsDtor)(st, NULL, 1);
+            InterlockedIncrement(&g_lsFreed);
+            if (cap > 0) InterlockedExchangeAdd64(&g_lsBytes, cap);
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { InterlockedIncrement(&g_lsFaults); }
+}
+
+// Same convention as the record destructor: record in EAX, no stack arguments. The callers
+// keep EBX, ESI and EDI across the call; the C function keeps them too.
+__declspec(naked) static void ls_record_hook(void)
+{
+    __asm {
+        push eax                       ; kept for the original
+        push eax                       ; argument
+        call ls_free_state             ; stdcall, pops the argument
+        pop eax
+        jmp dword ptr [g_lsRecordFree] ; its RET returns to the caller
+    }
+}
+
+static const char* ls_record_bytes(void)
+{
+    // push edi/esi; mov edi/esi,[eax+18h]; test; jz: the spawn data check at the start
+    return by_build("57 8b 78 18 85 ff 74 24", "56 8b 70 18 85 f6 74 22");
+}
+
+static void storage_leak_tick(void)
+{
+    static int done, tries;
+    static LONG reported;
+    static DWORD report_tick;
+    if (!cfg_storage_leak) return;
+    if (done) {
+        LONG n = g_lsFreed;
+        if (n != reported && GetTickCount() - report_tick >= 30000) {
+            report_tick = GetTickCount();
+            logf_("stability: layer storage: %ld saved entity state(s) freed so far (%lld MB) that the game would have kept%s",
+                  n, (long long)(g_lsBytes >> 20), g_lsFaults ? " - some reads failed" : "");
+            reported = n;
+        }
+        return;
+    }
+    {
+        uintptr_t rec = ga(VA_LS_RECORD_FREE), clr = ga(VA_LS_CLEAR_CALL), rem = ga(VA_LS_REMOVE_CALL);
+        uintptr_t vt = ga(VA_GDS_VTBL), dtor = ga(VA_GDS_DTOR);
+        const char* site = by_build("8b c7 e8", "8b c3 e8");
+        const char* site2 = by_build("8b c7 e8", "8b c2 e8");
+        int a, b;
+        if (!code_matches(rec, ls_record_bytes()) || !code_matches(clr - 2, site) || !code_matches(rem - 2, site2) ||
+            !range_readable((void*)vt, sizeof(void*)) || read_ptr((void*)vt) != (void*)dtor ||
+            !code_matches(dtor, by_build("55 8b ec 56 8b f1 8d 46 04 e8", "55 8b ec 56 8b f1 8d 4e 04 e8"))) {
+            if (++tries >= 100) {
+                done = 1;
+                cfg_storage_leak = 0;
+                logf_("stability: layer storage record destructor not recognised at %08X - layer_storage_leak off",
+                      (unsigned)rec);
+            }
+            return;
+        }
+        done = 1;
+        g_lsRecordFree = rec; g_gdsVtbl = vt; g_gdsDtor = dtor;
+        a = patch_call(clr, rec, (void*)ls_record_hook);
+        b = patch_call(rem, rec, (void*)ls_record_hook);
+        logf_("stability: layer storage leak fix: array clear %s, single removal %s",
+              a ? "hooked" : "NOT hooked", b ? "hooked" : "NOT hooked");
+        if (!a && !b) cfg_storage_leak = 0;
+    }
+}
+
 // ---- crash capture ------------------------------------------------------
 // The game's own top-level filter (installed by the static initializer at 00930D99,
 // handler 00930D4A) is `xor eax,eax; inc eax; ret 4`: EXCEPTION_EXECUTE_HANDLER, so a
@@ -6772,6 +6874,7 @@ static DWORD WINAPI worker(LPVOID param)
         ray_guard_tick();
         quit_guard_tick();
         quit_guard_report();
+        storage_leak_tick();
         osd_pump();
         dd_tick();
         apply_lod();
@@ -7112,6 +7215,8 @@ static const ga_row k_gog[] = {
     { VA_FADE_OUT_EXEC_SLOT, 0x00F1F3B8u },   // CRenderCommand_ScreenFadeOut vtable 00F1F3AC + 0x0C
     { VA_GAME,               0x01475740u },   // written at 00AFB1DC; +0x40 activeWorld, +0x250 player
     { VA_GC,                 0x00B11BA4u },
+    { VA_GDS_DTOR,           0x00423212u },   // same shape (lea ecx,[esi+4] where Steam has lea eax)
+    { VA_GDS_VTBL,           0x00F21290u },   // CGameDataStorage (RTTI 01151A7C, locator 00FB57E8)
     { VA_IMAGES_ADD,         0 },
     { VA_IMAGES_REMOVE,      0 },
     { VA_IMAGES_VTBL_ADD,    0 },
@@ -7120,6 +7225,9 @@ static const ga_row k_gog[] = {
     { VA_INDOOR_IMM,         0x00A11295u },
     { VA_LAYER_LOAD,         0x00AAE95Eu },   // stdcall (info, ctx), RET 8 on GOG
     { VA_LAYER_LOAD_CALL,    0x00AE5D66u },   // in the bucket loader 00AE5C5A ("Loading layer '%s'...")
+    { VA_LS_CLEAR_CALL,      0x0044F348u },   // in the array clear 0044F334 (after mov eax,ebx), from the load 00B37C82
+    { VA_LS_RECORD_FREE,     0x00B37334u },   // EAX = record; frees +0x18 only, as on Steam
+    { VA_LS_REMOVE_CALL,     0x00B3746Fu },   // in the single removal 00B373CD (after mov eax,edx)
     { VA_MAP_FIND,           0 },
     { VA_MEM_SERIALIZE,      0x00B138EAu },
     { VA_MEM_SIZE,           0x00B138E3u },
@@ -7293,6 +7401,7 @@ static void build_gate(void)
     int winkeys = ga_have(WK_WNDPROC_SLOT, WK_WNDPROC, 0);
     int ray = ga_have(VA_RAY_SLOT, VA_RAY_HIT, 0);
     int quit = ga_have(VA_FACTS_TIME, 0);
+    int storage = ga_have(VA_LS_RECORD_FREE, VA_LS_CLEAR_CALL, VA_LS_REMOVE_CALL, VA_GDS_VTBL, VA_GDS_DTOR, 0);
     // Script patches change data only, through the file hooks; they are tested on both builds.
     int scripts = g_build != BUILD_UNKNOWN && g_imp[IMP_CREATEFILEW] &&
                   g_imp[IMP_FINDFIRSTFILEW] && g_imp[IMP_FINDNEXTFILEW];
@@ -7383,6 +7492,10 @@ static void build_gate(void)
     if (!quit && cfg_quit_guard) {
         gate_off("stability", "quit_guard");
         cfg_quit_guard = 0;
+    }
+    if (!storage && cfg_storage_leak) {
+        gate_off("stability", "layer_storage_leak");
+        cfg_storage_leak = 0;
     }
     // The pause menu's Quit ends the game with an area loaded, which crashes in FactsAdd during
     // shutdown unless quit_guard is in (docs/fixes/quit-crash.md): the row waits for the guard.
@@ -7656,6 +7769,9 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             if (g_factsNoWorld)
                 logf_("stability: quit guard: FactsAdd ran without a world %ld time(s), time 0 used",
                       (long)g_factsNoWorld);
+            if (g_lsFreed)
+                logf_("stability: layer storage: %ld saved entity state(s) freed this session (%lld MB)",
+                      (long)g_lsFreed, (long long)(g_lsBytes >> 20));
             logf_("unloaded");
             fclose(g_log);
             g_log = NULL;

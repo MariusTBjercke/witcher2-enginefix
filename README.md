@@ -18,6 +18,7 @@ Sibling of [Witcher Engine Fix](https://github.com/MariusTBjercke/witcher-engine
 | **Faster save list** | To show the Load/Save list (and at game start) the game unpacked every save in full to read a few header values. The mod unpacks only the parts the list reads, in memory: about 2.5x faster with 120 saves, same list. Loading a save is unchanged. `[saves] fast_list`. | on |
 | **Crash guard** | A physics ray cast that meets an object that was just unloaded (seen once when walking out of the Flotsam inn) misses it instead of closing the game. `[stability] raycast_guard`. | on |
 | **Clean quit** | Quit in the pause menu (or any quit with an area loaded) crashed the game while it shut down: a script recorded a quest fact after the world was gone. Nobody saw it, but each quit left a crash dump. The mod gives that fact time 0 instead. `[stability] quit_guard`. | on |
+| **Memory leak on save load** | Every time a save is loaded, the game keeps the stored state of every NPC in the world and loads a new copy from the save. After an evening with many loads that was ~370 MB, enough to fill the 32-bit game and stop the seamless interiors. The mod frees the old copies. `[stability] layer_storage_leak`. | on |
 | **32-thread CPUs** | On a CPU with 32 or more logical processors the game never showed a window: its own CPU count never ended. The mod skips that count, the same as taking a core away in Task Manager, but keeps the core. `[stability] cpu32_guard`. | on |
 | **Crash capture** | The game's own crash handler closes the game without a word. The mod logs what crashed and writes a small dump next to the log, so a crash can be reported and analysed. `[diagnostics] crash_dump`. | on |
 | **Faster start** | The game sat idle for about 11 s while the sound system loaded, waiting on a coarse timer. The mod removes most of that wait: on the machine it was measured on the main menu comes after 6.5 s instead of 16 s. Your gain depends on your disk and on what else your system does. Save previews also load about ten times faster, which matters if you have many saves: 165 saves took 2.9 s, now under 0.3 s. | on |
@@ -123,6 +124,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[stability] raycast_guard` | 1 | 0 turns the ray-cast crash guard off |
 | `[stability] cpu32_guard` | 1 | 0 lets the game run its own CPU count (hangs on 32 or more logical processors) |
 | `[stability] quit_guard` | 1 | 0 lets the shutdown after Quit crash again (it only leaves a dump) |
+| `[stability] layer_storage_leak` | 1 | 0 lets every save load leak the world's stored NPC states again |
 | `[startup] skip_intro` | 0 | 1 starts at the main menu, without logo videos and intro |
 | `[startup] fast_start` | 1 | 0 keeps the game's own idle wait for FMOD while it starts |
 | `[window] borderless` | 0 | 1 starts borderless (Full screen off, desktop resolution). After the first use, Options > Graphics owns the setting; it is stored in the game's User.ini |

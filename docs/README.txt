@@ -141,6 +141,8 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [startup] fast_start=1         0 keeps the game's own idle wait while starting
   [stability] raycast_guard=1, cpu32_guard=1, quit_guard=1
                                  0 turns that crash or hang guard off
+  [stability] layer_storage_leak=1
+                                 0 lets every save load leak memory again
   [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1,
                   medallion=1
                                  0 turns that one off
