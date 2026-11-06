@@ -3535,9 +3535,10 @@ static void pt_job(const char* why, const void* job)
 // Layer classes for the door rules, from the layer info's path (+0x68) and name (+0x78):
 //   FAKE      the area's flat "fake room" boxes (fake_interiors\<area>\fake.w2l)
 //   SWAP      what each partition swaps for its own and must not be kept: ambient sound
-//             (`\sounds\`), occluders (`occ` in the name: outdoor occluders around a building
-//             the camera is inside, or an interior's own) and the indoor environment
-//             (`\environments\interior`)
+//             (`\sounds\`), occluders (`occ` in the name, or any layer under an
+//             `\occluders\` folder: the prologue's `occluders\basement\basement.w2l`; outdoor
+//             occluders around a building the camera is inside, or an interior's own) and the
+//             indoor environment (`\environments\interior`)
 //   LOWPOLY   low-poly stand-ins an interior loads for the view out of its windows
 //             (`city_building_lowpoly\ships_lowpoly`); the real objects stay when kept
 //   INTERIOR  a building's own rooms (`\buildings\<name>\interior\`; the prologue village's
@@ -3551,7 +3552,8 @@ static int ko_class(const void* layer)
     pt_text((const char*)layer + 0x78, name, 64);
     pt_text((const char*)layer + 0x68, path, 260);
     if (!_wcsicmp(name, L"fake")) return LC_FAKE;
-    if (wcsistr(path, L"\\sounds\\") || wcsistr(name, L"occ") || wcsistr(path, L"\\environments\\interior"))
+    if (wcsistr(path, L"\\sounds\\") || wcsistr(name, L"occ") || wcsistr(path, L"\\occluders\\") ||
+        wcsistr(path, L"\\environments\\interior"))
         return LC_SWAP;
     if (wcsistr(path, L"_lowpoly\\")) return LC_LOWPOLY;
     if ((wcsistr(path, L"\\buildings\\") && wcsistr(path, L"\\interior\\")) || wcsistr(path, L"_ints\\"))
@@ -3673,6 +3675,12 @@ static void ko_count(const char* when, void* world)
 // those groups are preloaded, except what a door swaps (sound, occluders, the indoor
 // environment, low-poly stand-ins) and the townspeople (`comm*`, `community`), who stay with
 // the door. g_kpSet remembers what was preloaded so no job unloads it.
+// Only house-sized siblings count: a house has one or two groups of its own (the prologue
+// village's interior<N>), while the prologue's `Basement` (31) and `OldTunnel` (12) and Act 3's
+// `area_sewers` (62) are whole indoor areas. Preloading those beside the prologue's `Dream` put
+// the dungeon's occluders, Xbox-only rocks and quest layers into the interrogation cutscene:
+// Roche's face and the wall behind him went missing (docs/fixes/interior-preload.md).
+#define KP_HOUSE_GROUPS 4
 #define KP_GROUPS 512
 #define KP_SET    4096
 static wchar_t g_kpGroup[KP_GROUPS][200];
@@ -3736,9 +3744,15 @@ static int kp_interior_groups(void* world, const wchar_t* target)
             logf_("preload:   sibling '%ls' location type %ld", pt_text((char*)c + 0x04, nm, 96), loc);
         }
         if (loc != 1) continue;
-        sibs++;
         groups = (char*)read_ptr((char*)c + 0x74);
         n = (DWORD)(uintptr_t)read_ptr((char*)c + 0x78);
+        if (n > KP_HOUSE_GROUPS) {
+            wchar_t nm[96];
+            logf_("preload: indoor sibling '%ls' skipped - %lu layer groups of its own, a whole area, not a house",
+                  pt_text((char*)c + 0x04, nm, 96), n);
+            continue;
+        }
+        sibs++;
         for (j = 0; groups && n < 10000 && j < n && g_kpGroups < KP_GROUPS; j++) {
             pt_text(groups + 0x10 * j, g_kpGroup[g_kpGroups], 200);
             if (g_kpGroup[g_kpGroups][0]) g_kpGroups++;
@@ -4069,10 +4083,11 @@ static int ko_frames_alive(void) { return g_koFrameTick && GetTickCount() - g_ko
 
 static int ko_is_occluder(const void* layer)
 {
-    wchar_t name[64];
+    wchar_t name[64], path[260];
     if (ko_class(layer) != LC_SWAP) return 0;
     pt_text((const char*)layer + 0x78, name, 64);
-    return wcsistr(name, L"occ") != NULL;
+    pt_text((const char*)layer + 0x68, path, 260);
+    return wcsistr(name, L"occ") != NULL || wcsistr(path, L"\\occluders\\") != NULL;
 }
 
 static void ko_defer_occluders(void)

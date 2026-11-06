@@ -462,3 +462,48 @@ More logging so a player's log shows missed interiors without `load_trace`:
   deferred. Run 17 (`docs/validation/occluders-run17-2026-11-02.log`): out through both inn
   doors and back, one reload per door 3.3-5.0 s after it, 2 layers in 12-13 ms; owner: much
   better.
+
+## Whole indoor areas are not houses (2026-11-06)
+
+**Symptom** (a player on Nexus, reproduced by the owner on Steam with 0.11.0 and the current
+build): in the prologue's interrogation cutscene the wall behind Roche is a flat, fog-coloured
+surface and his face is missing inside the hood, while his body, the table and the stone pillar
+are drawn. Draw distance, LOD and shadows at Vanilla before the load did not change it;
+`interiors=0` did.
+
+**Cause.** The partition-tree rule takes every `LT_INDOOR` sibling of the target partition as a
+house. The prologue's partitions under `all` were read from `levels\l01-keep\l01-keep.w2w`
+(`pack0.dzip`, offline):
+
+| Partition | Location type | Own layer groups | What it is |
+|---|---|---|---|
+| `Dream` (the interrogation; the room itself is in `all`) | default | 14 | `basement\torture_room`, `occluders\interogation_room`, `environmets\dungeon` ... |
+| `Basement` | `LT_INDOOR` | 31 | the whole dungeon: `basement`, `occluders\basement`, `quests\q002_prison_break` ... |
+| `OldTunnel` | `LT_INDOOR` | 12 | `old_tunnel`, `occluders\old_tunnel`, `environmets\old_tunnel` ... |
+| `interior1` ... `interior25`, `with_basement`, `with_basement2` (village houses) | `LT_INDOOR` | 1-2 | `island\village_b_ints\interior<N>`, `containers\village\containers\interior<N>` |
+
+A save in `all\Dream` or `all\Bridge` therefore preloaded `Basement` and `OldTunnel` (log:
+`43 layer groups from the indoor ones`, `205 interior layers from the partition tree`). Group
+paths match as path prefixes, so that pulled in `basement\xbox_only\rocks.w2l`, every
+`quests\q002_prison_break\...` layer and the dungeon's occluders. Those occluders,
+`occluders\basement\basement.w2l` and `occluders\old_tunnel\old_tunnel.w2l`, have no `occ` in
+their names, so `ko_class` did not hold them back. The most likely culprit for the missing wall
+and face is an occluder from the basement next to the interrogation room: the renderer skips
+whatever is behind it, per component. Not proven which of these layers does it; removing all of
+them is the fix.
+
+The other worlds: `l02-port` has no `LT_INDOOR` partition (only `LT_CAVE`), `03_camp` none, and
+`04_city` one, `area_sewers` with 62 groups: the same mistake waiting in Act 3.
+
+**Fix** (`src/enginefix.c`, `kp_interior_groups` and `ko_class`):
+
+* An indoor sibling with more than 4 own layer groups (`KP_HOUSE_GROUPS`) is a whole area and is
+  skipped. Log: `preload: indoor sibling 'Basement' skipped - 31 layer groups of its own, a whole
+  area, not a house`. The prologue houses still preload, through the tree and the folder rule
+  (`_ints\`).
+* Any layer under an `\occluders\` folder is an occluder (`LC_SWAP`, and `ko_is_occluder` for the
+  door deferral), whatever its file is called.
+
+To check in game: a save in `all\Dream` logs both siblings as skipped, about 0 layers from the
+partition tree, and the interrogation shows the wall and Roche's face with `interiors=2`.
+Village houses still open without a fade.
