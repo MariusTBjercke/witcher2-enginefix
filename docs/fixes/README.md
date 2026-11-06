@@ -50,7 +50,8 @@ current version; the entry itself has the proof.
 |---|---|---|---|
 | [crash-capture.md](crash-capture.md) | Crash log and dump, silent exit | Shipped | `[diagnostics] crash_dump` |
 | [crash-raycast-stale-body.md](crash-raycast-stale-body.md) | Crash leaving the Flotsam inn | Shipped | `[stability] raycast_guard` |
-| [quit-crash.md](quit-crash.md) | Crash while quitting with an area loaded (`FactsAdd`; a cutscene actor in the prologue) | Guard in 0.9.0; Quit ends the session first: seen on Steam (2026-11-06), GOG not run | `[stability] quit_guard`, `clean_quit` |
-| [layer-storage-leak.md](layer-storage-leak.md) | Every save load leaks the world's stored NPC states (~370 MB after one evening) | Built, confirmed on Steam (2026-11-06), GOG not run | `[stability] layer_storage_leak` |
+| [quit-crash.md](quit-crash.md) | Crash while quitting with an area loaded (`FactsAdd`; a cutscene actor in the prologue) | Guard in 0.9.0; Quit ends the session first: in 0.12.0, seen on Steam and GOG | `[stability] quit_guard`, `clean_quit` |
+| [layer-storage-leak.md](layer-storage-leak.md) | Every save load leaks the world's stored NPC states (~370 MB after one evening) | In 0.12.0, seen on Steam and GOG | `[stability] layer_storage_leak` |
+| [door-transitions.md](door-transitions.md), "Freeze at a door" | Freeze in pathfinding: a zero-length line loops PathEngine's edge walk, every job waits | In 0.12.0, installed on Steam and GOG, no catch seen yet | `[stability] path_guard` |
 | [cpu32-hang.md](cpu32-hang.md) | No window on 32 or more threads | In 0.9.0, confirmed by a player on such a CPU | `[stability] cpu32_guard` |
 | [gog-build.md](gog-build.md) | How GOG differs, build detection, porting an address | In 0.10.0: every feature ported and seen on GOG (2026-11-04) | |

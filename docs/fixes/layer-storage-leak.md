@@ -3,7 +3,8 @@
 Status 2026-11-06: found in a running game (Steam, five-hour session), proven in the code on Steam
 and GOG, fixed by `[stability] layer_storage_leak=1` (default). Run on Steam: five loads, ~6 570
 states freed per reload, no orphans left (`docs/validation/layer-storage-leak-2026-11-06.md`).
-Not run on GOG yet.
+Run on GOG (2026-11-06, Flotsam, four loads): both calls hooked, 10 276 states (27 MB) freed;
+after the first load private memory rose 36 and 9 MB per load.
 
 ## Symptom
 
@@ -128,7 +129,16 @@ now, and a probe stops after 4096 slots.
 
 Counts include freed memory that still holds a vtable, and a class with several bases has one
 row per vtable, so a row is "objects plus remnants"; only steady growth means something. The
-census found here: ~2.6 s from outside, for ~1.5 GB of private memory. Not yet run in game.
+census found here: ~2.6 s from outside, for ~1.5 GB of private memory.
+
+In game (Steam, DXVK, Flotsam, 2026-11-06 17:20-17:29): the vtable map took 484 ms (4 675
+vtables), census #1 3.9 s and #2 6.8 s on the low-priority thread, with no stutter reported.
+Between minute 2 and 7, walking through doors with no save load, private memory rose from 1 484
+to 1 956 MB while the engine's own 64 KB pages grew by ~240 (15 MB): most of that growth lies
+outside the engine's page allocator. Classes that grew most: `CCurve` +10 263, `CFXTrack` +2 160,
+`CJobImmediateUpdateTransform` +1 979, `SBehaviorGraphInstanceSlot` +1 654, the other `CFX*`
+effect classes, `CDebugAnimation` +1 215 and `CVisualDebug` +537. One step proves no leak; a
+longer session decides.
 
 ## Risks and what to check in game
 

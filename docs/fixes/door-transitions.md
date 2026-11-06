@@ -577,9 +577,35 @@ view of the WOW64 dump).
   thread was in `d3d9`.
 
 So a pathfinding query never ended and every job behind it waited; the door's flush is simply the
-first thing that waits for all of them. One snapshot cannot prove the edge walk loops forever,
-but the job was still running 30 s in. The owner has seen such freezes before without a cause.
-Whether the mod contributes is open: a kept door leaves the outdoors and the interior loaded
-together, so more obstacles may stand in PathEngine's mesh at once than in the game's own door.
-Next step if it comes back: a passive watchdog that logs the job queue when a partition job's
-flush runs for more than a few seconds.
+first thing that waits for all of them. The owner has seen such freezes before without a cause.
+
+### Why the walk never ends
+
+The job thread's arguments in the dump: `FUN_006550c0(line, startEdge, before, after)` with
+`line = {65C9, 5381, 65C9, 5381}`, both ends the same point. The function walks the edges around
+a mesh vertex until the cross product of an edge with the line's direction changes sign; the
+first loop (`00655214`) leaves only when the two products differ. With no direction both are
+always 0, so it goes round the vertex for good. Any zero-length line that reaches it hangs that
+job thread, in the vanilla game too; nothing in the mod produces the line. Whether kept doors make
+such a query likelier (more obstacles in the mesh at once) is not known.
+
+The function is cdecl with four stack arguments and a plain `RET`, has nine callers (the crossing
+walk `FUN_008bbf70` through `FUN_0065c0c0`, and eight in `008B`-`008D`), and is byte-identical on
+GOG at `00725FC0` (PathEngine is a static library; 0x2D4 bytes compared).
+
+### Fix: `[stability] path_guard` (default 1)
+
+The entry (8 bytes, `55 8B EC 83 EC 28 53 56`, checked over 26) becomes a jump to `path_stub`.
+For a line whose ends are equal it sets both outputs to the start edge and returns: what the
+function itself returns when its first loop stops on the start edge, after which its second loop
+stops at once on a product of 0. Every other line runs the original through a trampoline. Patched
+behind the patch barrier from the worker. A test harness ran the stub: a point gets the start
+edge without calling the original, other lines reach the original with the outputs it sets.
+
+Log: `stability: path guard installed (PathEngine edge walk at 006550C0)`, and when it catches
+one: `stability: path guard: N pathfinding line(s) of zero length answered at once`. Installed on
+Steam (2026-11-06, a ten-minute Flotsam session with doors, no catch, clean quit) and on GOG
+(at `00355FC0` with ASLR, four loads, no catch). Not yet seen
+catching one: the frozen query is not reproducible on demand, so the evidence will be a caught line in
+a long session's log and no more freezes of this kind. Not proven either: that the callers then
+finish; `FUN_008bbf70` does (the end point lies in the start face, so `FUN_0065c0c0` returns 0).

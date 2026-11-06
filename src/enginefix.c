@@ -209,6 +209,7 @@ static int cfg_cpu32_guard = 1; // [stability] cpu32_guard: no endless CPU count
 static int cfg_quit_guard = 1;  // [stability] quit_guard: FactsAdd without a world (quitting) does not crash
 static int cfg_storage_leak = 1; // [stability] layer_storage_leak: free the saved NPC states the game drops
 static int cfg_clean_quit = 1;  // [stability] clean_quit: Quit with an area loaded ends the game session first
+static int cfg_path_guard = 1;  // [stability] path_guard: a zero-length pathfinding line does not hang a job
 static int g_proxyOnly;         // loaded by another program in bin (Configurator.exe): forward only
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
@@ -561,6 +562,7 @@ static void load_config(void)
     cfg_quit_guard = ini_int("stability", "quit_guard", 1);
     cfg_storage_leak = ini_int("stability", "layer_storage_leak", 1);
     cfg_clean_quit = ini_int("stability", "clean_quit", 1);
+    cfg_path_guard = ini_int("stability", "path_guard", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -5739,6 +5741,107 @@ static void clean_quit_tick(void)
           g_cqHooked ? "hooked" : "NOT hooked");
 }
 
+// ---- pathfinding guard --------------------------------------------------
+// [stability] path_guard=1. FUN_006550c0 (GOG 00725FC0, byte-identical: PathEngine is a static
+// library) is PathEngine's edge walk around a mesh vertex: cdecl (line, startEdge, out before,
+// out after), plain RET; line = 4 ints (x1, y1, x2, y2), an edge = {mesh, index}. It walks the
+// edges until the cross product of an edge and the line's direction changes sign. A line whose
+// two ends are the same point has no direction: every product is 0 and the first loop
+// (00655214..) never ends. Seen 2026-11-06 in a Task Manager dump of a frozen game: a job
+// thread in that loop with the line {65C9,5381,65C9,5381}, called from the obstacle crossing
+// walk FUN_008bbf70 in a CPathfindingQueryJob, and 53 jobs behind it; the main thread spun in
+// the next door's flush (docs/fixes/door-transitions.md). Nine callers use the walk. The
+// function's entry goes to path_stub: for a zero-length line it returns at once with both
+// outputs set to the start edge, which is what the function returns when its first loop stops
+// on the start edge (the second loop then stops at once on a product of 0); any other line
+// runs the original through a trampoline with its 8 prologue bytes.
+#define VA_PATH_EDGE_WALK 0x006550C0u
+#define PATH_PROLOGUE     "55 8b ec 83 ec 28 53 56 8b 75 0c 8b 06 8b 50 14 8b 4e 04 8d 0c 89 8b 4c 8a 04"
+
+static void* g_pathTramp;              // the original: 8 prologue bytes, then jmp site+8
+static volatile LONG g_pathFlat;       // zero-length lines answered by the guard
+
+__declspec(naked) static void path_stub(void)
+{
+    __asm {
+        mov eax, [esp + 4]           // line
+        mov ecx, [eax]
+        cmp ecx, [eax + 8]
+        jne original
+        mov ecx, [eax + 4]
+        cmp ecx, [eax + 12]
+        jne original
+        mov eax, [esp + 8]           // start edge {mesh, index}
+        mov ecx, [esp + 12]          // out before
+        mov edx, [eax]
+        mov [ecx], edx
+        mov edx, [eax + 4]
+        mov [ecx + 4], edx
+        mov ecx, [esp + 16]          // out after
+        mov edx, [eax]
+        mov [ecx], edx
+        mov edx, [eax + 4]
+        mov [ecx + 4], edx
+        lock inc dword ptr [g_pathFlat]
+        ret
+    original:
+        jmp dword ptr [g_pathTramp]
+    }
+}
+
+static void path_guard_tick(void)
+{
+    static int done, tries;
+    static LONG reported;
+    unsigned char code[8];
+    pb_range range;
+    HANDLE peers[256];
+    unsigned count = 0;
+    DWORD old = 0, tmp = 0;
+    uintptr_t at = ga(VA_PATH_EDGE_WALK);
+    int64_t delta;
+    LONG flat = g_pathFlat;
+
+    if (flat != reported && (!reported || flat - reported >= 10)) {
+        logf_("stability: path guard: %ld pathfinding line(s) of zero length answered at once "
+              "(the game would have looped for good)", (long)flat);
+        reported = flat;
+    }
+    if (done || !cfg_path_guard) return;
+    if (!at || !code_matches(at, PATH_PROLOGUE)) {
+        if (++tries >= 100) {
+            done = 1;
+            logf_("stability: PathEngine edge walk not recognised at %08X - path guard off", (unsigned)at);
+        }
+        return;
+    }
+    done = 1;
+    delta = (int64_t)(uintptr_t)path_stub - (int64_t)(at + 5);
+    if (delta < INT32_MIN || delta > INT32_MAX) return;
+    g_pathTramp = wf_make_trampoline((void*)at, (const unsigned char*)at, 8);
+    if (!g_pathTramp) { logf_("stability: no memory for the path guard's trampoline - off"); return; }
+    code[0] = 0xE9;
+    *(uint32_t*)(code + 1) = (uint32_t)(int32_t)delta;
+    memset(code + 5, 0x90, 3);
+    range.start = (const unsigned char*)at;
+    range.len = (unsigned)sizeof code;
+    if (!pb_stop_peers(peers, &count, &range, 1)) {
+        logf_("stability: could not stop the game's threads to patch the PathEngine edge walk - path guard off");
+        return;
+    }
+    if (!code_matches(at, PATH_PROLOGUE) ||
+        !VirtualProtect((void*)at, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
+        pb_resume_peers(peers, count);
+        logf_("stability: PathEngine edge walk changed while patching - path guard off");
+        return;
+    }
+    memcpy((void*)at, code, sizeof code);
+    VirtualProtect((void*)at, sizeof code, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), (void*)at, sizeof code);
+    pb_resume_peers(peers, count);
+    logf_("stability: path guard installed (PathEngine edge walk at %08X)", (unsigned)at);
+}
+
 // ---- layer storage leak -------------------------------------------------
 // [stability] layer_storage_leak=1. Each layer keeps the state of its entities when they detach,
 // in a "layerStorage" (save block names): an array of 0x1C-byte records, idTag at +0, the state
@@ -7280,6 +7383,7 @@ static DWORD WINAPI worker(LPVOID param)
         quit_guard_tick();
         quit_guard_report();
         clean_quit_tick();
+        path_guard_tick();
         storage_leak_tick();
         osd_pump();
         dd_tick();
@@ -7619,6 +7723,7 @@ static const ga_row k_gog[] = {
     { VA_QUIT_FLAG,          0x00AFA032u },   // ECX = engine (Steam reads the global itself)
     { VA_EXIT_GAME,          0x00AFC92Cu },   // ECX = game, plain RET; native 00AFCE86
     { VA_ENGINE,             0x0167D4CCu },
+    { VA_PATH_EDGE_WALK,     0x00725FC0u },   // PathEngine, byte-identical to Steam's 006550C0
     { VA_FADE_IN_EXEC,       0x00A2D789u },
     { VA_FADE_IN_EXEC_SLOT,  0x00F1F3CCu },   // CRenderCommand_ScreenFadeIn vtable 00F1F3C0 + 0x0C
     { VA_FADE_OUT_EXEC,      0x00A2D7E1u },
@@ -7813,6 +7918,7 @@ static void build_gate(void)
     int quit = ga_have(VA_FACTS_TIME, 0);
     int storage = ga_have(VA_LS_RECORD_FREE, VA_LS_CLEAR_CALL, VA_LS_REMOVE_CALL, VA_GDS_VTBL, VA_GDS_DTOR, 0);
     int cleanq = ga_have(VA_QUIT_CALL, VA_QUIT_FLAG, VA_EXIT_GAME, VA_ENGINE, VA_GAME, 0);
+    int pathg = ga_have(VA_PATH_EDGE_WALK, 0);
     // Script patches change data only, through the file hooks; they are tested on both builds.
     int scripts = g_build != BUILD_UNKNOWN && g_imp[IMP_CREATEFILEW] &&
                   g_imp[IMP_FINDFIRSTFILEW] && g_imp[IMP_FINDNEXTFILEW];
@@ -7911,6 +8017,10 @@ static void build_gate(void)
     if (!cleanq && cfg_clean_quit) {
         gate_off("stability", "clean_quit");
         cfg_clean_quit = 0;
+    }
+    if (!pathg && cfg_path_guard) {
+        gate_off("stability", "path_guard");
+        cfg_path_guard = 0;
     }
     // The pause menu's Quit ends the game with an area loaded, which crashes in FactsAdd during
     // shutdown unless quit_guard is in (docs/fixes/quit-crash.md): the row waits for the guard.
@@ -8188,6 +8298,9 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             if (g_factsNoWorld)
                 logf_("stability: quit guard: FactsAdd ran without a world %ld time(s), time 0 used",
                       (long)g_factsNoWorld);
+            if (g_pathFlat)
+                logf_("stability: path guard: %ld pathfinding line(s) of zero length answered this session",
+                      (long)g_pathFlat);
             if (g_lsFreed)
                 logf_("stability: layer storage: %ld saved entity state(s) freed this session (%lld MB)",
                       (long)g_lsFreed, (long long)(g_lsBytes >> 20));

@@ -71,6 +71,7 @@ running exe's import directory.
 | `VA_PART_SWITCH` | `00A91BF9` | `00AE626C` |  |
 | `VA_PART_SWITCH_A` | `00AAA1FF` | `00AFE3F0` | call from the request queue |
 | `VA_PART_SWITCH_B` | `00AAB089` | `00AFF2DC` |  |
+| `VA_PATH_EDGE_WALK` | `006550C0` | `00725FC0` |  |
 | `VA_PROV_FORWARD` | `0052AF96` |  | provider stream slot 1: forwards to the inner stream (+0x20) |
 | `VA_PROV_OPEN` | `00931DB7` |  | thiscall Stream* Open(String* name, bool mode1) |
 | `VA_PROV_STREAM` | `0052ADFF` |  | the provider stream's constructor |

@@ -160,6 +160,7 @@ In game (Steam, owner, 2026-11-06), Esc, Quit, Yes each time:
 |---|---|---|---|
 | Prologue interrogation (`all\Dream`), crashed three times before | 1 015 ms | 2 578 ms | `ExitProcess(0)` on the main thread, `unloaded`, no dump |
 | Flotsam, 18 minutes of play | 1 078 ms | 2 656 ms | the same |
+| GOG, Flotsam after four loads | 1 093 ms | 2 609 ms | `CorExitProcess(0)` on the main thread (GOG's usual end, see `gog-build.md`), no dump |
 
-The game closed before the main menu was drawn, so the player sees no menu. Not run on GOG,
-where the exit flag setter and ExitGame take ECX: that is the part to check there.
+On Steam the game closed before the main menu was drawn; on GOG the owner saw the menu for a
+moment. The GOG run confirms the ECX convention of its exit flag setter and ExitGame.
