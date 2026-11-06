@@ -553,3 +553,33 @@ checks GOG's add call, the Stabilize jump and the spinner slot),
 (the change should take about a second, with no jump), Einar Gausel's door (no change, no
 spinner), a save made inside the inn then out (no freeze, no fade), and `door_light_blend=0`
 for the old behaviour.
+
+## Freeze at a door: a pathfinding job that does not finish (2026-11-06)
+
+Steam, DXVK, Flotsam, 0.11.0 plus the day's builds: about six minutes after a load, a kept door
+(`'Flotsam' -> '04_guards_marketplace' is loaded - no fade (0 to load)`, 17:05:56) froze the game
+for good. The owner took a full dump from Task Manager 30 s later (read offline with cdb, x86
+view of the WOW64 dump).
+
+* **Main thread:** in the partition job `FUN_00a91952` (run from our `hook_PartRun`), first stage
+  "Flushing...": `FUN_00b0cea0` spins with Enter/LeaveCriticalSection on the job manager at
+  `0258A240` (array `+0x20`, count `+0x24`) until no job has `+0x30 == 1`, `+0x34 == 0`,
+  `+0x38 != 0`. No sleep in that loop.
+* **The queue:** 53 jobs, all still in that state: 51 `CJobSpawnEntity` (vtable `00E8DFC4`) and 2
+  `CPathfindingQueryJob` (`00ECE1D0`). The critical section was free.
+* **The one busy job thread (T4):** inside PathEngine (`cMesh.cpp` asserts in `FUN_0065a4c0`,
+  "findShortestPath_MultipleStartPositions"), at `FUN_006550c0`, an edge walk around a mesh
+  vertex in a `while (true)` loop (`0065525A`). Stack: `0098E60E` -> `FUN_008e498c` (the query job)
+  -> `FUN_0065a4c0` -> `FUN_00658160` -> ... -> `FUN_006550c0`. The other job threads (T3,
+  T12-T14, T35) waited.
+* **Not DXVK and not the driver:** no NVIDIA event, no `DEVICE_LOST`, the DXVK log's last entry
+  was two minutes earlier, and every DXVK thread waited idle. Unlike the 2026-11-04 hangs, no
+  thread was in `d3d9`.
+
+So a pathfinding query never ended and every job behind it waited; the door's flush is simply the
+first thing that waits for all of them. One snapshot cannot prove the edge walk loops forever,
+but the job was still running 30 s in. The owner has seen such freezes before without a cause.
+Whether the mod contributes is open: a kept door leaves the outdoors and the interior loaded
+together, so more obstacles may stand in PathEngine's mesh at once than in the game's own door.
+Next step if it comes back: a passive watchdog that logs the job queue when a partition job's
+flush runs for more than a few seconds.
