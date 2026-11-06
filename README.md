@@ -135,6 +135,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[diagnostics] save_trace` | 0 | 1 logs the save-preview path (Steam writes, screenshot encoding) |
 | `[diagnostics] savelist_trace` | 0 | 1 logs each save-list build (time, Steam reads, memory) |
 | `[diagnostics] load_trace` | 0 | 1 measures every loading screen and house door |
+| `[diagnostics] mem_trace` | 0 | N takes a memory census every N minutes, to find what grows over a long session (`tools/memtrace-report.py`) |
 | `[diagnostics] crash_dump` | 1 | 1 logs a crash and writes a minidump, 2 a full dump, 0 off |
 | `[diagnostics] exit_trace` | 1 | 1 logs which code ended the game (one line at exit), 0 off |
 

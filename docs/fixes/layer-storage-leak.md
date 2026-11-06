@@ -101,6 +101,35 @@ stability: layer storage: N saved entity state(s) freed so far (M MB) that the g
 The second line comes at most every 30 s while the count grows, and once more at the DLL detach.
 `0` turns the fix off; without the addresses (an unknown exe) `build_gate` turns it off.
 
+## Finding the next one: `[diagnostics] mem_trace`
+
+The census that found this leak was taken from outside the process. `[diagnostics] mem_trace=N`
+(`src/enginefix.c`, section "memory trace") takes the same census inside the game every N
+minutes, the first after 2, on a low-priority thread. It only reads: `VirtualQuery` over the
+address space, and every aligned dword of committed private read/write memory that is a vtable
+of witcher2.exe is counted in an 8 MB open-addressing table (its own `VirtualAlloc`, skipped by
+the scan). The vtables are mapped once before the first census, one bit per dword of the image:
+those whose RTTI locator checks out (signature 0, type descriptor name `.?AV`/`.?AU`). A page
+that goes away during the scan ends that region (SEH).
+
+The first build counted every value inside the image and checked RTTI afterwards. In Flotsam at
+2.1 GB private (2026-11-06) texture and sound data gave more distinct "addresses" than the table
+has slots; with the table full every add walked all of it, and the first census never ended
+(no `memtrace: #1` line after 18 minutes, the game itself unaffected). Only vtables are keys
+now, and a probe stops after 4096 slots.
+
+* Log, per census: `memtrace: #N at T min: private, free (largest); 64 KB pages: state, havok,
+  small, other; K classes; the six classes that grew most since the first census (ms)`.
+* `witcher2_enginefix_memtrace.tsv` next to the log, one row per value (`census, seconds, kind,
+  key, value`; classes with 20 or more objects). The session before is kept as `.prev.tsv`.
+* `python -I tools/memtrace-report.py <tsv> [top]` prints the series and the classes that grew
+  from the first census to the last, with how many steps they rose and fell; a class that rose in
+  three quarters of the steps and never fell is listed as a leak candidate.
+
+Counts include freed memory that still holds a vtable, and a class with several bases has one
+row per vtable, so a row is "objects plus remnants"; only steady growth means something. The
+census found here: ~2.6 s from outside, for ~1.5 GB of private memory. Not yet run in game.
+
 ## Risks and what to check in game
 
 * A state still used after its record is gone would now be freed memory. Nothing in the code reads

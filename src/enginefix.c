@@ -178,6 +178,7 @@ static int cfg_skip_intro;      // [startup] skip_intro: no logo/intro videos be
 static int cfg_fast_start = 1;  // [startup] fast_start: no idle waiting for FMOD while the game starts
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
 static int cfg_load_trace;      // [diagnostics] load_trace: where loading-screen time goes
+static int cfg_mem_trace;       // [diagnostics] mem_trace: minutes between memory censuses (0 = off)
 static int cfg_fast_doors = 1;  // [loading] fast_doors: picture back once a house interior is in
 static float cfg_door_fade = 0.05f; // [loading] door_fade: seconds of the door fade-out/in (game: 0.5)
 static float cfg_area_fade = 0.25f; // [loading] area_fade: door fade when the door changes area (Flotsam gate)
@@ -519,6 +520,9 @@ static void load_config(void)
     cfg_fast_start = ini_int("startup", "fast_start", 1);
     cfg_file_trace = ini_int("diagnostics", "file_trace", 0);
     cfg_load_trace = ini_int("diagnostics", "load_trace", 0);
+    cfg_mem_trace = ini_int("diagnostics", "mem_trace", 0);
+    if (cfg_mem_trace < 0) cfg_mem_trace = 0;
+    if (cfg_mem_trace > 240) cfg_mem_trace = 240;
     cfg_fast_doors = ini_int("loading", "fast_doors", 1);
     cfg_door_fade = ini_float("loading", "door_fade", 0.05f);
     cfg_area_fade = ini_float("loading", "area_fade", 0.25f);
@@ -5668,6 +5672,240 @@ static void storage_leak_tick(void)
     }
 }
 
+// ---- memory trace -------------------------------------------------------
+// [diagnostics] mem_trace=N: every N minutes (first one after 2), a census of the process's own
+// memory on a low-priority thread, to find what grows over a long session. Passive: it only
+// reads. Per census:
+// * private, free and largest free address space;
+// * the engine's 64 KB pages (FUN_00ac84cd: one VirtualAlloc each) by their first bytes: saved
+//   entity state (BLCK), Havok packfiles, small-block pages (12 12 12 12), other;
+// * every aligned dword in committed private read/write memory that is an RTTI vtable of
+//   witcher2.exe, counted per vtable. Freed memory that still holds a vtable counts too, so a
+//   count is "objects plus remnants"; what matters is a class that keeps growing.
+// The log gets one line per census with the classes that grew most since the first one; the full
+// counts go to witcher2_enginefix_memtrace.tsv (previous session: .prev.tsv), read by
+// tools/memtrace-report.py. Found the layer storage leak this way (docs/fixes/layer-storage-leak.md).
+#define MT_SLOTS     (1u << 20)        // open-addressing table of vtable -> count, 8 MB
+#define MT_MIN_TSV   20                // classes with fewer objects stay out of the file
+#define MT_TOP       6
+
+typedef struct { uint32_t key, count; } mt_slot;
+typedef struct { uint32_t vt, count; } mt_pair;
+
+static mt_slot*  g_mtTable;
+static mt_pair*  g_mtBase;             // first census, sorted by vtable
+static unsigned  g_mtBaseN;
+static uintptr_t g_mtLo, g_mtHi;       // witcher2.exe image
+static uint32_t* g_mtVt;               // one bit per dword of the image: an RTTI vtable starts there
+static unsigned  g_mtVtN;              // how many
+static char      g_mtPath[MAX_PATH];
+
+// Only vtables are keys (some ten thousand), so the table never fills. Counting every value
+// that fell inside the image did: in Flotsam at 2 GB private, texture and sound data alone gave
+// millions of distinct "addresses", and with the table full each add walked all 1M slots (the
+// first census never ended, 2026-11-06). The probe is capped as well.
+static void mt_add(uint32_t v)
+{
+    uint32_t h = (v * 2654435761u) >> 12, i;
+    for (i = 0; i < 4096; i++) {
+        mt_slot* s = &g_mtTable[(h + i) & (MT_SLOTS - 1)];
+        if (s->key == v) { s->count++; return; }
+        if (!s->key) { s->key = v; s->count = 1; return; }
+    }
+}
+
+static int mt_is_vt(uint32_t v)
+{
+    uint32_t k = (v - (uint32_t)g_mtLo) >> 2;
+    return !(v & 3) && v >= g_mtLo && v < g_mtHi && (g_mtVt[k >> 5] >> (k & 31) & 1);
+}
+
+// The RTTI class name of a vtable of witcher2.exe, or NULL: complete object locator at vt-4
+// (signature 0), type descriptor at +12, its name at +8 (".?AV...").
+static const char* mt_rtti(uint32_t vt)
+{
+    const char* name = NULL;
+    __try {
+        uint32_t col = *(const uint32_t*)(uintptr_t)(vt - 4), td;
+        if (col < g_mtLo || col + 16 > g_mtHi || *(const uint32_t*)(uintptr_t)col != 0) return NULL;
+        td = *(const uint32_t*)(uintptr_t)(col + 12);
+        if (td < g_mtLo || td + 16 > g_mtHi) return NULL;
+        name = (const char*)(uintptr_t)(td + 8);
+        if (name[0] != '.' || name[1] != '?' || name[2] != 'A' || (name[3] != 'V' && name[3] != 'U')) return NULL;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return NULL; }
+    return name;
+}
+
+// The vtable map, once, before the first census: every dword of the image whose RTTI locator
+// checks out. ~10M reads of the exe's own pages, well under a second.
+static int mt_build_vt(void)
+{
+    uint32_t words = (uint32_t)((g_mtHi - g_mtLo) >> 2), k;
+    if (g_mtVt) return 1;
+    g_mtVt = (uint32_t*)VirtualAlloc(NULL, ((words + 31) >> 5) * 4, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!g_mtVt) return 0;
+    for (k = 1; k < words; k++)
+        if (mt_rtti((uint32_t)g_mtLo + 4 * k)) { g_mtVt[k >> 5] |= 1u << (k & 31); g_mtVtN++; }
+    return 1;
+}
+
+static int mt_pair_cmp(const void* a, const void* b)
+{
+    uint32_t x = ((const mt_pair*)a)->vt, y = ((const mt_pair*)b)->vt;
+    return x < y ? -1 : x > y;
+}
+
+static uint32_t mt_base_count(uint32_t vt)
+{
+    mt_pair k, *p;
+    if (!g_mtBase) return 0;
+    k.vt = vt;
+    p = (mt_pair*)bsearch(&k, g_mtBase, g_mtBaseN, sizeof k, mt_pair_cmp);
+    return p ? p->count : 0;
+}
+
+// Scan one committed region in place; a page that goes away under the scan ends the region.
+static void mt_scan(const uint32_t* p, size_t words)
+{
+    size_t i = 0;
+    __try {
+        for (; i < words; i++) {
+            uint32_t v = p[i];
+            if (mt_is_vt(v)) mt_add(v);
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
+static void mt_census(int n, DWORD t0)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    uintptr_t at = 0x10000;
+    unsigned long long priv = 0, freeb = 0, largest = 0;
+    unsigned pages[4] = { 0, 0, 0, 0 };   // state, havok, small, other
+    unsigned i, used = 0, classes = 0;
+    DWORD start = GetTickCount(), sec = (start - t0) / 1000;
+    FILE* f = NULL;
+    mt_pair top[MT_TOP];
+    mt_pair* now;
+    char line[512];
+
+    memset(g_mtTable, 0, MT_SLOTS * sizeof(mt_slot));
+    while (at < 0xFFFF0000u && VirtualQuery((void*)at, &mbi, sizeof mbi)) {
+        uintptr_t base = (uintptr_t)mbi.BaseAddress;
+        if (mbi.State == MEM_FREE) {
+            freeb += mbi.RegionSize;
+            if (mbi.RegionSize > largest) largest = mbi.RegionSize;
+        } else if (mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE) {
+            DWORD pr = mbi.Protect;
+            priv += mbi.RegionSize;
+            if ((pr & (PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) &&
+                !(pr & (PAGE_GUARD | PAGE_NOACCESS)) &&
+                !(base >= (uintptr_t)g_mtTable && base < (uintptr_t)g_mtTable + MT_SLOTS * sizeof(mt_slot)) &&
+                mbi.AllocationBase != (void*)g_mtVt) {
+                if (mbi.RegionSize == 0x10000 && mbi.AllocationBase == mbi.BaseAddress) {
+                    uint32_t h = 0;
+                    __try { h = *(const uint32_t*)base; } __except (EXCEPTION_EXECUTE_HANDLER) { h = 0; }
+                    pages[h == 0x4B434C42u ? 0 : h == 0x57E0E057u ? 1 : h == 0x12121212u ? 2 : 3]++;
+                }
+                mt_scan((const uint32_t*)base, mbi.RegionSize / 4);
+            }
+        }
+        if (base + mbi.RegionSize <= at) break;
+        at = base + mbi.RegionSize;
+    }
+    for (i = 0; i < MT_SLOTS; i++) if (g_mtTable[i].key) used++;
+    now = (mt_pair*)malloc((used ? used : 1) * sizeof(mt_pair));
+    if (!now) return;
+    // keep the vtables only
+    for (i = 0; i < MT_SLOTS; i++) {
+        mt_slot* s = &g_mtTable[i];
+        if (s->key && s->count >= 2 && mt_rtti(s->key)) { now[classes].vt = s->key; now[classes].count = s->count; classes++; }
+    }
+    qsort(now, classes, sizeof *now, mt_pair_cmp);
+
+    if (fopen_s(&f, g_mtPath, n == 1 ? "w" : "a") == 0 && f) {
+        if (n == 1) fprintf(f, "census\tseconds\tkind\tkey\tvalue\n");
+        fprintf(f, "%d\t%lu\tmem\tprivate_mb\t%llu\n", n, sec, priv >> 20);
+        fprintf(f, "%d\t%lu\tmem\tfree_mb\t%llu\n", n, sec, freeb >> 20);
+        fprintf(f, "%d\t%lu\tmem\tlargest_free_mb\t%llu\n", n, sec, largest >> 20);
+        fprintf(f, "%d\t%lu\tpage\tstate\t%u\n%d\t%lu\tpage\thavok\t%u\n%d\t%lu\tpage\tsmall\t%u\n%d\t%lu\tpage\tother\t%u\n",
+                n, sec, pages[0], n, sec, pages[1], n, sec, pages[2], n, sec, pages[3]);
+        for (i = 0; i < classes; i++)
+            if (now[i].count >= MT_MIN_TSV)
+                fprintf(f, "%d\t%lu\tclass\t%s@%08X\t%u\n", n, sec, mt_rtti(now[i].vt), (unsigned)now[i].vt, now[i].count);
+        fclose(f);
+    }
+
+    memset(top, 0, sizeof top);
+    if (g_mtBase) {
+        for (i = 0; i < classes; i++) {
+            uint32_t was = mt_base_count(now[i].vt), grew = now[i].count > was ? now[i].count - was : 0;
+            int k;
+            if (!grew) continue;
+            for (k = MT_TOP; k > 0 && grew > top[k - 1].count; k--) if (k < MT_TOP) top[k] = top[k - 1];
+            if (k < MT_TOP) { top[k].vt = now[i].vt; top[k].count = grew; }
+        }
+        line[0] = 0;
+        for (i = 0; i < MT_TOP && top[i].count; i++) {
+            const char* nm = mt_rtti(top[i].vt);
+            const char* end;
+            size_t len = strlen(line);
+            if (!nm) continue;
+            nm += 4;   // ".?AV"
+            end = strstr(nm, "@@");
+            _snprintf_s(line + len, sizeof line - len, _TRUNCATE, "%s%.*s +%u", i ? ", " : "",
+                        (int)(end ? end - nm : (ptrdiff_t)strlen(nm)), nm, top[i].count);
+        }
+        free(now);
+    } else {
+        g_mtBase = now;
+        g_mtBaseN = classes;
+        strcpy_s(line, sizeof line, "first census, the baseline");
+    }
+    logf_("memtrace: #%d at %lu min: private %llu MB, free %llu MB (largest %llu MB); 64 KB pages: state %u, havok %u, small %u, other %u; %u classes; %s (%lu ms)",
+          n, sec / 60, priv >> 20, freeb >> 20, largest >> 20, pages[0], pages[1], pages[2], pages[3], classes,
+          line[0] ? line : "nothing grew since the first", GetTickCount() - start);
+}
+
+static DWORD WINAPI memtrace_thread(LPVOID param)
+{
+    const IMAGE_DOS_HEADER* dos;
+    const IMAGE_NT_HEADERS32* nt;
+    char prev[MAX_PATH];
+    DWORD t0 = GetTickCount(), wait = 120000;
+    int n = 0;
+    (void)param;
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+    __try {
+        dos = (const IMAGE_DOS_HEADER*)g_base;
+        nt = (const IMAGE_NT_HEADERS32*)(g_base + dos->e_lfanew);
+        g_mtLo = g_base;
+        g_mtHi = g_base + nt->OptionalHeader.SizeOfImage;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { g_mtLo = g_mtHi = 0; }
+    g_mtTable = (mt_slot*)VirtualAlloc(NULL, MT_SLOTS * sizeof(mt_slot), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!g_base || g_mtHi <= g_mtLo || !g_mtTable) {
+        logf_("memtrace: no exe image or no table - off");
+        return 0;
+    }
+    sprintf_s(g_mtPath, MAX_PATH, "%s\\witcher2_enginefix_memtrace.tsv", g_binDir);
+    sprintf_s(prev, MAX_PATH, "%s\\witcher2_enginefix_memtrace.prev.tsv", g_binDir);
+    MoveFileExA(g_mtPath, prev, MOVEFILE_REPLACE_EXISTING);
+    logf_("memtrace: a census every %d min, the first in 2 min; counts in %s", cfg_mem_trace, g_mtPath);
+    while (g_running) {
+        DWORD slept = 0;
+        while (g_running && slept < wait) { Sleep(1000); slept += 1000; }
+        if (!g_running) break;
+        if (!g_mtVt) {
+            DWORD s = GetTickCount();
+            if (!mt_build_vt()) { logf_("memtrace: no memory for the vtable map - off"); break; }
+            logf_("memtrace: %u vtables in witcher2.exe (%lu ms)", g_mtVtN, GetTickCount() - s);
+        }
+        mt_census(++n, t0);
+        wait = (DWORD)cfg_mem_trace * 60000;
+    }
+    return 0;
+}
+
 // ---- crash capture ------------------------------------------------------
 // The game's own top-level filter (installed by the static initializer at 00930D99,
 // handler 00930D4A) is `xor eax,eax; inc eax; ret 4`: EXCEPTION_EXECUTE_HANDLER, so a
@@ -7682,7 +7920,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
               cfg_distance, cfg_visibility, cfg_shadow_range);
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d fast_start=%d", cfg_skip_intro, cfg_fast_start);
-        logf_("diagnostics: file_trace=%d load_trace=%d", cfg_file_trace, cfg_load_trace);
+        logf_("diagnostics: file_trace=%d load_trace=%d mem_trace=%d", cfg_file_trace, cfg_load_trace, cfg_mem_trace);
         logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
@@ -7724,6 +7962,10 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
                 if (cfg_light_previews) {
                     h = CreateThread(NULL, 0, light_previews_thread, NULL, 0, NULL);
                     if (h) CloseHandle(h); else logf_("saves: CreateThread failed - light_previews off");
+                }
+                if (cfg_mem_trace) {
+                    h = CreateThread(NULL, 0, memtrace_thread, NULL, 0, NULL);
+                    if (h) CloseHandle(h); else logf_("memtrace: CreateThread failed - off");
                 }
             }
             if (cfg_file_trace) {
