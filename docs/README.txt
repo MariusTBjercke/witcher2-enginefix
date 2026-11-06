@@ -143,6 +143,7 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
                                  0 turns that crash or hang guard off
   [stability] layer_storage_leak=1
                                  0 lets every save load leak memory again
+  [stability] clean_quit=1       0 quits at once with an area loaded (can crash)
   [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1,
                   medallion=1
                                  0 turns that one off

@@ -100,3 +100,66 @@ handler), and no dump was written. Log:
 ```
 
 Both `FactsAdd` calls that would have faulted were caught, and the shutdown finished.
+
+## The next fault on the same way out: a cutscene actor (2026-11-06)
+
+What "Not done" above warned about. Three dumps on Steam, each after the pause menu's Quit with a
+prologue save loaded in `all\Dream` (the interrogation), also with `interiors=0` and every graphics
+setting at Vanilla:
+
+```text
+crash: unhandled exception 0xC0000005 at 0x00A517CC (witcher2.EXE+0x6517CC), thread <main>
+crash: access violation reading 0x00000038
+crash: eax=00000000 ... ecx=01614CF0
+```
+
+`00A517CC` is the first instruction of `FUN_00a517cc` (`mov edx,[eax+38h]`): it searches an
+array at `+0x34`/`+0x38` of the object in EAX for an element whose `+0x30` is the CName in ECX.
+Its caller `FUN_00a47fdc` walks a cutscene's actors and passes `entity+0x130`, which is already
+NULL ("Actor '%s' has been stolen from cutscene '%s'" is the game's message when the search finds
+nothing; a NULL object it does not expect; `FUN_00a48226` next to it does check `+0x130`). The
+stack runs from the engine's shutdown (`00AD9BE9`) through the world holder's destructor
+`FUN_00958dd5` -> `FUN_00a8d58a` -> `FUN_00a8d0ed`, which stops the running cutscenes. Same cause
+as FactsAdd: the engine tears the world down with the session still running.
+
+### Fix: `[stability] clean_quit` (default 1)
+
+Instead of a guard per fault, Quit with an area loaded now does what the game's own "Exit current
+game" does first. The QuitApplication native's call to the exit flag is redirected to
+`quit_stub`; with a world at `game+0x40` it calls ExitGame's body (sets `game+0x4E`, raises
+`RequestGameEnd`), which ends the session in order and opens the main menu. Once the world has
+been gone for 1.5 s, the exit flag is set from the next frame on the game thread (`ko_frame`, the
+viewport tick; the worker if that tick is not hooked), the state the main menu's own Quit runs in.
+If the session has not ended after 30 s the flag is set anyway. With no area loaded nothing
+changes. `quit_guard` stays as a second line.
+
+| | Steam 3.5.0.26 | GOG 3.5.0.26g |
+|---|---|---|
+| QuitApplication native | `009A25AE`: `55 8B EC 8B 45 08 FF 40 18`, call at `009A25B7` | `00504E78`: the same 9 bytes, `8B 0D` + engine, call at `00504E87` (registered in `00508C2D`, `"QuitApplication"` at `00D43C20`) |
+| Exit flag setter | `00AA5F3A`: `A1 <engine> 80 78 20 00 75 04 C6 40 20 01 C3` | `00AFA032`: `80 79 20 00 75 04 C6 41 20 01 C3`, ECX = engine |
+| Engine object | `[0160C6DC]`, exit flag `+0x20` | `[0167D4CC]` |
+| ExitGame body | `00AA8945`: `55 8B EC 83 EC 14 53 56 57 33 DB 8B F0`, EAX = game (native `00AA8E6C`) | `00AFC92C`: `55 8B EC 83 EC 10 56 57 33 FF 8B F1`, ECX = game (native `00AFCE86`) |
+
+`cq_call_exit` passes the game in both EAX and ECX, so one stub serves both builds. The flag
+setter is matched once in each exe; the native's prologue is common on Steam, so the call is only
+patched when its rel32 points at the setter. Off: `[stability] clean_quit=0`.
+
+Log on a quit from an area:
+
+```text
+quit: QuitApplication hooked - with an area loaded it ends the game session first (clean_quit)
+quit: an area is loaded - ending the game session first
+quit: the game session ended N ms after Quit
+quit: quitting from the main menu, M ms after Quit
+unloaded
+```
+
+In game (Steam, owner, 2026-11-06), Esc, Quit, Yes each time:
+
+| Save | Session ended | Exit flag set | End of the log |
+|---|---|---|---|
+| Prologue interrogation (`all\Dream`), crashed three times before | 1 015 ms | 2 578 ms | `ExitProcess(0)` on the main thread, `unloaded`, no dump |
+| Flotsam, 18 minutes of play | 1 078 ms | 2 656 ms | the same |
+
+The game closed before the main menu was drawn, so the player sees no menu. Not run on GOG,
+where the exit flag setter and ExitGame take ECX: that is the part to check there.

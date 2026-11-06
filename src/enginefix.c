@@ -208,6 +208,7 @@ static int cfg_ray_guard = 1;   // [stability] raycast_guard: a ray cast that hi
 static int cfg_cpu32_guard = 1; // [stability] cpu32_guard: no endless CPU count on 32+ logical processors
 static int cfg_quit_guard = 1;  // [stability] quit_guard: FactsAdd without a world (quitting) does not crash
 static int cfg_storage_leak = 1; // [stability] layer_storage_leak: free the saved NPC states the game drops
+static int cfg_clean_quit = 1;  // [stability] clean_quit: Quit with an area loaded ends the game session first
 static int g_proxyOnly;         // loaded by another program in bin (Configurator.exe): forward only
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
@@ -559,6 +560,7 @@ static void load_config(void)
     cfg_cpu32_guard = ini_int("stability", "cpu32_guard", 1);
     cfg_quit_guard = ini_int("stability", "quit_guard", 1);
     cfg_storage_leak = ini_int("stability", "layer_storage_leak", 1);
+    cfg_clean_quit = ini_int("stability", "clean_quit", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -4073,6 +4075,7 @@ static void km_watch(void* const* own[], const LONG ownN[], int buckets, void* c
 #define VA_EMPTY_STRING 0x0160FBA0u   // the game's empty String, its usual loading-screen argument
 
 static volatile DWORD g_koFrameTick;   // last viewport tick (game thread)
+static void cq_poll(int gameThread);   // clean_quit, from ko_frame
 static volatile DWORD g_koOccTick;     // GetTickCount() | 1 when the occluders were requested
 static int   g_koDeferOcc;
 static DWORD g_koDeferSince;
@@ -4124,6 +4127,7 @@ static void ko_frame(void)
     DWORD waited;
     int i, away = 0;
     g_koFrameTick = GetTickCount();
+    cq_poll(1);
     if (!g_koDeferOcc) return;
     waited = GetTickCount() - g_koDeferSince;
     if (waited < KO_OCC_MIN_MS) return;
@@ -5585,6 +5589,154 @@ static void quit_guard_report(void)
     if (seen || !g_factsNoWorld) return;
     seen = 1;
     logf_("stability: quit guard: FactsAdd ran without a world - time 0 used");
+}
+
+// ---- clean quit ---------------------------------------------------------
+// [stability] clean_quit=1. QuitApplication's native (Steam 009A25AE, GOG 00504E78) only sets the
+// engine's exit flag, byte +0x20 of the engine object (Steam 00AA5F3A reads [0160C6DC] itself;
+// GOG 00AFA032 takes it in ECX). With an area loaded (the pause menu's Quit, pause_quit) the
+// engine then shuts down with the world still in, and the world goes before its entities and
+// cutscenes are done: FactsAdd without a world (quit_guard), and in the prologue's interrogation
+// a cutscene actor whose component at +0x130 is already gone (00A517CC reads +0x38 of NULL, from
+// the cutscene stop 00A47FDC; three dumps 2026-11-06). The game's own "Exit current game" calls
+// theGame.ExitGame() (native 00AA8E6C -> 00AA8945, EAX = game; GOG 00AFCE86 -> 00AFC92C, ECX =
+// game; plain RET): it sets game+0x4E and raises RequestGameEnd, which ends the session in order
+// and opens the main menu. With an area loaded, the native's call to the exit flag goes to
+// quit_stub: it runs that ExitGame and remembers the world. Once the world has been gone for
+// CQ_SETTLE_MS the exit flag is set from the next frame on the game thread (the worker when
+// there is no viewport tick), as the main menu's own Quit does with no area loaded; after
+// CQ_GIVEUP_MS it is set in any case. With no area loaded the flag is set at once, as before.
+// See docs/fixes/quit-crash.md.
+#define VA_QUIT_CALL    0x009A25B7u   // call 00AA5F3A in the QuitApplication native 009A25AE
+#define VA_QUIT_FLAG    0x00AA5F3Au   // [engine]+0x20 = 1 (GOG 00AFA032: ECX = engine)
+#define VA_EXIT_GAME    0x00AA8945u   // ExitGame's body: EAX = game (GOG: ECX), plain RET
+#define VA_ENGINE       0x0160C6DCu   // the engine object; +0x20 its exit flag
+#define CQ_SETTLE_MS    1500
+#define CQ_GIVEUP_MS    30000
+
+static uintptr_t g_cqFlag, g_cqExit;
+static void* volatile g_cqWorld;       // the world Quit was pressed in; NULL = nothing pending
+static volatile DWORD g_cqTick, g_cqGoneTick;
+static int g_cqHooked;
+static int ko_frames_alive(void);
+
+// ExitGame's body with the game in both EAX (Steam) and ECX (GOG); it keeps EBX, ESI and EDI.
+#pragma warning(suppress: 4100)   // `game` is read from the stack
+__declspec(naked) static void __stdcall cq_call_exit(void* game)
+{
+    __asm {
+        mov eax, [esp + 4]
+        mov ecx, eax
+        call dword ptr [g_cqExit]
+        ret 4
+    }
+}
+
+// On the game thread, from quit_stub: 1 = the session is ending (ExitGame), 0 = quit at once.
+static int __cdecl cq_request(void)
+{
+    char* game = (char*)read_ptr((void*)ga(VA_GAME));
+    void* world = game ? read_ptr(game + 0x40) : NULL;
+    unsigned char ending = 0;
+    if (!world || !cfg_clean_quit || !g_cqExit) return 0;
+    if (g_cqWorld) return 1;   // Quit again while the session ends
+    __try {
+        ending = (unsigned char)game[0x4E];
+        if (!ending) cq_call_exit(game);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("quit: ExitGame faulted - quitting as the game does");
+        return 0;
+    }
+    g_cqGoneTick = 0;
+    g_cqTick = GetTickCount();
+    g_cqWorld = world;
+    logf_("quit: an area is loaded - ending the game session first%s", ending ? " (it was already ending)" : "");
+    return 1;
+}
+
+// Replaces the native's `call VA_QUIT_FLAG`. GOG passes the engine in ECX, kept for the original.
+__declspec(naked) static void quit_stub(void)
+{
+    __asm {
+        push ecx
+        push edx
+        call cq_request
+        pop edx
+        pop ecx
+        test eax, eax
+        jnz handled
+        jmp dword ptr [g_cqFlag]
+    handled:
+        ret
+    }
+}
+
+static void cq_set_exit_flag(void)
+{
+    unsigned char* eng = (unsigned char*)read_ptr((void*)ga(VA_ENGINE));
+    __try {
+        if (eng && !eng[0x20]) eng[0x20] = 1;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
+// From ko_frame (gameThread 1) and the worker (0, only without the viewport tick).
+static void cq_poll(int gameThread)
+{
+    void* w = g_cqWorld;
+    char* game;
+    void* cur;
+    DWORD now;
+    if (!w || (!gameThread && ko_frames_alive())) return;
+    game = (char*)read_ptr((void*)ga(VA_GAME));
+    cur = game ? read_ptr(game + 0x40) : NULL;
+    now = GetTickCount();
+    if (cur != w) {
+        if (!g_cqGoneTick) {
+            g_cqGoneTick = now | 1;
+            logf_("quit: the game session ended %lu ms after Quit", now - g_cqTick);
+            return;
+        }
+        if (now - g_cqGoneTick < CQ_SETTLE_MS) return;
+        if (InterlockedCompareExchangePointer((void* volatile*)&g_cqWorld, NULL, w) != w) return;
+        logf_("quit: quitting from the main menu, %lu ms after Quit", now - g_cqTick);
+        cq_set_exit_flag();
+    } else if (now - g_cqTick >= CQ_GIVEUP_MS) {
+        if (InterlockedCompareExchangePointer((void* volatile*)&g_cqWorld, NULL, w) != w) return;
+        logf_("quit: the game session did not end within %d s - quitting as the game does", CQ_GIVEUP_MS / 1000);
+        cq_set_exit_flag();
+    }
+}
+
+// The native's bytes before the call (GOG also loads the engine into ECX, relocated: checked
+// against ga()), the flag setter and ExitGame's prologue.
+static void clean_quit_tick(void)
+{
+    static int done, tries;
+    uintptr_t at = ga(VA_QUIT_CALL);
+    int gog = g_build == BUILD_GOG, ok;
+    cq_poll(0);
+    if (done || !cfg_clean_quit) return;
+    ok = at &&
+         code_matches(at - (gog ? 15 : 9), "55 8b ec 8b 45 08 ff 40 18") &&
+         (!gog || (code_matches(at - 6, "8b 0d") && read_ptr((void*)(at - 4)) == (void*)ga(VA_ENGINE))) &&
+         code_matches(ga(VA_QUIT_FLAG) + (gog ? 0 : 5),
+                       by_build("80 78 20 00 75 04 c6 40 20 01 c3", "80 79 20 00 75 04 c6 41 20 01 c3")) &&
+         (gog || read_ptr((void*)(ga(VA_QUIT_FLAG) + 1)) == (void*)ga(VA_ENGINE)) &&
+         code_matches(ga(VA_EXIT_GAME), by_build("55 8b ec 83 ec 14 53 56 57 33 db 8b f0",
+                                                 "55 8b ec 83 ec 10 56 57 33 ff 8b f1"));
+    if (!ok) {
+        if (++tries >= 100) {
+            done = 1;
+            logf_("quit: QuitApplication or ExitGame not recognised - clean_quit off");
+        }
+        return;
+    }
+    done = 1;
+    g_cqFlag = ga(VA_QUIT_FLAG);
+    g_cqExit = ga(VA_EXIT_GAME);
+    g_cqHooked = patch_call(at, g_cqFlag, (void*)quit_stub);
+    logf_("quit: QuitApplication %s - with an area loaded it ends the game session first (clean_quit)",
+          g_cqHooked ? "hooked" : "NOT hooked");
 }
 
 // ---- layer storage leak -------------------------------------------------
@@ -7127,6 +7279,7 @@ static DWORD WINAPI worker(LPVOID param)
         ray_guard_tick();
         quit_guard_tick();
         quit_guard_report();
+        clean_quit_tick();
         storage_leak_tick();
         osd_pump();
         dd_tick();
@@ -7462,6 +7615,10 @@ static const ga_row k_gog[] = {
     { VA_ENV_STAB,           0x00AC8CDFu },   // thiscall on GOG (ECX = the manager), plain RET
     { VA_ENV_STAB_CALL,      0x005AF54Bu },   // a JMP: the tail of the door finish 005AF51F
     { VA_FACTS_TIME,         0x0050B0A9u },   // in FactsAdd 0050B044 ("FactsAdd" 00D441D4)
+    { VA_QUIT_CALL,          0x00504E87u },   // in the QuitApplication native 00504E78 (registered in 00508C2D)
+    { VA_QUIT_FLAG,          0x00AFA032u },   // ECX = engine (Steam reads the global itself)
+    { VA_EXIT_GAME,          0x00AFC92Cu },   // ECX = game, plain RET; native 00AFCE86
+    { VA_ENGINE,             0x0167D4CCu },
     { VA_FADE_IN_EXEC,       0x00A2D789u },
     { VA_FADE_IN_EXEC_SLOT,  0x00F1F3CCu },   // CRenderCommand_ScreenFadeIn vtable 00F1F3C0 + 0x0C
     { VA_FADE_OUT_EXEC,      0x00A2D7E1u },
@@ -7655,6 +7812,7 @@ static void build_gate(void)
     int ray = ga_have(VA_RAY_SLOT, VA_RAY_HIT, 0);
     int quit = ga_have(VA_FACTS_TIME, 0);
     int storage = ga_have(VA_LS_RECORD_FREE, VA_LS_CLEAR_CALL, VA_LS_REMOVE_CALL, VA_GDS_VTBL, VA_GDS_DTOR, 0);
+    int cleanq = ga_have(VA_QUIT_CALL, VA_QUIT_FLAG, VA_EXIT_GAME, VA_ENGINE, VA_GAME, 0);
     // Script patches change data only, through the file hooks; they are tested on both builds.
     int scripts = g_build != BUILD_UNKNOWN && g_imp[IMP_CREATEFILEW] &&
                   g_imp[IMP_FINDFIRSTFILEW] && g_imp[IMP_FINDNEXTFILEW];
@@ -7749,6 +7907,10 @@ static void build_gate(void)
     if (!storage && cfg_storage_leak) {
         gate_off("stability", "layer_storage_leak");
         cfg_storage_leak = 0;
+    }
+    if (!cleanq && cfg_clean_quit) {
+        gate_off("stability", "clean_quit");
+        cfg_clean_quit = 0;
     }
     // The pause menu's Quit ends the game with an area loaded, which crashes in FactsAdd during
     // shutdown unless quit_guard is in (docs/fixes/quit-crash.md): the row waits for the guard.

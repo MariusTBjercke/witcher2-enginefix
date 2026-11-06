@@ -34,10 +34,12 @@ running exe's import directory.
 | `VA_DZIP_READER_CALL` | `00A980BC` | `00AEBF37` | its call in the save open 00A9805B (GOG 00AEBEDA, after push eax) |
 | `VA_DZIP_READER_VT` | `00E8BA80` | `00F2E990` | its vtable: slots 1-4 forward to the memory stream at +0x30 |
 | `VA_EMPTY_STRING` | `0160FBA0` | `01680110` | the game's empty String, its usual loading-screen argument |
+| `VA_ENGINE` | `0160C6DC` | `0167D4CC` | the engine object; +0x20 its exit flag |
 | `VA_ENV_ADD` | `00A75014` | `00AC9EED` |  |
 | `VA_ENV_ADD_CALL` | `00A367CB` | `00A89F59` | call FUN_00a75014 in FUN_00a36748, its only caller |
 | `VA_ENV_STAB` | `00A74FBF` | `00AC8CDF` |  |
 | `VA_ENV_STAB_CALL` | `0095DC5E` | `005AF54B` | call FUN_00a74fbf in FUN_0095db81 (door re-evaluation) |
+| `VA_EXIT_GAME` | `00AA8945` | `00AFC92C` | ExitGame's body: EAX = game (GOG: ECX), plain RET |
 | `VA_FACTS_TIME` | `0099871E` | `0050B0A9` | mov eax,[eax+90h]; mov eax,[eax+8] (9 bytes), EAX = game |
 | `VA_FADE_IN_EXEC` | `009DC2C3` | `00A2D789` |  |
 | `VA_FADE_IN_EXEC_SLOT` | `00E7C394` | `00F1F3CC` |  |
@@ -73,6 +75,8 @@ running exe's import directory.
 | `VA_PROV_OPEN` | `00931DB7` |  | thiscall Stream* Open(String* name, bool mode1) |
 | `VA_PROV_STREAM` | `0052ADFF` |  | the provider stream's constructor |
 | `VA_PROV_VTBL_OPEN` | `00F02B90` |  | Steam provider vtable slot +0x18 |
+| `VA_QUIT_CALL` | `009A25B7` | `00504E87` | call 00AA5F3A in the QuitApplication native 009A25AE |
+| `VA_QUIT_FLAG` | `00AA5F3A` | `00AFA032` | [engine]+0x20 = 1 (GOG 00AFA032: ECX = engine) |
 | `VA_RAY_HIT` | `0084C750` | `0091F110` |  |
 | `VA_RAY_SLOT` | `00D41A38` | `00E08740` |  |
 | `VA_RENDERER` | `0160C6EC` | `0167D4DC` | the renderer: +0x20 cascade size, +0x24/+0x28 the atlas |

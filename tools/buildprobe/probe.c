@@ -58,7 +58,7 @@ static int* const k_switches[] = {
     &cfg_skip_intro, &cfg_keep_outdoors, &cfg_keep_interiors, &cfg_preload_interiors,
     &cfg_skip_door_gc, &cfg_indoor_outdoors, &cfg_fast_doors, &cfg_instant_doors,
     &cfg_load_trace, &cfg_wf_enabled, &cfg_window_mode, &cfg_winkeys, &cfg_ray_guard,
-    &cfg_quit_guard, &cfg_storage_leak, &cfg_cpu32_guard, &cfg_book_marker, &cfg_continue, &cfg_pause_quit,
+    &cfg_quit_guard, &cfg_storage_leak, &cfg_clean_quit, &cfg_cpu32_guard, &cfg_book_marker, &cfg_continue, &cfg_pause_quit,
     &cfg_medallion, &cfg_suppress, &cfg_crash_dump, &cfg_file_trace,
 };
 #define SWITCHES (sizeof k_switches / sizeof k_switches[0])
@@ -326,6 +326,7 @@ int main(int argc, char** argv)
     check("GOG: load_trace stays on", cfg_load_trace);
     check("GOG: skip_intro, raycast and quit guards stay on", cfg_skip_intro && cfg_ray_guard && cfg_quit_guard);
     check("GOG: layer storage leak fix stays on", cfg_storage_leak);
+    check("GOG: clean quit stays on", cfg_clean_quit);
     check("GOG: script patches stay on, pause_quit too now that quit_guard is", cfg_book_marker &&
           cfg_continue && cfg_medallion && cfg_pause_quit);
     check("GOG: cpu32 guard, crash capture, keyboard filter, file trace stay on", cfg_cpu32_guard &&
@@ -416,7 +417,8 @@ int main(int argc, char** argv)
     all_on();
     build_gate();
     check("unknown exe: script patches and every address feature off", !cfg_book_marker &&
-          !cfg_medallion && !cfg_enforce && !cfg_wf_enabled && !cfg_quit_guard && !cfg_storage_leak);
+          !cfg_medallion && !cfg_enforce && !cfg_wf_enabled && !cfg_quit_guard && !cfg_storage_leak &&
+          !cfg_clean_quit);
     check("unknown exe: crash capture and keyboard filter stay on", cfg_crash_dump && cfg_suppress);
 
     printf("%s: %d failures\n", failures ? "FAILED" : "OK", failures);
