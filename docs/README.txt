@@ -60,7 +60,7 @@ What it does:
   default), which matters if you have many saves.
 - Skip intro ([startup] skip_intro=1, off by default): starts at the main
   menu without the logo videos and the intro movie (a short black moment
-  remains).
+  remains). Since 0.12.1 no startup movie is started at all.
 - Book marker: the "already read" overlay on a book normally only means
   "you carry a copy". It now also shows for books Geralt has read (the game
   records each book read from the inventory). Books get "Read", "Unread" or

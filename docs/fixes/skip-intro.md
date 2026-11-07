@@ -60,7 +60,8 @@ The game's own skip path is used, at a time when a movie is really playing:
   once a movie has been playing (`+0xAD`) for 300 ms of real time it calls `009A1F2E` with
   ESI = player, exactly what Esc does (`009A1FC6`). The game then plays the next entry, which is
   stopped the same way, and after the last one takes its own "done" branch. The 300 ms keep the
-  stop out of `009B581C`'s ten ticks, which run in one go.
+  stop out of `009B581C`'s ten ticks, which run in one go. (Replaced on 2026-11-07: see "The stop
+  at 300 ms broke the next movie" below.)
 * Disarmed when `+0xAC` (done) is set, or after 60 s. Other movies (flashbacks, extras) use the
   same object and tick but are never armed.
 
@@ -95,6 +96,66 @@ column (`bumpers_GOG`); the log's `movie list built (N entries)` shows what GOG 
 
 Start the game: the main menu appears without the CD PROJEKT RED logo (or, without the intro
 mod, the bumper and intro movie) and without a black wait; the log shows the three lines above.
+
+## Suspected of a black screen at the end of Act 1, then refuted (2026-11-07)
+
+**Refuted the same day:** with the new skip below (no startup movie started at all) the black
+screen came back (16:50). The skip change stays, as it is simpler and shows no logo, but it does
+not fix the black screen. What follows is the record of why it was suspected.
+
+Owner, Steam, DXVK: at the end of Act 1 (Roche path), after the last cutscene, the screen went
+black and silent for good. Two dumps of the hang:
+
+* The main thread waits in the game start `FUN_00a9eed2` ("Attaching entities...", a `Sleep(1)`
+  loop) while `[game + 0x2338]` is set: a `CVideoInstance` with `+0xAD` = 1, made by
+  `FUN_009b56b0` (the video player for `load_a1_a2_r.usm`). It goes only when `ui_video.swf`
+  reports `MovieStopped` (`FUN_009b353c` clears the slot).
+* The loading screen thread (`FUN_009d1e96`, `ls_akt1.swf` and a `CLoadingScreenVideo`) spins at
+  full speed, as it always does while a loading screen shows; DXVK, the job threads and FMOD
+  were idle; nothing waited on a lock.
+* A dump of the same transition with the video playing had two game threads more (10 against 8):
+  the stream's threads, which never started in the black runs.
+
+Runs, all from the same save: 6 of 7 black with `skip_intro=1` (in various `[loading]` and
+diagnostics settings, which turned out not to matter), 0 of 3 black without it (`enabled=0`
+twice, `skip_intro=0` once).
+
+`009A2005` (play) is only the Flash call `PlayVideo`, which opens a `NetStream` on the `.usm`;
+`009A1F2E` (stop) calls `StopVideo`, which closes it. `ui_video.swf` also has `MovieStarted`
+(on `NetStream.Play.Start`), but the game registers no handler for it. The startup movie and the
+Act 2 movie use the same player slot and the same `ui_video.swf`. The DLL stopped the first
+startup movie 300 ms after `+0xAD` was set, which can be before its stream has opened. The
+likely result is that the stream is left half open, so no later movie in that session starts.
+This is not proven in the code of the video library (Scaleform video over CRI), only by the runs
+above.
+
+### Change: never start a startup movie
+
+The wrapped tick now runs before the game's own tick for the armed player: if nothing plays
+yet, it sets the index `+0xB0` to the count and `+0xAD` to 1. The game's tick then only ticks the
+panel and never calls `009A2005`. After `STARTVIDEO_MIN_MS` (outside `009B581C`'s ten ticks) it
+calls `009A1F2E` as Esc would; `StopVideo` closes a stream that was never opened, which the empty
+list test of 2026-10-30 already did in game (Esc in the black wait). The next tick takes the
+game's own branch for "all played" (`+0xAC`, "movies done"); with an empty list `009A1F2E` sets
+done itself. No movie shows at all now, not even for 0.3 s.
+
+Log: `startup: K startup movie(s) marked as played, none started`, then
+`startup: K startup movie(s) skipped without starting them, main menu reached`.
+
+Seen in game (Steam, 2026-11-07, two starts): the main menu after the new skip, both log lines.
+The Act 1 -> Act 2 movie then started once and stayed black once.
+
+### What the black runs have in common instead
+
+A dump of a black run with the new skip (16:51) against one where the movie played (16:08,
+`enabled=0`): the video player's control block holds the relative path
+`globals\gui\load_a1_a2_r.usm` in both. In the run that played, the dword at block+0x24 is 3,
+there are two buffer pointers and a `...\CookedPC\movies\load_a1_a2_r.usm` path elsewhere in
+memory (the file was opened). In the black run that dword is 0, the buffers are 0 and no full
+path exists: the movie got its name and never started opening the file. Why is open. Players
+report the same black screen at this point without Engine Fix (GOG forum, "black screen after
+end of act 1 cut scene", 2014), so it may be the game's own race; how often it happens here
+with and without the mod is not settled (with the mod 3 of 10 runs played, without it 2 of 2).
 
 ## Confirmed in game, 2026-10-31
 

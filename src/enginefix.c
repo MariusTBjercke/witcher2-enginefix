@@ -2102,8 +2102,18 @@ static void savelist_install(void)
 // mouse/pad button (009A1FC6) and the Flash "MovieStopped" event (009A1F92) both end the
 // current movie through 009A1F2E (ESI = player). Calling "done" from the build itself
 // crashed the game silently (2026-10-30: it ran inside 009B581C's ticks, before the GUI).
-// So the build call at 009B588F only arms the skip; the wrapped tick calls 009A1F2E once
-// a startup movie has played for STARTVIDEO_MIN_MS of real time, until +0xAC is set.
+// So the build call at 009B588F only arms the skip.
+//
+// Playing is 009A2005: the Flash call PlayVideo on ui_video.swf, which opens a NetStream on the
+// .usm; StopVideo (in 009A1F2E) closes it. Up to 0.12.0 the wrapped tick let the first movie
+// start and stopped it 300 ms later. That was suspected of leaving the Act 1 -> Act 2 movie
+// black (2026-11-07), and was refuted the same day: the black screen came back with no startup
+// movie started (docs/fixes/skip-intro.md). The change stays: no startup movie is started at all:
+// before the first play the wrapped tick sets the index to the count and +0xAD ("playing"), so
+// the game's tick only ticks the panel. After STARTVIDEO_MIN_MS (outside 009B581C's ticks) it
+// calls 009A1F2E as Esc would, StopVideo on a stream that never opened (Esc in the black wait of
+// an empty list did that in game, 2026-10-30), and the next tick takes the game's own "all
+// played" branch (+0xAC, "movies done"); with an empty list 009A1F2E sets done itself.
 #define VA_STARTVIDEO_LIST  0x009A2190u   // builds the startup list, EAX = player object
 #define VA_STARTVIDEO_CALL  0x009B588Fu   // E8 rel32 in 009B581C (after mov eax,esi)
 #define VA_STARTVIDEO_TICK  0x009A211Du   // thiscall void Tick(float), ret 4
@@ -2178,9 +2188,22 @@ __declspec(naked) static void __stdcall startvideo_stop_gog(void* player)
 }
 #pragma warning(pop)
 
+static int g_skipHeld;   // 1: the list is marked as played and +0xAD held, 2: stopped (game thread)
+
 static void __fastcall startvideo_tick(void* self, void* edx, float dt)
 {
     unsigned char* p = (unsigned char*)self;
+    // Before the game's tick can start the first movie: every entry counts as played, and the
+    // player counts as busy, so the tick only runs the panel. No PlayVideo, no stream.
+    if (self == g_skipPlayer && !g_skipHeld && !p[0xAC] && !p[0xAD]) {
+        DWORD count = *(DWORD*)(p + 0xA0);
+        if (*(DWORD*)(p + 0xB0) < count) *(DWORD*)(p + 0xB0) = count;
+        p[0xAD] = 1;
+        g_skipHeld = 1;
+        g_skipPlayAt = GetTickCount();
+        InterlockedExchange(&g_skipStops, (LONG)count);
+        logf_("startup: %lu startup movie(s) marked as played, none started", count);
+    }
     ((StartTick_t)g_startvideoTick)(self, edx, dt);
     if (self != g_skipPlayer) return;
     if (p[0xAC] || GetTickCount() - g_skipArmedAt > STARTVIDEO_MAX_MS) {
@@ -2188,12 +2211,9 @@ static void __fastcall startvideo_tick(void* self, void* edx, float dt)
         InterlockedExchange(&g_skipDone, p[0xAC] ? 1 : 2);
         return;
     }
-    if (!p[0xAD]) { g_skipPlayAt = 0; return; }
-    if (!g_skipPlayAt) { g_skipPlayAt = GetTickCount(); return; }
-    if (GetTickCount() - g_skipPlayAt < STARTVIDEO_MIN_MS) return;
-    g_skipPlayAt = 0;
-    InterlockedIncrement(&g_skipStops);
-    logf_("startup: stopping startup movie %lu of %lu", *(DWORD*)(p + 0xB0), *(DWORD*)(p + 0xA0));
+    if (g_skipHeld != 1 || GetTickCount() - g_skipPlayAt < STARTVIDEO_MIN_MS) return;
+    // What Esc does; the stream it closes was never opened. The next tick finishes the list.
+    g_skipHeld = 2;
     if (g_build == BUILD_GOG) startvideo_stop_gog(self); else startvideo_stop(self);
 }
 
@@ -5944,26 +5964,6 @@ static void storage_leak_tick(void)
     }
 }
 
-// ---- memory trace -------------------------------------------------------
-// [diagnostics] mem_trace=N: every N minutes (first one after 2), a census of the process's own
-// memory on a low-priority thread, to find what grows over a long session. Passive: it only
-// reads. Per census:
-// * private, free and largest free address space;
-// * the engine's 64 KB pages (FUN_00ac84cd: one VirtualAlloc each) by their first bytes: saved
-//   entity state (BLCK), Havok packfiles, small-block pages (12 12 12 12), other;
-// * every aligned dword in committed private read/write memory that is an RTTI vtable of
-//   witcher2.exe, counted per vtable. Freed memory that still holds a vtable counts too, so a
-//   count is "objects plus remnants"; what matters is a class that keeps growing.
-// The log gets one line per census with the classes that grew most since the first one; the full
-// counts go to witcher2_enginefix_memtrace.tsv (previous session: .prev.tsv), read by
-// tools/memtrace-report.py. Found the layer storage leak this way (docs/fixes/layer-storage-leak.md).
-#define MT_SLOTS     (1u << 20)        // open-addressing table of vtable -> count, 8 MB
-#define MT_MIN_TSV   20                // classes with fewer objects stay out of the file
-#define MT_TOP       6
-
-typedef struct { uint32_t key, count; } mt_slot;
-typedef struct { uint32_t vt, count; } mt_pair;
-
 // ---- text file terminator -----------------------------------------------
 // [stability] text_guard=1. The engine's whole-file text reader (00AC6AAE, GOG 00B1B4AB; three
 // callers, CSV tables among them) asks the file for its size, allocates size + 1 (the pool
@@ -6025,6 +6025,26 @@ static void text_guard_tick(void)
         logf_("stability: text file reader call could not be patched - text_guard off");
     }
 }
+
+// ---- memory trace -------------------------------------------------------
+// [diagnostics] mem_trace=N: every N minutes (first one after 2), a census of the process's own
+// memory on a low-priority thread, to find what grows over a long session. Passive: it only
+// reads. Per census:
+// * private, free and largest free address space;
+// * the engine's 64 KB pages (FUN_00ac84cd: one VirtualAlloc each) by their first bytes: saved
+//   entity state (BLCK), Havok packfiles, small-block pages (12 12 12 12), other;
+// * every aligned dword in committed private read/write memory that is an RTTI vtable of
+//   witcher2.exe, counted per vtable. Freed memory that still holds a vtable counts too, so a
+//   count is "objects plus remnants"; what matters is a class that keeps growing.
+// The log gets one line per census with the classes that grew most since the first one; the full
+// counts go to witcher2_enginefix_memtrace.tsv (previous session: .prev.tsv), read by
+// tools/memtrace-report.py. Found the layer storage leak this way (docs/fixes/layer-storage-leak.md).
+#define MT_SLOTS     (1u << 20)        // open-addressing table of vtable -> count, 8 MB
+#define MT_MIN_TSV   20                // classes with fewer objects stay out of the file
+#define MT_TOP       6
+
+typedef struct { uint32_t key, count; } mt_slot;
+typedef struct { uint32_t vt, count; } mt_pair;
 
 static mt_slot*  g_mtTable;
 static mt_pair*  g_mtBase;             // first census, sorted by vtable
@@ -7439,7 +7459,7 @@ static DWORD WINAPI worker(LPVOID param)
         static int skip_logged;
         if (!skip_logged && g_skipDone) {
             skip_logged = 1;
-            logf_("startup: %ld startup movie(s) stopped, %s", g_skipStops,
+            logf_("startup: %ld startup movie(s) skipped without starting them, %s", g_skipStops,
                   g_skipDone == 1 ? "main menu reached" : "gave up after 60 s");
         }
         crash_tick();
@@ -7449,6 +7469,7 @@ static DWORD WINAPI worker(LPVOID param)
         clean_quit_tick();
         path_guard_tick();
         storage_leak_tick();
+        text_guard_tick();
         osd_pump();
         dd_tick();
         apply_lod();
@@ -7469,7 +7490,6 @@ static DWORD WINAPI worker(LPVOID param)
 // own quick-load/whatever on them. Ctrl+F9 would therefore still fire. Because we own
 // DirectInput8Create we can patch the vtable slots of the objects the game receives:
 // IDirectInput8::CreateDevice (slot 3) to see each device, then
-        text_guard_tick();
 // IDirectInputDevice8::GetDeviceState (slot 9) to clear F9/F10 in the 256-byte keyboard
 // state whenever Ctrl or Alt is held.
 
@@ -7789,6 +7809,8 @@ static const ga_row k_gog[] = {
     { VA_EXIT_GAME,          0x00AFC92Cu },   // ECX = game, plain RET; native 00AFCE86
     { VA_ENGINE,             0x0167D4CCu },
     { VA_PATH_EDGE_WALK,     0x00725FC0u },   // PathEngine, byte-identical to Steam's 006550C0
+    { VA_TEXT_ALLOC,         0x00403268u },   // pool allocator, cdecl (size); called as on Steam
+    { VA_TEXT_ALLOC_CALL,    0x00B1B4C2u },   // in the text reader 00B1B4AB (size ESI, buffer EDI)
     { VA_FADE_IN_EXEC,       0x00A2D789u },
     { VA_FADE_IN_EXEC_SLOT,  0x00F1F3CCu },   // CRenderCommand_ScreenFadeIn vtable 00F1F3C0 + 0x0C
     { VA_FADE_OUT_EXEC,      0x00A2D7E1u },
@@ -7809,8 +7831,6 @@ static const ga_row k_gog[] = {
     { VA_LS_RECORD_FREE,     0x00B37334u },   // EAX = record; frees +0x18 only, as on Steam
     { VA_LS_REMOVE_CALL,     0x00B3746Fu },   // in the single removal 00B373CD (after mov eax,edx)
     { VA_MAP_FIND,           0 },
-    { VA_TEXT_ALLOC,         0x00403268u },   // pool allocator, cdecl (size); called as on Steam
-    { VA_TEXT_ALLOC_CALL,    0x00B1B4C2u },   // in the text reader 00B1B4AB (size ESI, buffer EDI)
     { VA_MEM_SERIALIZE,      0x00B138EAu },
     { VA_MEM_SIZE,           0x00B138E3u },
     { VA_MEM_STREAM,         0x00F1A248u },   // CMemoryFileReader (RTTI), ctor 00B1391C
@@ -7986,6 +8006,7 @@ static void build_gate(void)
     int storage = ga_have(VA_LS_RECORD_FREE, VA_LS_CLEAR_CALL, VA_LS_REMOVE_CALL, VA_GDS_VTBL, VA_GDS_DTOR, 0);
     int cleanq = ga_have(VA_QUIT_CALL, VA_QUIT_FLAG, VA_EXIT_GAME, VA_ENGINE, VA_GAME, 0);
     int pathg = ga_have(VA_PATH_EDGE_WALK, 0);
+    int textg = ga_have(VA_TEXT_ALLOC, VA_TEXT_ALLOC_CALL, 0);
     // Script patches change data only, through the file hooks; they are tested on both builds.
     int scripts = g_build != BUILD_UNKNOWN && g_imp[IMP_CREATEFILEW] &&
                   g_imp[IMP_FINDFIRSTFILEW] && g_imp[IMP_FINDNEXTFILEW];
@@ -8006,7 +8027,6 @@ static void build_gate(void)
     }
     if (!thumbs && cfg_save_thumbs) {
         gate_off("saves", "fix_thumbnails");
-    int textg = ga_have(VA_TEXT_ALLOC, VA_TEXT_ALLOC_CALL, 0);
         cfg_save_thumbs = 0;
     }
     if (!savetrace && cfg_save_trace) {
@@ -8090,6 +8110,10 @@ static void build_gate(void)
         gate_off("stability", "path_guard");
         cfg_path_guard = 0;
     }
+    if (!textg && cfg_text_guard) {
+        gate_off("stability", "text_guard");
+        cfg_text_guard = 0;
+    }
     // The pause menu's Quit ends the game with an area loaded, which crashes in FactsAdd during
     // shutdown unless quit_guard is in (docs/fixes/quit-crash.md): the row waits for the guard.
     if (!quit && cfg_pause_quit && scripts) {
@@ -8110,10 +8134,6 @@ static void build_gate(void)
               g_gated);
     else if (g_gated)
         logf_("build: witcher2.exe not recognised - every feature that needs a game address is off");
-    if (!textg && cfg_text_guard) {
-        gate_off("stability", "text_guard");
-        cfg_text_guard = 0;
-    }
 }
 
 // ---- proxy plumbing -----------------------------------------------------
