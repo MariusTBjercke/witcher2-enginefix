@@ -210,6 +210,7 @@ static int cfg_quit_guard = 1;  // [stability] quit_guard: FactsAdd without a wo
 static int cfg_storage_leak = 1; // [stability] layer_storage_leak: free the saved NPC states the game drops
 static int cfg_clean_quit = 1;  // [stability] clean_quit: Quit with an area loaded ends the game session first
 static int cfg_path_guard = 1;  // [stability] path_guard: a zero-length pathfinding line does not hang a job
+static int cfg_text_guard = 1;  // [stability] text_guard: a UTF-16 text file read whole always ends in 0x0000
 static int g_proxyOnly;         // loaded by another program in bin (Configurator.exe): forward only
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
@@ -563,6 +564,7 @@ static void load_config(void)
     cfg_storage_leak = ini_int("stability", "layer_storage_leak", 1);
     cfg_clean_quit = ini_int("stability", "clean_quit", 1);
     cfg_path_guard = ini_int("stability", "path_guard", 1);
+    cfg_text_guard = ini_int("stability", "text_guard", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -5962,6 +5964,68 @@ static void storage_leak_tick(void)
 typedef struct { uint32_t key, count; } mt_slot;
 typedef struct { uint32_t vt, count; } mt_pair;
 
+// ---- text file terminator -----------------------------------------------
+// [stability] text_guard=1. The engine's whole-file text reader (00AC6AAE, GOG 00B1B4AB; three
+// callers, CSV tables among them) asks the file for its size, allocates size + 1 (the pool
+// allocator 0040315F, GOG 00403268, cdecl, zeroes exactly what was asked), reads the file and
+// writes one 0 byte after it. A UTF-16 file (FF FE) is then copied as a wide string from
+// offset 2, and a wide string ends at a 0x0000 on an even offset: the byte after the one 0 is
+// whatever the pool block held before. Seen 2026-11-07 (Steam, after a save load in Flotsam):
+// globals\knowledge_list.csv's text ran on to the end of its page and the copy's wcslen
+// (004020F9) read 0x6AB00000. The call to the allocator goes to text_alloc_hook, which asks
+// for 2 bytes more and zeroes them, so the text ends in three 0 bytes whatever its length.
+// The read itself still writes size bytes. The buffer is never freed by the reader, as before.
+#define VA_TEXT_ALLOC       0x0040315Fu   // cdecl (size), returns the block in EAX
+#define VA_TEXT_ALLOC_CALL  0x00AC6ACAu   // E8 rel32 after lea eax,[edi+1] / push eax
+
+typedef void* (__cdecl *TextAlloc_t)(unsigned size);
+static uintptr_t g_textAlloc;
+static volatile LONG g_textReads;
+
+static void* __cdecl text_alloc_hook(unsigned n)
+{
+    unsigned char* p;
+    if (n == 0 || n > 0x7FFFFFF0u) return ((TextAlloc_t)g_textAlloc)(n);
+    p = (unsigned char*)((TextAlloc_t)g_textAlloc)(n + 2);
+    if (p) {
+        p[n] = 0;
+        p[n + 1] = 0;
+        InterlockedIncrement(&g_textReads);
+    }
+    return p;
+}
+
+static void text_guard_tick(void)
+{
+    static int done, tries;
+    uintptr_t call, alloc;
+    if (done || !cfg_text_guard) return;
+    call = ga(VA_TEXT_ALLOC_CALL);
+    alloc = ga(VA_TEXT_ALLOC);
+    // lea eax,[size+1] / push eax before the call; after it pop ecx, the read through the
+    // file's vtable and `mov byte [buf+size],0` (Steam: size EDI, buffer ESI; GOG the other way).
+    if (!call || !alloc ||
+        !code_matches(call - 4, by_build("8d 47 01 50 e8", "8d 46 01 50 e8")) ||
+        !code_matches(call + 5, by_build("59 8b f0 8b 03 57 56 8b cb ff 50 04 c6 04 3e 00",
+                                         "59 8b f8 8b 03 56 57 8b cb ff 50 04 c6 04 37 00"))) {
+        if (++tries >= 100) {
+            done = 1;
+            cfg_text_guard = 0;
+            logf_("stability: text file reader not recognised at %08X - text_guard off", (unsigned)call);
+        }
+        return;
+    }
+    done = 1;
+    g_textAlloc = alloc;
+    if (patch_call(call, alloc, (void*)text_alloc_hook)) {
+        logf_("stability: text guard installed (text files end in three 0 bytes, allocation at %08X)",
+              (unsigned)call);
+    } else {
+        cfg_text_guard = 0;
+        logf_("stability: text file reader call could not be patched - text_guard off");
+    }
+}
+
 static mt_slot*  g_mtTable;
 static mt_pair*  g_mtBase;             // first census, sorted by vtable
 static unsigned  g_mtBaseN;
@@ -7405,6 +7469,7 @@ static DWORD WINAPI worker(LPVOID param)
 // own quick-load/whatever on them. Ctrl+F9 would therefore still fire. Because we own
 // DirectInput8Create we can patch the vtable slots of the objects the game receives:
 // IDirectInput8::CreateDevice (slot 3) to see each device, then
+        text_guard_tick();
 // IDirectInputDevice8::GetDeviceState (slot 9) to clear F9/F10 in the 256-byte keyboard
 // state whenever Ctrl or Alt is held.
 
@@ -7744,6 +7809,8 @@ static const ga_row k_gog[] = {
     { VA_LS_RECORD_FREE,     0x00B37334u },   // EAX = record; frees +0x18 only, as on Steam
     { VA_LS_REMOVE_CALL,     0x00B3746Fu },   // in the single removal 00B373CD (after mov eax,edx)
     { VA_MAP_FIND,           0 },
+    { VA_TEXT_ALLOC,         0x00403268u },   // pool allocator, cdecl (size); called as on Steam
+    { VA_TEXT_ALLOC_CALL,    0x00B1B4C2u },   // in the text reader 00B1B4AB (size ESI, buffer EDI)
     { VA_MEM_SERIALIZE,      0x00B138EAu },
     { VA_MEM_SIZE,           0x00B138E3u },
     { VA_MEM_STREAM,         0x00F1A248u },   // CMemoryFileReader (RTTI), ctor 00B1391C
@@ -7939,6 +8006,7 @@ static void build_gate(void)
     }
     if (!thumbs && cfg_save_thumbs) {
         gate_off("saves", "fix_thumbnails");
+    int textg = ga_have(VA_TEXT_ALLOC, VA_TEXT_ALLOC_CALL, 0);
         cfg_save_thumbs = 0;
     }
     if (!savetrace && cfg_save_trace) {
@@ -8042,6 +8110,10 @@ static void build_gate(void)
               g_gated);
     else if (g_gated)
         logf_("build: witcher2.exe not recognised - every feature that needs a game address is off");
+    if (!textg && cfg_text_guard) {
+        gate_off("stability", "text_guard");
+        cfg_text_guard = 0;
+    }
 }
 
 // ---- proxy plumbing -----------------------------------------------------

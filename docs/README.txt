@@ -30,6 +30,9 @@ What it does:
   (seen once leaving the Flotsam inn) no longer closes the game.
 - Clean quit: Quit in the pause menu no longer crashes the game while it
   shuts down (nobody saw it, but each quit left a crash dump).
+- Text table crash: the game ended a UTF-16 text file (its CSV tables) with
+  one 0 byte where it needs two, so reading one could close the game (seen
+  once after loading a save). Such files now end in three 0 bytes.
 - 32-thread CPUs: on a CPU with 32 or more logical processors the game now
   starts; its own CPU count never ended there.
 - Crash capture: a crash is logged with a small dump next to the log, so it
@@ -145,6 +148,7 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
                                  0 lets every save load leak memory again
   [stability] clean_quit=1       0 quits at once with an area loaded (can crash)
   [stability] path_guard=1       0 lets a pathfinding job freeze the game again
+  [stability] text_guard=1       0 lets a text table end with one 0 byte again
   [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1,
                   medallion=1
                                  0 turns that one off

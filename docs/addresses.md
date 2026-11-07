@@ -106,6 +106,8 @@ running exe's import directory.
 | `VA_SUN_CASCADE_MID_LEN` | `00F117B4` | `00F78620` | the float 17.0 that loads, shared with other code |
 | `VA_SUN_POISSON_CALL` | `00AECA7A` | `00B256E0` | its call for vPoissonSamples, in FUN_00AEC932 |
 | `VA_SUN_POISSON_SET` | `009D0C70` | `00A21FF6` | sets a pixel constant: EAX device, stack (register, vector), RET 8 |
+| `VA_TEXT_ALLOC` | `0040315F` | `00403268` | cdecl (size), returns the block in EAX |
+| `VA_TEXT_ALLOC_CALL` | `00AC6ACA` | `00B1B4C2` | E8 rel32 after lea eax,[edi+1] / push eax |
 | `VA_UNPACK` | `0068F3B0` | `007614F0` |  |
 | `VA_UNPACK_CALL` | `0068E8E7` | `007618C7` | call FUN_0068f3b0 in FUN_0068e890 |
 | `WF_CONFIG` | `01608650` | `01679440` | the config manager the writer works on (its ECX on GOG) |
