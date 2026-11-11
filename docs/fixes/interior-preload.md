@@ -717,10 +717,73 @@ hides them. Measured in the cave near Vergen, 4K borderless, `VSync=0`, DXVK 72 
 The preloaded interiors are not the cost - the save + load had the same 59 and was fast; the
 kept outdoor layers are. The log at the switch before the walk showed `partition:
 keep_outdoors kept 112 of 114 layers, unloaded 2; loaded 16`. Workaround: `interiors=0`
-(the game's own unloading, at the price of a reload at every house door). A future fix
-could drop the kept layers once the player is far from the door that kept them, or when the
-kept layers' mesh count is high; the door/area bookkeeping the memory path already uses is
-where that would go.
+(the game's own unloading, at the price of a reload at every house door), or `release_kept`
+below.
+
+### `[loading] release_kept` (default 0; seen working in game once, 2026-11-11)
+
+`release_kept=<metres>` unloads the kept outdoor layers once Geralt is that far from the door
+that kept them. The way out loads them again at the door, behind its fade: one ordinary door
+load, in exchange for the interior's frame rate while deep inside.
+
+* **What is recorded.** After a kept door (`hook_PartRun`, `keep_outdoors` path, a real door,
+  not the occluders' switch to the same partition) the layers it kept, except interiors
+  (`LC_INTERIOR`) and preloaded layers (`kp_in_set`), which `preload_interiors` keeps on
+  purpose. That leaves the outdoors: in Vergen a house door keeps only the other houses' rooms
+  (all preloaded), so a house door records nothing; the cave records its ~112 outdoor layers.
+  Geralt's position at the door is the anchor; a later kept door adds its layers and moves the
+  anchor. At most 1 024 layers; more and nothing is released (no partial release).
+* **When.** `kr_frame` (viewport tick, game thread, every 250 ms) once Geralt is
+  `release_kept` metres from the anchor, at least 3 s after the door, with no switch in
+  progress or queued (`game+0xE8`), no stream job (`world+0x30C`), no occluders waiting and no
+  loading screen (render thread `+0x268`/`+0x26C`). A blocked release logs why, once.
+* **How.** Not by calling the unload primitives from outside a job: `kr_frame` queues a switch
+  to the partition that is already current (`FUN_00aa7e18`, mode 4, as the occluders' switch
+  does), and `hook_PartRun` adds the recorded layers to that job's unload list. The game's own
+  runner (`FUN_00a91952`) then unloads them as it does at a door: `FUN_00a7015c(world)`,
+  `FUN_00a5aa35` per layer, `FUN_00a7015c(world)`, `FUN_00b05b13` on the root group (it
+  destroys the unloaded layer objects; the world tick `FUN_00a91724` runs it every frame too),
+  the GC (not skipped for a release), entity attach and the partition settings of the partition
+  Geralt is already in. No new engine address, so GOG takes the same path (not tested there).
+* **Safety.** The switch lists for unloading the layers that are loaded but not in the target
+  partition (the release job in the run below listed exactly the 112 kept layers), so only
+  recorded layers that are also in the release job's own unload list go: a layer of the
+  partition Geralt is in is never released. Every job also strikes the layers it loads off the
+  list. A stream
+  switch (mode 0, never seen by `hook_PartRun`), an area load (mode 1) or another world forgets
+  the list. The release forgets the learned instant-door pairs, so the door that loads the
+  layers back has its fade again; the way out does not report them as interiors the preload
+  missed.
+* **Log.** `interiors: N kept outdoor layers recorded (M in all) - released once Geralt is D m
+  from (x, y, z)`, then `interiors: released N kept outdoor layers D m from the door (job T ms,
+  GC G ms); they load again at the door`, and `partition: release kept 0 of 0 layers, unloaded
+  N`. Off: `release_kept=0`.
+
+#### Seen in game (owner, 2026-11-11, Steam, DXVK, 4K, `release_kept=30`)
+
+`docs/validation/release-kept-2026-11-11.log`. A save in front of the cave (Act 2, quarry),
+in through the door to `common\secret_passage`, on to the open spot (the cliff), out again:
+
+| Step | Log |
+|---|---|
+| Door in | `keep_outdoors kept 112 of 114 layers`, `53 kept outdoor layers recorded` (the other 59 are preloaded interiors and stay) |
+| 12 s later, 30 m in | `released 53 kept outdoor layers 30 m from the door (job 72 ms, GC 33 ms)` |
+| At the spot | `distance stats` ~0.72 M range calls per 5 s (kept state: ~5.1 M; after a fresh load: ~0.65 M); owner: frame rate stable, clearly better than before |
+| Door out | the 53 layers loaded again in 372 ms behind the 0.25 s area fade (`keeps its fade`), picture back after 438 ms; the world normal; no crash, no dump |
+
+The black plane in the cave mouth seen from outside is the game's own
+(`quarry\black_plane_harpy.w2l`, part of the quarry partition, loaded by the game's job on the
+way out); the cave has one of its own (`secret_passage\black_plane.w2l`). Not measured with
+PresentMon yet. The intersection with the release job's unload list (Safety, above) came after
+this run; the run released all 53, which the job listed.
+
+Retest with that check (`docs/validation/release-kept-retest-2026-11-11.log`, same route): the
+door in recorded 53, `released 53 kept outdoor layers 31 m from the door (job 74 ms, GC 36 ms)`,
+the way out loaded them back in 365 ms behind the fade; owner: everything looked normal, no
+dump. An earlier short trip in the same session showed why the check is needed: in for 10 s
+and out again, the door out loaded nothing (the quarry was still loaded), so its load list
+struck nothing off and the recorded list still held the 53 quarry layers while Geralt stood in
+the quarry (`69 in all`); only the release job's unload list tells them apart.
 
 ### Still to check in game
 

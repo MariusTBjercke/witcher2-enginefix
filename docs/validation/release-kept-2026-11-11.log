@@ -1,0 +1,378 @@
+22:25:14.786 witcher2_enginefix 0.12.1 loaded (image base 0x00400000)
+22:25:14.787 build: Steam 3.5.0.26 (TimeDateStamp 518B881C, .text 008A94AD), delta 0x00000000 from 0x00400000; import slots 27/27 found by name
+22:25:14.787 diagnostics: crash_dump=1 exit_trace=1 (previous log kept as witcher2_enginefix.prev.log)
+22:25:14.787 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+22:25:14.787 distance config: experimental=1 visibility=3.00x shadow=3.00x
+22:25:14.787 saves: fix_thumbnails=1 save_trace=0
+22:25:14.787 startup: skip_intro=0 fast_start=1
+22:25:14.787 diagnostics: file_trace=0 load_trace=0 mem_trace=0 script_bindings=0
+22:25:14.787 loading: fast_doors=1 door_fade=0.05 area_fade=0.25 interiors=2 (keep_outdoors=1 keep_interiors=1 preload_interiors=1 skip_door_gc=1 release_kept=30 instant_doors=1 indoor_outdoors=1) door_light_blend=1.00 preload_street=1 door_spinner=0 preload_memory_mb=1280 door_memory_mb=1024 area_memory_mb=1536
+22:25:14.787 scriptpatches: book_marker=1 continue=1 pause_quit=1 window_mode=1 medallion=1
+22:25:14.787 window: enabled=1 borderless=0 dpi_aware=1
+22:25:14.787 presets: default=extreme, cycle modifiers=1 VK=79 (Options > Graphics remembers the level)
+22:25:14.787 exit: hooked kernel32.dll!ExitProcess
+22:25:14.787 exit: hooked kernel32.dll!TerminateProcess
+22:25:14.787 exit: hooked kernel32.dll!GetProcAddress
+22:25:14.787 exit (steam_api.dll): hooked kernel32.dll!ExitProcess
+22:25:14.787 exit (steam_api.dll): hooked kernel32.dll!TerminateProcess
+22:25:14.787 cpu32: hooked kernel32.dll!GetProcessAffinityMask
+22:25:14.789 script-patcher: hooked kernel32.dll!CreateFileW
+22:25:14.789 script-patcher: hooked kernel32.dll!FindFirstFileW
+22:25:14.789 script-patcher: hooked kernel32.dll!FindNextFileW
+22:25:14.789 script patches: hooks installed after 0 ms (3/3 slots)
+22:25:14.792 shadows: startup=vanilla (options menu)
+22:25:14.792 presets: startup=vanilla (options menu)
+22:25:14.792 window: dpi awareness = system aware (fallback)
+22:25:14.792 window: borderless=1 (options menu), dpi_aware=1, menu=1
+22:25:14.801 startup: fast_start: timeBeginPeriod(1) = 0, Sleep(1) took 9.6 ms before, 1.9 ms after
+22:25:14.801 startup: hooked kernel32.dll!Sleep
+22:25:14.801 startup: hooked kernel32.dll!Sleep
+22:25:14.887 shadows: level vanilla; atlas at start 1024, filter on, live atlas on
+22:25:14.889 window: startup borderless style patched
+22:25:14.894 window: menu channel hooked (Options > Graphics applies borderless at once)
+22:25:14.894 window: viewport tick hooked (Full screen switches at once)
+22:25:15.016 script overlay: cache <game>\bin\witcher2_enginefix_cache
+22:25:15.023 script overlay: user content: no Config\UserContent.ini, none mounted
+22:25:15.084 script overlay: read icons: 152 books, 152 icons
+22:25:15.085 script overlay: book_marker=on
+22:25:15.085 script overlay: continue=on
+22:25:15.085 script overlay: pause_quit=on
+22:25:15.086 script overlay: window_mode=on
+22:25:15.086 script overlay: medallion=on
+22:25:15.100 script overlay: ui_trade.swf: patched (loose)
+22:25:15.109 script overlay: ui_storage.swf: patched (loose)
+22:25:15.113 script overlay: base_scripts.dzip: 8 entries replaced or added
+22:25:15.117 script overlay: dlc_finishers.dzip: 152 entries replaced or added
+22:25:15.123 script overlay: cache: built in 109 ms (4 redirects)
+22:25:15.125 script patches: book_marker=on continue=on pause_quit=on window_mode=on medallion=on cache=built 109 ms
+22:25:15.507 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+22:25:15.511 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+22:25:15.826 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+22:25:16.290 saves: hooked d3dx9_39.dll!D3DXCreateTextureFromFileInMemory
+22:25:16.290 saves: light previews on (640x360 BMP at its own size, one level)
+22:25:16.290 crash: filter armed, chaining to 0x62D32571 (CSERHelper.dll+0x12571)
+22:25:16.296 osd: window ready (font 34 px)
+22:25:16.296 stability: ray cast guard installed (collector slot 00D41A38)
+22:25:16.296 stability: quit guard installed (FactsAdd time default at 0099871E)
+22:25:16.296 quit: QuitApplication hooked - with an area loaded it ends the game session first (clean_quit)
+22:25:16.297 stability: path guard installed (PathEngine edge walk at 006550C0)
+22:25:16.297 stability: layer storage leak fix: array clear hooked, single removal hooked
+22:25:16.297 stability: text guard installed (text files end in three 0 bytes, allocation at 00AC6ACA)
+22:25:16.297 settings object 0x02580E78 found: mesh=1.200 foliage=2.000
+22:25:16.297 preset: vanilla at startup
+22:25:16.297 lod enforced: mesh=1.000 foliage=1.000
+22:25:16.297 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=1.00x shadow=1.00x
+22:25:16.297 billboards: hook installed, factor 1.00x
+22:25:16.297 shadows: zones patched at 009C016A, 009C019A and 009C01AA
+22:25:16.297 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+22:25:16.297 thumbnail: menu image registry hooked (QuickSave preview refresh)
+22:25:16.298 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=1 trace=0
+22:25:16.298 saves: ISteamRemoteStorage 135E0BE8 FileWrite hooked; thumbnail fix=1
+22:25:16.298 preload: per-layer load hooked - preloaded layers stop below 1280 MB of free address space
+22:25:16.298 doors: indoor partitions keep drawing terrain and grass (indoor_outdoors=1)
+22:25:16.298 partition: switch calls hooked/hooked, sync run hooked (load_trace=0 keep_outdoors=1)
+22:25:16.298 doors: environment activation hooked, door Stabilize hooked - door_light_blend on (1.00 s)
+22:25:16.298 doors: loading spinner command hooked - no spinner on instant doors
+22:25:16.298 doors: streaming door timer hooked
+22:25:16.298 doors: door start hooked (door_fade 0.05 s, area_fade 0.25 s)
+22:25:16.298 doors: fade commands hooked/hooked - instant_doors on
+22:25:16.298 doors: fade-out patched, fade-in patched, 0.05 s, area changes 0.25 s (game 0.5 s); fast_doors=1
+22:25:18.230 shadows: atlas 1024 per cascade, wanted 1024
+22:25:20.911 startup: fast_start: FMOD waits of 10 ms cut to 1 ms until the game window, after 6109 ms: fmodex 1788, fmod_event 867
+22:25:21.007 window: game window 3840x2160, User.ini viewport 3840x2160
+22:25:21.604 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook installed on vtable 63E26264
+22:25:21.605 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+22:25:21.605 input: keyboard state filter installed
+22:25:21.605 input: keyboard cooperative level hook installed
+22:25:21.605 input: window procedure hooked (key messages ignored while DirectInput reads the keyboard)
+22:25:21.605 input: keyboard cooperative level 0x05 -> 0x06 (Windows keys and Print Screen work in game)
+22:25:31.131 saves: first preview made at its own size
+22:25:59.601 interiors: before the switch - 1542 layers in the world, 0 loaded; 0 building interiors, 0 loaded
+22:25:59.612 savelist: before the switch private=1057 MB commit=1417 reserve=280 free=2398 largest_free=2044 MB, previews held=326
+22:25:59.612 preload: 'common\secret_passage' found (type 0); siblings by location type: default 26, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+22:25:59.613 preload: 24 building(s) with interior lighting of their own in the partition tree, 57 layer groups only they list
+22:25:59.625 preload: 0 interior layers from the indoor partitions, 59 from the buildings with their own lighting, 0 more by folder name (59 known in this world)
+22:26:03.625 preload: 59 of 59 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2182 MB, floor 1280 MB)
+22:26:03.625 partition: sync job ran 4026 ms (GC  33 ms)
+22:26:03.625 partition: preload kept 0 of 0 layers, unloaded 0; loaded 659 (59 interiors added), skipped 0 (fake rooms, low-poly)
+22:26:03.627 interiors: after the switch - 1542 layers in the world, 659 loaded; 0 building interiors, 0 loaded
+22:26:03.641 savelist: after the switch private=1280 MB commit=1636 reserve=266 free=2192 largest_free=2044 MB, previews held=326
+22:26:06.950 distance stats: mesh=417584 shadow=392701 baseline_reject=155412 admitted=0 (1.00x/1.00x)
+22:26:06.950 billboards: 15 new proxies, 0 moved; last 20.0 m -> 20.0 m (1.00x)
+22:26:12.015 distance stats: mesh=1884212 shadow=1625470 baseline_reject=1216117 admitted=0 (1.00x/1.00x)
+22:26:17.082 distance stats: mesh=2628462 shadow=2238755 baseline_reject=1847022 admitted=0 (1.00x/1.00x)
+22:26:22.147 distance stats: mesh=2407052 shadow=2075427 baseline_reject=1614623 admitted=0 (1.00x/1.00x)
+22:26:27.213 distance stats: mesh=2153045 shadow=1902510 baseline_reject=1363102 admitted=0 (1.00x/1.00x)
+22:26:32.277 distance stats: mesh=1052457 shadow=1019079 baseline_reject=371014 admitted=0 (1.00x/1.00x)
+22:26:37.346 distance stats: mesh=549965 shadow=528379 baseline_reject=96664 admitted=0 (1.00x/1.00x)
+22:26:42.414 distance stats: mesh=682846 shadow=650975 baseline_reject=159634 admitted=0 (1.00x/1.00x)
+22:26:47.484 distance stats: mesh=565746 shadow=541409 baseline_reject=198587 admitted=0 (1.00x/1.00x)
+22:26:52.548 distance stats: mesh=890598 shadow=845408 baseline_reject=417939 admitted=0 (1.00x/1.00x)
+22:26:57.616 distance stats: mesh=680436 shadow=646648 baseline_reject=218559 admitted=0 (1.00x/1.00x)
+22:27:02.683 distance stats: mesh=476597 shadow=454251 baseline_reject=82733 admitted=0 (1.00x/1.00x)
+22:27:07.751 distance stats: mesh=419088 shadow=400625 baseline_reject=63866 admitted=0 (1.00x/1.00x)
+22:27:12.816 distance stats: mesh=414187 shadow=397960 baseline_reject=97301 admitted=0 (1.00x/1.00x)
+22:27:17.885 distance stats: mesh=558199 shadow=535188 baseline_reject=231564 admitted=0 (1.00x/1.00x)
+22:27:21.669 doors: 'common\secret_passage' -> 'common\quarry' still has 54 layers to load - 0.25 s fades
+22:27:22.738 partition: sync job ran 790 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:27:22.738 partition: keep_outdoors kept 75 of 75 layers, unloaded 0; loaded 53 (0 interiors added), skipped 0 (fake rooms, low-poly), occluders wait until Geralt is through the door
+22:27:22.739 interiors: 16 kept outdoor layers recorded (16 in all) - released once Geralt is 30 m from (-281.8, -173.2, -0.9)
+22:27:22.739 doors: 'common\secret_passage' -> 'common\quarry' loaded 53 layer(s) not preloaded (790 ms): levels\03_camp\quarry\birds.w2l levels\03_camp\quarry\black_plane_harpy.w2l levels\03_camp\quarry\containers.w2l levels\03_camp\quarry\decals.w2l levels\03_camp\quarry\house_new_decoration.w2l levels\03_camp\quarry\quarry_field.w2l levels\03_camp\quarry\quarry_rocks.w2l levels\03_camp\quarry\vegetation.w2l levels\03_camp\common_quarry_burnt_village\birds.w2l levels\03_camp\common_quarry_burnt_village\bushes.w2l levels\03_camp\common_quarry_burnt_village\denied_area.w2l levels\03_camp\common_quarry_burnt_village\passage.w2l levels\03_camp\common_quar levels\03_camp\quarry\gra levels\03_camp\a
+22:27:22.739 doors: 'common\secret_passage' -> 'common\quarry' took 790 ms - it keeps its fade
+22:27:22.792 doors: interior ready after 859 ms - picture back now (state 2)
+22:27:22.953 distance stats: mesh=480887 shadow=440387 baseline_reject=219245 admitted=0 (1.00x/1.00x)
+22:27:22.953 billboards: 12 new proxies, 0 moved; last 15.0 m -> 15.0 m (1.00x)
+22:27:27.402 doors: Geralt is through the door - loading the occluders (4657 ms after the door)
+22:27:27.414 partition: sync job ran 9 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:27:27.414 partition: keep_outdoors kept 75 of 75 layers, unloaded 0; loaded 2 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:27:28.017 distance stats: mesh=1895492 shadow=584571 baseline_reject=250763 admitted=0 (1.00x/1.00x)
+22:27:33.083 distance stats: mesh=1415461 shadow=326223 baseline_reject=58794 admitted=0 (1.00x/1.00x)
+22:27:38.151 distance stats: mesh=2022126 shadow=962862 baseline_reject=530726 admitted=0 (1.00x/1.00x)
+22:27:43.218 distance stats: mesh=1588378 shadow=481592 baseline_reject=140269 admitted=0 (1.00x/1.00x)
+22:27:48.283 distance stats: mesh=1407399 shadow=760672 baseline_reject=452069 admitted=0 (1.00x/1.00x)
+22:27:53.350 distance stats: mesh=1248893 shadow=1129405 baseline_reject=734631 admitted=0 (1.00x/1.00x)
+22:27:58.414 distance stats: mesh=1297497 shadow=869808 baseline_reject=549251 admitted=0 (1.00x/1.00x)
+22:28:03.482 distance stats: mesh=1509360 shadow=1157860 baseline_reject=772524 admitted=0 (1.00x/1.00x)
+22:28:08.548 distance stats: mesh=1510001 shadow=1157860 baseline_reject=772539 admitted=0 (1.00x/1.00x)
+22:28:13.613 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:18.683 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:23.751 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:28.817 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:33.885 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:38.953 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:44.022 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:49.086 distance stats: mesh=1506146 shadow=1154813 baseline_reject=770507 admitted=0 (1.00x/1.00x)
+22:28:54.147 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:28:59.213 distance stats: mesh=1507174 shadow=1154962 baseline_reject=770528 admitted=0 (1.00x/1.00x)
+22:29:04.282 distance stats: mesh=1509960 shadow=1157711 baseline_reject=772534 admitted=0 (1.00x/1.00x)
+22:29:09.345 distance stats: mesh=1509252 shadow=1157860 baseline_reject=772525 admitted=0 (1.00x/1.00x)
+22:29:14.413 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:29:19.477 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:29:24.543 distance stats: mesh=1506679 shadow=1154813 baseline_reject=770508 admitted=0 (1.00x/1.00x)
+22:29:29.604 distance stats: mesh=1509587 shadow=1157860 baseline_reject=772539 admitted=0 (1.00x/1.00x)
+22:29:34.670 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:29:39.736 distance stats: mesh=1506146 shadow=1154813 baseline_reject=770507 admitted=0 (1.00x/1.00x)
+22:29:44.807 distance stats: mesh=1514094 shadow=1160907 baseline_reject=774573 admitted=0 (1.00x/1.00x)
+22:29:49.871 distance stats: mesh=1506146 shadow=1154813 baseline_reject=770507 admitted=0 (1.00x/1.00x)
+22:29:54.938 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:30:00.005 distance stats: mesh=1510120 shadow=1157860 baseline_reject=772540 admitted=0 (1.00x/1.00x)
+22:30:05.073 distance stats: mesh=1449523 shadow=1020513 baseline_reject=641989 admitted=0 (1.00x/1.00x)
+22:30:10.143 distance stats: mesh=1426754 shadow=492629 baseline_reject=176641 admitted=0 (1.00x/1.00x)
+22:30:15.212 distance stats: mesh=1489245 shadow=372249 baseline_reject=94119 admitted=0 (1.00x/1.00x)
+22:30:20.278 distance stats: mesh=1456758 shadow=643538 baseline_reject=222083 admitted=0 (1.00x/1.00x)
+22:30:25.344 distance stats: mesh=1414211 shadow=421644 baseline_reject=63429 admitted=0 (1.00x/1.00x)
+22:30:30.408 distance stats: mesh=1424146 shadow=502444 baseline_reject=205387 admitted=0 (1.00x/1.00x)
+22:30:35.476 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:30:40.542 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:30:45.606 distance stats: mesh=1500982 shadow=554403 baseline_reject=242042 admitted=0 (1.00x/1.00x)
+22:30:50.674 distance stats: mesh=1497371 shadow=552978 baseline_reject=241441 admitted=0 (1.00x/1.00x)
+22:30:55.739 distance stats: mesh=1500697 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:00.805 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:05.870 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:10.936 distance stats: mesh=1498632 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:31:16.002 distance stats: mesh=1499418 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:21.065 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:26.131 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:31.199 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:36.266 distance stats: mesh=1497353 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:31:41.335 distance stats: mesh=1500697 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:31:46.407 distance stats: mesh=1504950 shadow=555879 baseline_reject=242697 admitted=0 (1.00x/1.00x)
+22:31:51.473 distance stats: mesh=1497794 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:31:56.542 distance stats: mesh=1501026 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:32:01.608 distance stats: mesh=1500230 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:32:06.674 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:32:11.742 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:32:16.805 distance stats: mesh=1499966 shadow=553415 baseline_reject=241462 admitted=0 (1.00x/1.00x)
+22:32:21.875 distance stats: mesh=1502034 shadow=555425 baseline_reject=242658 admitted=0 (1.00x/1.00x)
+22:32:26.938 distance stats: mesh=1497050 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:32:32.004 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:32:37.067 distance stats: mesh=1500060 shadow=553507 baseline_reject=241470 admitted=0 (1.00x/1.00x)
+22:32:42.133 distance stats: mesh=1497990 shadow=553874 baseline_reject=242013 admitted=0 (1.00x/1.00x)
+22:32:47.199 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:32:52.266 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:32:57.332 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:02.401 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:07.469 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:12.536 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:17.603 distance stats: mesh=1497338 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:33:22.671 distance stats: mesh=1500712 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:27.736 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:32.806 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:37.874 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:42.940 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:33:48.004 distance stats: mesh=1500172 shadow=553619 baseline_reject=241493 admitted=0 (1.00x/1.00x)
+22:33:53.071 distance stats: mesh=1497878 shadow=553762 baseline_reject=241990 admitted=0 (1.00x/1.00x)
+22:33:58.138 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:03.205 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:08.271 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:13.336 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:18.406 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:23.471 distance stats: mesh=1497050 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:34:28.538 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:33.606 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:38.672 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:43.738 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:48.806 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:53.874 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:34:58.939 distance stats: mesh=1497050 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:35:04.004 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:09.073 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:14.138 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:19.203 distance stats: mesh=1500924 shadow=554348 baseline_reject=241988 admitted=0 (1.00x/1.00x)
+22:35:24.268 distance stats: mesh=1497126 shadow=553033 baseline_reject=241495 admitted=0 (1.00x/1.00x)
+22:35:29.332 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:34.402 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:39.468 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:44.535 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:49.599 distance stats: mesh=1497050 shadow=552961 baseline_reject=241423 admitted=0 (1.00x/1.00x)
+22:35:54.669 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:35:59.735 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:36:04.802 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:36:09.870 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:36:14.937 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:36:20.002 distance stats: mesh=1499966 shadow=553415 baseline_reject=241462 admitted=0 (1.00x/1.00x)
+22:36:25.070 distance stats: mesh=1498329 shadow=553966 baseline_reject=242021 admitted=0 (1.00x/1.00x)
+22:36:30.139 distance stats: mesh=1501126 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:36:35.209 distance stats: mesh=1503539 shadow=554868 baseline_reject=242099 admitted=0 (1.00x/1.00x)
+22:36:40.272 distance stats: mesh=1498090 shadow=553972 baseline_reject=242021 admitted=0 (1.00x/1.00x)
+22:36:45.338 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:36:50.407 distance stats: mesh=1501000 shadow=554420 baseline_reject=242060 admitted=0 (1.00x/1.00x)
+22:36:55.477 distance stats: mesh=1500221 shadow=581775 baseline_reject=267408 admitted=0 (1.00x/1.00x)
+22:37:00.545 distance stats: mesh=1321803 shadow=1240057 baseline_reject=640218 admitted=0 (1.00x/1.00x)
+22:37:05.609 distance stats: mesh=1628352 shadow=922903 baseline_reject=403260 admitted=0 (1.00x/1.00x)
+22:37:10.678 distance stats: mesh=2221236 shadow=921199 baseline_reject=416054 admitted=0 (1.00x/1.00x)
+22:37:15.741 distance stats: mesh=1490898 shadow=706263 baseline_reject=244692 admitted=0 (1.00x/1.00x)
+22:37:20.807 distance stats: mesh=1359277 shadow=1138404 baseline_reject=515568 admitted=0 (1.00x/1.00x)
+22:37:25.877 distance stats: mesh=1273150 shadow=1120682 baseline_reject=511093 admitted=0 (1.00x/1.00x)
+22:37:30.943 distance stats: mesh=417896 shadow=390765 baseline_reject=181918 admitted=0 (1.00x/1.00x)
+22:37:33.475 stability: layer storage: 1 saved entity state(s) freed so far (0 MB) that the game would have kept
+22:37:33.884 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 63E26264
+22:37:33.884 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+22:37:33.884 input: keyboard state filter installed
+22:37:36.118 thumbnail: menu reloads QuickSave_640x360.bmp
+22:37:36.121 thumbnail: menu reloads ManualSave_0339_640x360.bmp
+22:37:37.578 interiors: 16 kept outdoor layers forgotten (an area load)
+22:37:37.581 interiors: before the switch - 1542 layers in the world, 0 loaded; 0 building interiors, 0 loaded
+22:37:37.594 savelist: before the switch private=1237 MB commit=1563 reserve=263 free=2268 largest_free=1867 MB, previews held=327
+22:37:37.595 preload: 'common\quarry' found (type 0); siblings by location type: default 26, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+22:37:37.595 preload: 24 building(s) with interior lighting of their own in the partition tree, 57 layer groups only they list
+22:37:37.607 preload: 0 interior layers from the indoor partitions, 59 from the buildings with their own lighting, 0 more by folder name (59 known in this world)
+22:37:40.263 preload: 59 of 59 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2164 MB, floor 1280 MB)
+22:37:40.263 partition: sync job ran 2683 ms (GC  11 ms)
+22:37:40.263 partition: preload kept 0 of 0 layers, unloaded 0; loaded 698 (59 interiors added), skipped 0 (fake rooms, low-poly)
+22:37:40.265 interiors: after the switch - 1542 layers in the world, 698 loaded; 0 building interiors, 0 loaded
+22:37:40.278 savelist: after the switch private=1296 MB commit=1653 reserve=267 free=2174 largest_free=1913 MB, previews held=327
+22:37:41.074 distance stats: mesh=1731 shadow=548 baseline_reject=679 admitted=0 (1.00x/1.00x)
+22:37:41.074 billboards: 22 new proxies, 0 moved; last 15.0 m -> 15.0 m (1.00x)
+22:37:46.138 distance stats: mesh=781116 shadow=418734 baseline_reject=222499 admitted=0 (1.00x/1.00x)
+22:37:50.057 doors: 'common\quarry' -> 'common\secret_passage' still has 17 layers to load - 0.25 s fades
+22:37:50.435 partition: sync job ran 96 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:37:50.435 partition: keep_outdoors kept 112 of 114 layers, unloaded 2; loaded 16 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:37:50.435 interiors: 53 kept outdoor layers recorded (53 in all) - released once Geralt is 30 m from (-283.1, -172.3, -0.9)
+22:37:50.435 doors: 'common\quarry' -> 'common\secret_passage' loaded 16 layer(s) not preloaded (96 ms): levels\03_camp\secret_passage\black_plane.w2l levels\03_camp\secret_passage\containers.w2l levels\03_camp\secret_passage\decorations.w2l levels\03_camp\secret_passage\denied_area.w2l levels\03_camp\secret_passage\doors.w2l levels\03_camp\secret_passage\lightsources.w2l levels\03_camp\secret_passage\q214_dwarf_body.w2l levels\03_camp\secret_passage\secret_passage_new.w2l levels\03_camp\secret_passage\shadow_box.w2l levels\03_camp\secret_passage\top.w2l levels\03_camp\common_secretpassage_dwarfcity\doors.w2l levels\03_camp\common_secretpassage_dwarfcity\rocks. levels\03_camp\finisher_spots\sec
+22:37:50.435 doors: 'common\quarry' -> 'common\secret_passage' took 96 ms - it keeps its fade
+22:37:50.442 doors: interior ready after 125 ms - picture back now (state 2)
+22:37:51.204 distance stats: mesh=780261 shadow=509422 baseline_reject=244240 admitted=0 (1.00x/1.00x)
+22:37:51.204 billboards: 5 new proxies, 0 moved; last 8.0 m -> 8.0 m (1.00x)
+22:37:56.270 distance stats: mesh=2241797 shadow=904058 baseline_reject=353004 admitted=0 (1.00x/1.00x)
+22:38:01.337 distance stats: mesh=1714400 shadow=573115 baseline_reject=171730 admitted=0 (1.00x/1.00x)
+22:38:02.024 partition: sync job ran 72 ms (GC  33 ms) - keep_outdoors: outdoor layers left loaded
+22:38:02.024 partition: keep_outdoors kept 112 of 112 layers, unloaded 53; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:38:02.024 interiors: released 53 kept outdoor layers 30 m from the door (job 72 ms, GC 33 ms); they load again at the door
+22:38:03.510 stability: layer storage: 6160 saved entity state(s) freed so far (15 MB) that the game would have kept
+22:38:06.407 distance stats: mesh=801068 shadow=702536 baseline_reject=310273 admitted=0 (1.00x/1.00x)
+22:38:11.475 distance stats: mesh=1777356 shadow=1566685 baseline_reject=1055955 admitted=0 (1.00x/1.00x)
+22:38:16.539 distance stats: mesh=1636082 shadow=1433772 baseline_reject=995453 admitted=0 (1.00x/1.00x)
+22:38:21.602 distance stats: mesh=896827 shadow=845513 baseline_reject=460324 admitted=0 (1.00x/1.00x)
+22:38:26.666 distance stats: mesh=1827225 shadow=1637854 baseline_reject=1349353 admitted=0 (1.00x/1.00x)
+22:38:31.733 distance stats: mesh=2101891 shadow=1831726 baseline_reject=1468464 admitted=0 (1.00x/1.00x)
+22:38:36.801 distance stats: mesh=2177940 shadow=1881685 baseline_reject=1365574 admitted=0 (1.00x/1.00x)
+22:38:41.869 distance stats: mesh=1005379 shadow=945062 baseline_reject=308897 admitted=0 (1.00x/1.00x)
+22:38:46.931 distance stats: mesh=611884 shadow=583559 baseline_reject=138183 admitted=0 (1.00x/1.00x)
+22:38:51.996 distance stats: mesh=440562 shadow=421947 baseline_reject=79696 admitted=0 (1.00x/1.00x)
+22:38:57.062 distance stats: mesh=424238 shadow=405242 baseline_reject=83129 admitted=0 (1.00x/1.00x)
+22:39:02.127 distance stats: mesh=944385 shadow=885030 baseline_reject=373150 admitted=0 (1.00x/1.00x)
+22:39:07.195 distance stats: mesh=731955 shadow=687029 baseline_reject=201655 admitted=0 (1.00x/1.00x)
+22:39:12.261 distance stats: mesh=765557 shadow=718353 baseline_reject=221170 admitted=0 (1.00x/1.00x)
+22:39:17.326 distance stats: mesh=759110 shadow=711987 baseline_reject=214083 admitted=0 (1.00x/1.00x)
+22:39:22.398 distance stats: mesh=751848 shadow=704728 baseline_reject=207044 admitted=0 (1.00x/1.00x)
+22:39:27.461 distance stats: mesh=744245 shadow=697246 baseline_reject=200805 admitted=0 (1.00x/1.00x)
+22:39:32.528 distance stats: mesh=742435 shadow=695315 baseline_reject=198307 admitted=0 (1.00x/1.00x)
+22:39:37.596 distance stats: mesh=738113 shadow=690992 baseline_reject=193803 admitted=0 (1.00x/1.00x)
+22:39:42.663 distance stats: mesh=731656 shadow=684876 baseline_reject=188392 admitted=0 (1.00x/1.00x)
+22:39:47.728 distance stats: mesh=727231 shadow=680491 baseline_reject=184492 admitted=0 (1.00x/1.00x)
+22:39:52.796 distance stats: mesh=723337 shadow=676596 baseline_reject=180393 admitted=0 (1.00x/1.00x)
+22:39:57.859 distance stats: mesh=720344 shadow=673727 baseline_reject=179150 admitted=0 (1.00x/1.00x)
+22:40:02.923 distance stats: mesh=718868 shadow=672127 baseline_reject=177876 admitted=0 (1.00x/1.00x)
+22:40:07.992 distance stats: mesh=713287 shadow=666546 baseline_reject=173173 admitted=0 (1.00x/1.00x)
+22:40:13.062 distance stats: mesh=705786 shadow=659043 baseline_reject=166636 admitted=0 (1.00x/1.00x)
+22:40:18.130 distance stats: mesh=702347 shadow=655604 baseline_reject=163962 admitted=0 (1.00x/1.00x)
+22:40:23.196 distance stats: mesh=696239 shadow=649825 baseline_reject=158947 admitted=0 (1.00x/1.00x)
+22:40:28.261 distance stats: mesh=688327 shadow=642089 baseline_reject=152677 admitted=0 (1.00x/1.00x)
+22:40:33.326 distance stats: mesh=685220 shadow=638859 baseline_reject=148478 admitted=0 (1.00x/1.00x)
+22:40:38.389 distance stats: mesh=679285 shadow=632925 baseline_reject=142499 admitted=0 (1.00x/1.00x)
+22:40:43.457 distance stats: mesh=674530 shadow=628238 baseline_reject=139698 admitted=0 (1.00x/1.00x)
+22:40:48.526 distance stats: mesh=666999 shadow=621392 baseline_reject=133777 admitted=0 (1.00x/1.00x)
+22:40:53.595 distance stats: mesh=658288 shadow=612854 baseline_reject=126538 admitted=0 (1.00x/1.00x)
+22:40:58.660 distance stats: mesh=957731 shadow=858406 baseline_reject=395525 admitted=0 (1.00x/1.00x)
+22:41:03.725 distance stats: mesh=2246975 shadow=1912588 baseline_reject=1529445 admitted=0 (1.00x/1.00x)
+22:41:08.793 distance stats: mesh=2509482 shadow=2123815 baseline_reject=1748116 admitted=0 (1.00x/1.00x)
+22:41:13.859 distance stats: mesh=2419782 shadow=2077292 baseline_reject=1615772 admitted=0 (1.00x/1.00x)
+22:41:18.926 distance stats: mesh=1348115 shadow=1262197 baseline_reject=591818 admitted=0 (1.00x/1.00x)
+22:41:23.993 distance stats: mesh=559936 shadow=534635 baseline_reject=73223 admitted=0 (1.00x/1.00x)
+22:41:29.061 distance stats: mesh=469513 shadow=447495 baseline_reject=57642 admitted=0 (1.00x/1.00x)
+22:41:34.128 distance stats: mesh=479157 shadow=457322 baseline_reject=88388 admitted=0 (1.00x/1.00x)
+22:41:39.194 distance stats: mesh=490545 shadow=464785 baseline_reject=124804 admitted=0 (1.00x/1.00x)
+22:41:44.264 distance stats: mesh=309099 shadow=291439 baseline_reject=19477 admitted=0 (1.00x/1.00x)
+22:41:49.335 distance stats: mesh=322731 shadow=304817 baseline_reject=34489 admitted=0 (1.00x/1.00x)
+22:41:54.399 distance stats: mesh=454958 shadow=434856 baseline_reject=140184 admitted=0 (1.00x/1.00x)
+22:41:56.253 partition: sync job ran 372 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:41:56.253 partition: keep_outdoors kept 75 of 75 layers, unloaded 0; loaded 53 (0 interiors added), skipped 0 (fake rooms, low-poly), occluders wait until Geralt is through the door
+22:41:56.253 interiors: 16 kept outdoor layers recorded (16 in all) - released once Geralt is 30 m from (-281.9, -173.0, -1.0)
+22:41:56.253 doors: 'common\secret_passage' -> 'common\quarry' took 372 ms - it keeps its fade
+22:41:56.303 doors: interior ready after 438 ms - picture back now (state 2)
+22:41:59.469 distance stats: mesh=1132341 shadow=278752 baseline_reject=46034 admitted=0 (1.00x/1.00x)
+22:41:59.469 billboards: 12 new proxies, 0 moved; last 15.0 m -> 15.0 m (1.00x)
+22:42:04.535 distance stats: mesh=1607901 shadow=596990 baseline_reject=300949 admitted=0 (1.00x/1.00x)
+22:42:04.698 doors: Geralt is through the door - loading the occluders (8437 ms after the door)
+22:42:04.715 partition: sync job ran 8 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+22:42:04.715 partition: keep_outdoors kept 75 of 75 layers, unloaded 0; loaded 2 (0 interiors added), skipped 0 (fake rooms, low-poly)
+22:42:09.604 distance stats: mesh=1516420 shadow=278795 baseline_reject=38807 admitted=0 (1.00x/1.00x)
+22:42:14.671 distance stats: mesh=1530450 shadow=279598 baseline_reject=38306 admitted=0 (1.00x/1.00x)
+22:42:19.738 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:42:24.807 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:42:29.874 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:42:34.941 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:42:40.008 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:42:45.074 distance stats: mesh=1620225 shadow=295999 baseline_reject=40553 admitted=0 (1.00x/1.00x)
+22:42:50.139 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:42:55.206 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:00.270 distance stats: mesh=1623693 shadow=295999 baseline_reject=40604 admitted=0 (1.00x/1.00x)
+22:43:05.336 distance stats: mesh=1621032 shadow=296780 baseline_reject=40609 admitted=0 (1.00x/1.00x)
+22:43:10.404 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:15.474 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:20.539 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:25.609 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:30.676 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:35.745 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:40.814 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:45.883 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:50.950 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:43:56.015 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:44:01.082 distance stats: mesh=1622810 shadow=295999 baseline_reject=40603 admitted=0 (1.00x/1.00x)
+22:44:06.148 distance stats: mesh=1621915 shadow=296780 baseline_reject=40610 admitted=0 (1.00x/1.00x)
+22:44:11.215 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:44:16.282 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:44:21.348 distance stats: mesh=1624500 shadow=296780 baseline_reject=40660 admitted=0 (1.00x/1.00x)
+22:44:24.580 quit: an area is loaded - ending the game session first
+22:44:24.604 stability: layer storage: 6161 saved entity state(s) freed so far (15 MB) that the game would have kept
+22:44:25.081 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 63E26264
+22:44:25.081 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+22:44:25.081 input: keyboard state filter installed
+22:44:25.689 quit: the game session ended 1109 ms after Quit
+22:44:26.413 distance stats: mesh=1038825 shadow=189783 baseline_reject=26001 admitted=0 (1.00x/1.00x)
+22:44:27.258 quit: quitting from the main menu, 2672 ms after Quit, no loading screen up
+22:44:28.462 crash: filter armed, chaining to 0x00676B04 (witcher2.EXE+0x276B04)
+22:44:28.474 exit: ExitProcess(0) from witcher2.EXE+0x272388 on thread 4120 (the main thread)
+22:44:28.534 stability: layer storage: 12322 saved entity state(s) freed this session (31 MB)
+22:44:28.534 unloaded

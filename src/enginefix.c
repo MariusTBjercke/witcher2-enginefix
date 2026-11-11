@@ -187,6 +187,7 @@ static float cfg_area_fade = 0.25f; // [loading] area_fade: door fade when the d
 static int cfg_interiors = 2;   // [loading] interiors: 0 game, 1 keep the outdoors, 2 also preload interiors
 static int cfg_keep_outdoors = 1; // [loading] keep_outdoors: house doors leave the outdoor layers loaded
 static int cfg_skip_door_gc = 1; // [loading] skip_door_gc: no full object GC on a keep_outdoors house door
+static int cfg_release_kept;    // [loading] release_kept: metres from the door after which kept outdoor layers unload (0 = never)
 static int cfg_instant_doors = 1; // [loading] instant_doors: no fade on a house door known to load nothing
 static int cfg_indoor_outdoors = 1; // [loading] indoor_outdoors: keep drawing terrain/grass behind kept doors
 static int cfg_preload_interiors = 1; // [loading] preload_interiors: load every building interior with the area
@@ -546,6 +547,8 @@ static void load_config(void)
     cfg_preload_interiors = ini_int("loading", "preload_interiors", cfg_interiors >= 2);
     cfg_indoor_outdoors = ini_int("loading", "indoor_outdoors", 1);
     cfg_skip_door_gc = ini_int("loading", "skip_door_gc", 1);
+    cfg_release_kept = ini_int("loading", "release_kept", 0);
+    if (cfg_release_kept < 0 || cfg_release_kept > 1000) cfg_release_kept = 0;
     cfg_instant_doors = ini_int("loading", "instant_doors", 1);
     cfg_door_light_blend = ini_float("loading", "door_light_blend", 1.0f);
     if (cfg_door_light_blend < 0.0f || cfg_door_light_blend > 5.0f) cfg_door_light_blend = 1.0f;
@@ -3646,6 +3649,70 @@ static int ko_allowed(const void* job)
     return 1;
 }
 
+// release_kept: the outdoor layers keep_outdoors keeps at a door stay in the world while Geralt
+// is inside, and the visibility pass walks them every frame although the interior hides them:
+// deep inside the cave near Vergen ~8x the range calls and 49 fps instead of 75
+// (docs/fixes/interior-preload.md, "Known cost"). A kept door records the layers it kept (not
+// interiors or preloaded layers, which preload_interiors keeps on purpose) and where Geralt
+// stood. Once he is release_kept metres from that spot, with no switch, request, stream job,
+// waiting occluders or loading screen, kr_frame queues a switch to the partition that is already
+// current (as ko_frame does for the occluders), and hook_PartRun adds the recorded layers to that
+// job's unload list: the game's own job runner unloads them, between its own brackets
+// (FUN_00a7015c), with its GC, entity attach and partition settings - no new engine address.
+// The way out is an ordinary door job: the partition being entered lists them and the loader
+// loads them again (it skips only layers still loaded, +0x38). The switch lists for unloading the
+// loaded layers its partition does not hold, so only recorded layers in the release job's own
+// unload list go: a layer of the partition Geralt is in is never released. A layer any job loads
+// is also struck off the list; a stream or area switch, or another world, forgets it. A release
+// forgets the instant-door pairs, so the door that loads the layers back keeps its fade.
+#define KR_MAX          1024
+#define KR_SETTLE_MS    3000   // no release this soon after the kept door
+#define KR_PENDING_MS   5000   // the queued switch must run within this
+static void* g_krList[KR_MAX];   // kept layers that no partition since has loaded (game thread)
+static int   g_krCount, g_krFull;   // g_krFull: more than KR_MAX kept - nothing is released then
+static void* g_krWorld;          // the world they belong to
+static float g_krAnchor[3];      // Geralt at the last kept door
+static DWORD g_krSince;          // GetTickCount() of the last kept door
+static int   g_krPending;        // the release switch is queued
+static DWORD g_krPendingTick;
+static float g_krDist;
+static int   g_krBlockLogged;
+static void* g_krGone[KR_MAX];   // released layers: the way out does not report them as missed
+static int   g_krGoneCount;
+
+static void kr_clear(const char* why)
+{
+    if (g_krCount && cfg_release_kept) logf_("interiors: %d kept outdoor layers forgotten (%s)", g_krCount, why);
+    g_krCount = g_krFull = g_krPending = g_krGoneCount = 0;
+    g_krWorld = NULL;
+}
+
+static int kr_find(void* const* set, int n, const void* layer)
+{
+    int i;
+    for (i = 0; i < n; i++) if (set[i] == layer) return i;
+    return -1;
+}
+
+// Strike every layer this job loads off the list: it belongs to the partition being entered.
+// The job's own lists, before hook_PartRun points them at its arrays.
+static void kr_forget_loads(const void* job)
+{
+    const void* bucketData = read_ptr((const char*)job + 0x1C);
+    DWORD buckets = (DWORD)(uintptr_t)read_ptr((const char*)job + 0x20), b, k;
+    for (b = 0; b < buckets && b < 5 && g_krCount; b++) {
+        void* bk = read_ptr((const char*)bucketData + 4 * b);
+        void** d = bk ? (void**)read_ptr((char*)bk + 0x08) : NULL;
+        DWORD n = bk ? (DWORD)(uintptr_t)read_ptr((char*)bk + 0x0C) : 0;
+        if (!d || n > 4096) continue;
+        for (k = 0; k < n && g_krCount; k++) {
+            int at = kr_find(g_krList, g_krCount, read_ptr(d + k));
+            if (at >= 0) g_krList[at] = g_krList[--g_krCount];
+        }
+    }
+    if (!g_krCount) g_krFull = 0;
+}
+
 static unsigned char __fastcall hook_PartSwitch(void* world, void* edx, void* name, int mode, void* screen)
 {
     wchar_t from[160], to[160];
@@ -3663,6 +3730,8 @@ static unsigned char __fastcall hook_PartSwitch(void* world, void* edx, void* na
     }
     g_ptMode = mode;
     g_koDeferOcc = 0;
+    // A stream job is never seen by hook_PartRun, and an area load rebuilds the area.
+    if (mode != 4 && g_krCount) kr_clear(mode == 0 ? "a stream switch" : "an area load");
     ok = ((PartSwitch_t)g_partSwitch)(world, edx, name, mode, screen);
     g_ptMode = -1;
     if (cfg_load_trace) {
@@ -4310,6 +4379,85 @@ __declspec(naked) static unsigned char __stdcall ko_part_request(void* game, voi
 }
 #pragma warning(pop)
 
+static int kr_player_pos(float* p)
+{
+    void* game = read_ptr((void*)ga(VA_GAME));
+    void* player = game ? read_ptr((char*)game + OFF_GAME_PLAYER) : NULL;
+    int i;
+    for (i = 0; player && i < 3 && read_f32((char*)player + OFF_NODE_POS + 4 * i, &p[i]); i++) {}
+    return player && i == 3;
+}
+
+// After a kept door ran (hook_PartRun, game thread): remember the layers it kept and where.
+static void kr_record(void* const* unloadData, LONG unloadN, void* world)
+{
+    LONG i;
+    int added = 0, wasFull = g_krFull;
+    if (!cfg_release_kept || !g_partRequest) return;
+    if (g_krWorld != world) { g_krCount = g_krFull = g_krGoneCount = 0; g_krWorld = world; }
+    for (i = 0; i < unloadN; i++) {
+        void* l = unloadData[i];
+        if (!l || ko_class(l) != LC_OTHER || kp_in_set(l) || kr_find(g_krList, g_krCount, l) >= 0) continue;
+        if (g_krCount >= KR_MAX) { g_krFull = 1; continue; }
+        g_krList[g_krCount++] = l;
+        added++;
+    }
+    if (!g_krCount) return;
+    // The last kept door is the one Geralt would go back through.
+    g_krAnchor[0] = g_krAnchor[1] = g_krAnchor[2] = 0;
+    if (!kr_player_pos(g_krAnchor)) g_krFull = 1;
+    g_krSince = GetTickCount();
+    g_krBlockLogged = 0;
+    if (g_krFull && !wasFull)
+        logf_("interiors: more than %d kept outdoor layers (or Geralt not found) - none are released here", KR_MAX);
+    else if (added)
+        logf_("interiors: %d kept outdoor layers recorded (%d in all) - released once Geralt is %d m from "
+              "(%.1f, %.1f, %.1f)", added, g_krCount, cfg_release_kept, g_krAnchor[0], g_krAnchor[1], g_krAnchor[2]);
+}
+
+// Once per frame (ko_frame): far enough from the kept door and nothing else going on -> queue the
+// switch whose job hook_PartRun turns into the release.
+static void kr_frame(void)
+{
+    static DWORD last;
+    DWORD now = GetTickCount();
+    void *game, *world;
+    char* rt;
+    float p[3], dx, dy, dz, d;
+    const char* block = NULL;
+    if (!cfg_release_kept || !g_krCount) return;
+    if (g_krPending) {
+        if (now - g_krPendingTick < KR_PENDING_MS) return;
+        logf_("interiors: the release switch did not run within %d ms - asking again later", KR_PENDING_MS);
+        g_krPending = 0;
+    }
+    if (now - last < 250) return;
+    last = now;
+    game = read_ptr((void*)ga(VA_GAME));
+    world = game ? read_ptr((char*)game + 0x40) : NULL;
+    if (!world) return;
+    if (world != g_krWorld) { kr_clear("another world"); return; }
+    if (g_krFull || !kr_player_pos(p)) return;
+    dx = p[0] - g_krAnchor[0]; dy = p[1] - g_krAnchor[1]; dz = p[2] - g_krAnchor[2];
+    d = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (d < (float)cfg_release_kept || now - g_krSince < KR_SETTLE_MS) return;
+    rt = (char*)read_ptr((void*)ga(VA_RENDER_THREAD));
+    if (g_ptMode != -1 || read_ptr((char*)game + 0xE8)) block = "a switch is queued";
+    else if (read_ptr((char*)world + 0x30C)) block = "a stream job is running";
+    else if (g_koDeferOcc) block = "the occluders still wait";
+    else if (rt && (read_ptr(rt + OFF_RT_LOAD_MOVIE) || read_ptr(rt + OFF_RT_LOAD_SCREEN))) block = "a loading screen is up";
+    if (block) {
+        if (!g_krBlockLogged) logf_("interiors: releasing the kept outdoor layers waits - %s", block);
+        g_krBlockLogged = 1;
+        return;
+    }
+    g_krPending = 1;
+    g_krPendingTick = now;
+    g_krDist = d;
+    g_koOccTick = now | 1;   // the switch's spinner is hidden as for the occluders (hook_SpinnerExec)
+    ko_part_request(game, (char*)world + 0x310, 4, (void*)ga(VA_EMPTY_STRING));
+}
+
 // Viewport tick, once per frame on the game thread.
 static void ko_frame(void)
 {
@@ -4319,6 +4467,7 @@ static void ko_frame(void)
     int i, away = 0;
     g_koFrameTick = GetTickCount();
     cq_poll(1);
+    kr_frame();
     if (!g_koDeferOcc) return;
     waited = GetTickCount() - g_koDeferSince;
     if (waited < KO_OCC_MIN_MS) return;
@@ -4376,7 +4525,7 @@ static void __stdcall hook_PartRun(void* job)
     void* savedData[5];
     LONG savedN[5];
     LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
-    int on = 0, area = 0, mem = 0, filter, coarseSkip = 0;
+    int on = 0, area = 0, mem = 0, filter, coarseSkip = 0, rel = 0, relN = 0, relSkip = 0;
     int dropFake, fakeN = 0, fakeLast = 0, fakeKeep = -1, noInteriors = 0, memTier = g_koMemLow;
     LONGLONG tRun;
     void* world = read_ptr((char*)job);
@@ -4396,8 +4545,14 @@ static void __stdcall hook_PartRun(void* job)
         // the job is done (fast_door_tick): loaded with the job, they culled the town in front
         // of Geralt while he was still in the doorway.
         mem = g_koMemLow && g_ptMode == 4 && g_partRequest && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo);
+        // release_kept: what this job loads is no longer released; the queued switch to the
+        // current partition (kr_frame) is the release.
+        if (g_krCount && world != g_krWorld) kr_clear("another world");
+        if (g_krCount) kr_forget_loads(job);
+        rel = g_krPending && g_ptMode == 4 && !_wcsicmp(g_ptFrom, g_ptTo);
+        if (rel) g_krPending = 0;
     }
-    filter = nb >= 0 && (on || mem || (cfg_preload_interiors && g_koMemLow != 1));
+    filter = nb >= 0 && (on || mem || rel || (cfg_preload_interiors && g_koMemLow != 1));
     if (area && !g_layerHooked && cfg_preload_memory_mb &&
         ko_free_mb() < (DWORD)(cfg_preload_memory_mb + KM_COARSE_MB))
         coarseSkip = 1;
@@ -4419,6 +4574,16 @@ static void __stdcall hook_PartRun(void* job)
                         : g_koMemLow == 1 || !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
             if (c == LC_FAKE) g_kpFakeSeen = 1;
             if (go) g_koUnloadOut[unloaded++] = l; else kept++;
+        }
+        // Only what the job itself lists for unloading: the switch diffs the loaded layers
+        // against the partition (run of 2026-11-11: the release job listed the 112 kept layers),
+        // so a recorded layer missing there belongs to the partition Geralt is in and stays.
+        if (rel && g_krCount && !g_krFull && unloaded + g_krCount <= KO_LIST) {
+            for (i = 0; i < g_krCount; i++) {
+                if (kr_find(unloadData, unloadN, g_krList[i]) < 0) { relSkip++; continue; }
+                if (kr_find(g_koUnloadOut, unloaded, g_krList[i]) < 0) g_koUnloadOut[unloaded++] = g_krList[i];
+                g_krList[relN++] = g_krList[i];
+            }
         }
         *(void**)((char*)job + 0x0C) = g_koUnloadOut;
         *(LONG*)((char*)job + 0x10) = unloaded;
@@ -4517,7 +4682,8 @@ static void __stdcall hook_PartRun(void* job)
             *(LONG*)((char*)bk + 0x0C) = m;
         }
     }
-    g_koSkipGc = on && cfg_skip_door_gc;
+    // A release frees what it unloaded at once: the GC runs.
+    g_koSkipGc = on && cfg_skip_door_gc && !relN;
     // Preloaded layers come last in the job and load only while the address space allows.
     if (kmN && g_layerHooked && cfg_preload_memory_mb) {
         km_watch((void* const**)savedData, savedN, nb, kmBase, kmN);
@@ -4567,14 +4733,31 @@ static void __stdcall hook_PartRun(void* job)
               on ? " - keep_outdoors: outdoor layers left loaded" : "");
     if (filter)
         logf_("partition: %s kept %ld of %ld layers, unloaded %ld; loaded %ld (%ld interiors added), skipped %ld (fake rooms, low-poly)%s",
-              on ? "keep_outdoors" : memTier == 2 ? "area door" : mem ? "memory door" : "preload", kept, unloadN, unloaded,
+              on ? "keep_outdoors" : rel ? "release" : memTier == 2 ? "area door" : mem ? "memory door" : "preload", kept, unloadN, unloaded,
               loaded, added, skipped,
               deferred ? ", occluders wait until Geralt is through the door" : "");
     if (deferred) ko_defer_occluders();
     if (area) ko_count("after the switch", world);
+    if (rel) {
+        if (relN) {
+            for (i = 0; i < relN && g_krGoneCount < KR_MAX; i++)
+                if (kr_find(g_krGone, g_krGoneCount, g_krList[i]) < 0) g_krGone[g_krGoneCount++] = g_krList[i];
+            logf_("interiors: released %d kept outdoor layers %.0f m from the door (job %lu ms, GC %lu ms); "
+                  "they load again at the door%s", relN, g_krDist, (DWORD)(tRun / 1000), (DWORD)(g_ptGcUs / 1000),
+                  relSkip ? " - some recorded layers belong to this partition and stay" : "");
+            // The doors learned as loading nothing would now load them: their fade comes back.
+            g_koPairCount = 0;
+        } else {
+            logf_("interiors: the release switch found nothing to release (%d recorded layers belong to this "
+                  "partition and stay)", relSkip);
+        }
+        g_krCount = 0;
+    } else if (on && cfg_release_kept && _wcsicmp(g_ptFrom, g_ptTo)) {   // a door, not the occluders' switch
+        kr_record((void* const*)unloadData, unloadN, world);
+    }
     // A kept door that loaded nothing will not load anything next time either: no fade then.
     // When it only dropped fake rooms (no sound/occluder swap) the way back loads nothing too.
-    if (on && loaded == 0 && (cfg_keep_interiors || cfg_preload_interiors)) {
+    if (!rel && on && loaded == 0 && (cfg_keep_interiors || cfg_preload_interiors)) {
         int swaps = 0;
         for (i = 0; i < unloaded; i++) if (ko_class(g_koUnloadOut[i]) != LC_FAKE) swaps = 1;
         ko_pair_add(g_ptFrom, g_ptTo);
@@ -4583,7 +4766,7 @@ static void __stdcall hook_PartRun(void* job)
     // With preload a house door should load nothing but what each place swaps (sound,
     // occluders, the indoor environment) and its townspeople. Anything else is an interior the
     // preload missed: logged always, so a player's log shows which.
-    if (on && cfg_preload_interiors) {
+    if (!rel && on && cfg_preload_interiors) {
         char line[600];
         size_t used = 0;
         int missed = 0;
@@ -4595,6 +4778,7 @@ static void __stdcall hook_PartRun(void* job)
                 int c = ko_class(l);
                 wchar_t name[64], path[260];
                 if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
+                if (kr_find(g_krGone, g_krGoneCount, l) >= 0) continue;   // released, loads back here
                 pt_text((char*)l + 0x78, name, 64);
                 pt_text((char*)l + 0x68, path, 260);
                 if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\communit")) continue;
@@ -4607,6 +4791,7 @@ static void __stdcall hook_PartRun(void* job)
             logf_("doors: '%ls' -> '%ls' loaded %d layer(s) not preloaded (%lu ms):%s", g_ptFrom, g_ptTo, missed,
                   (DWORD)(tRun / 1000), used ? line : "");
     }
+    if (rel) return;   // not a door: its time says nothing about one
     if (on && tRun / 1000 >= KO_SLOW_MS) {
         ko_pair_put(g_koSlow, &g_koSlowCount, g_ptFrom, g_ptTo);
         logf_("doors: '%ls' -> '%ls' took %lu ms - it keeps its fade", g_ptFrom, g_ptTo, (DWORD)(tRun / 1000));
@@ -8315,8 +8500,8 @@ static void build_gate(void)
         cfg_skip_intro = 0;
     }
     if (!partitions && (cfg_keep_outdoors || cfg_keep_interiors || cfg_preload_interiors)) {
-        gate_off("loading", "interiors (keep_outdoors, keep_interiors, preload_interiors, skip_door_gc)");
-        cfg_keep_outdoors = cfg_keep_interiors = cfg_preload_interiors = cfg_skip_door_gc = 0;
+        gate_off("loading", "interiors (keep_outdoors, keep_interiors, preload_interiors, skip_door_gc, release_kept)");
+        cfg_keep_outdoors = cfg_keep_interiors = cfg_preload_interiors = cfg_skip_door_gc = cfg_release_kept = 0;
     }
     if (!indoor && cfg_indoor_outdoors) {
         if (cfg_keep_outdoors) gate_off("loading", "indoor_outdoors");
@@ -9174,7 +9359,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d fast_start=%d", cfg_skip_intro, cfg_fast_start);
         logf_("diagnostics: file_trace=%d load_trace=%d mem_trace=%d script_bindings=%d", cfg_file_trace, cfg_load_trace, cfg_mem_trace, cfg_script_bindings);
-        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
+        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d release_kept=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_release_kept, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",
