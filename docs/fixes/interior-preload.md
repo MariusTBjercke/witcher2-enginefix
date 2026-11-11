@@ -1,7 +1,9 @@
 # Interior preloading: can doors be seamless?
 
 Status 2026-11-02: shipped in 0.8.0 as `[loading] interiors=2` (default). The sections below
-follow the work in order; the run logs are in `docs/validation/`.
+follow the work in order; the run logs are in `docs/validation/`. Vergen (Act 2) is covered from
+0.12.1: built 2026-11-11, checked offline for all 24 houses and seen in game for four of them
+(Steam, DXVK); Act 1 was seen unchanged with the same build. See the last section.
 
 ## Question
 
@@ -507,3 +509,196 @@ The other worlds: `l02-port` has no `LT_INDOOR` partition (only `LT_CAVE`), `03_
 To check in game: a save in `all\Dream` logs both siblings as skipped, about 0 layers from the
 partition tree, and the interrogation shows the wall and Roche's face with `interiors=2`.
 Village houses still open without a fade.
+
+## Vergen: buildings by their lighting, fake rooms by content (2026-11-11)
+
+**Symptom** (a player on Nexus, 0.12.0, and the owner on Steam the same week): in Vergen the
+dark "fake room" box that stands behind a door from outside is still there inside the house,
+around Geralt. The owner's log, a save loaded in `common\dwarf_city\city_dec_unload`:
+
+```
+preload: 'common\dwarf_city\city_dec_unload' found (type 0); siblings by location type: default 24, indoor 0, ...
+preload: 0 interior layers from the partition tree, 0 more by folder name
+doors: '...city_dec_unload' -> '...building04_deco' loaded 3 layer(s) not preloaded (172 ms): levels\03_camp\dwarf_city\building04_dec\building04_dec.w2l ...lightsources.w2l levels\03_camp\environments\environment_interior\building04_dec\building04_dec.w2l
+partition: keep_outdoors kept 5 of 6 layers, unloaded 1
+```
+
+**Cause.** Act 2's level (`levels\03_camp\world.w2w`, read offline from `pack0.dzip`) names
+nothing the way Act 1 does, so each name rule missed:
+
+| What | Act 1 (`l02-port`) | Vergen (`03_camp`) | Rule before | Result in Vergen |
+|---|---|---|---|---|
+| Fake rooms | `fake_interiors\<area>\fake.w2l` | `dwarf_city\windows_outside\windows_outside.w2l` (25 x `fake_inside_dwarf.w2mesh` + `dark_interrior.w2mesh`, 29 wall pieces) | layer called `fake` | kept loaded inside: the box |
+| A house's rooms | `...\buildings\<house>\interior\*.w2l` | `dwarf_city\building04_dec\*.w2l` | `\buildings\...\interior\`, or an `LT_INDOOR` sibling | no partition is `LT_INDOOR`, no folder matches: nothing preloaded |
+| A house's lighting | `environments\interior_city\interior.w2l` | `environments\environment_interior\<house>\<house>.w2l` | `\environments\interior` | kept loaded after leaving the house |
+
+The street partition is `city_dec_unload` (5 groups of its own); its 24 siblings under
+`common\dwarf_city` are the houses (2-7 groups each); the town itself is their parent's 77
+groups. A door from the street unloads the street's 6 own layers (`windows_outside`,
+`fabric_roof`, `occluders_outside`, `background`, two `finisher_spots`) and loads the house's
+2-8.
+
+### The survey behind the new rules
+
+Every `.w2l` under `levels\` in `pack0.dzip` (5 271 layers, five worlds) was read for the meshes
+it names, and every `CStreamingDoor` for its `inside`/`outside` partition: 153 doors, 106
+partition pairs. With each world's partition tree and layer list, a model of the door rules
+gives, for every pair, what the game swaps and what the mod keeps. It reproduces the logged
+jobs (Binduga 48 out / 2-3 in, Flotsam to the inn 58 / 19, the Flotsam gate 195 / 348, Vergen
+6 / 2-4). Findings:
+
+* `fake_inside*.w2mesh` is in three layers that a partition loads: the two Act 1 `fake` layers
+  and Vergen's `windows_outside`. No other world has fake rooms. (`dark_interrior*.w2mesh` alone
+  is also the black plane in cave mouths, in `black_plane`/`dark_plane` layers; those belong to
+  area changes.)
+* Every Vergen house partition lists an interior environment group
+  (`environments\environment_interior\<house>`), as 13 of Flotsam's 14 do
+  (`environments\interior_city`). No street and no outdoor area lists one. The only other
+  partitions that do are the Arena's `room` and `arena_cutscene` (17 and 22 groups).
+* Each of the 25 Vergen fake rooms, the 15 in Flotsam and the 6 in Binduga has entities of a
+  preloaded interior within 4 m of its centre (all but one within 2.6 m, and at least 11
+  within 6 m), so leaving the fake rooms out shows a real room behind every one.
+
+### The rules (`src/enginefix.c`)
+
+* **`ko_class`**: FAKE is a layer called `fake` or `windows_outside`. SWAP also takes an
+  interior's environment wherever `interior` follows an `environments` folder
+  (`ko_env_interior`), and the rest of a `\windows_outside\` folder (Vergen's awning layer),
+  which the game takes away inside every house. In the five worlds this changes the class of
+  29 layers of `03_camp` and one of the Arena, none in the prologue, Act 1 or Act 3.
+* **Buildings by their lighting** (`kx_is_house`, `kx_family`, `kx_groups`): a partition with an
+  interior environment group and at most 8 groups of its own (`KX_HOUSE_GROUPS`; Philippa's
+  house has 7, the Arena's rooms 17 and 22) is a building, anywhere in the partition tree. Its
+  rooms are the layers directly in its own groups that no parent and no sibling that is not a
+  building lists as well: what its door loads. That is needed for Flotsam, whose houses also
+  list parts of the street (`pier\buildings\01_crane_pier`). Group folders are matched the way
+  the game takes a partition's layers (`grp_holds`, not as path prefixes). Preloaded on every
+  area load, like the folder rule: 59 layers for Vergen's 24 houses, and in Act 1 one layer the
+  folder rule did not have (`animals\floatsam_03commoners_house`).
+* **The street of a save inside a house** (`ks_street`): Vergen's street is smaller than some of
+  its houses, so "the sibling with the most groups" found none. The street of a building is now
+  its one sibling that is not a building, when there is exactly one.
+* **Fake rooms follow the preload.** Up to 0.12.0 the area's fake rooms were left out whenever
+  `preload_interiors` was on, also when the memory guard had skipped every interior (0 of 111
+  with the system's Direct3D 9 at 4K, `door-transitions.md`): open doors then showed nothing.
+  Now an area load holds its fake-room layers back to the very end of the job, after the
+  preloaded layers; `kp_layer_ok` loads them only if a preloaded layer was skipped. While they
+  are in use (`g_kpFakeKeep`: a skipped layer, the coarse skip, a memory door, or a world where
+  the mod knows no interior) doors swap them the way the game does and keep `door_fade`.
+* Townspeople are left to the door by `\communit` in the path (`communities\...` as well as
+  `community...`).
+
+Log lines: `preload: 24 building(s) with interior lighting of their own in the partition tree,
+57 layer groups only they list`, `preload: N interior layers from the indoor partitions, M from
+the buildings with their own lighting, K more by folder name (T known in this world)`,
+`preload: the fake rooms behind doors and windows are left out - every interior is loaded` (or
+`stay in use - not every interior is loaded (doors keep their fade)`).
+
+### Checked offline
+
+The DLL's own functions (`ko_class`, `kx_groups`, `kp_walk`, `ks_street`) were run in a harness
+on each world's partition tree and layer list, rebuilt in memory at the offsets the DLL reads,
+and compared with the model: the same class for all 5 271 layers, the same buildings (24 in
+`03_camp` with 57 groups, 9 in `l02-port` with 10, none elsewhere), the same 59 and 19
+preloaded layers, and `city_dec_unload` as the street of all 24 Vergen houses. With these rules
+a Vergen door loads only its house's environment (1-2 layers) and unloads the awning and the
+outdoor occluders. The harness and the survey scripts were throwaway and are not in the
+repository; the level-data format notes are in `door-transitions.md`, "Reading the level data".
+
+### Doors between whole areas: `[loading] area_memory_mb` (default 1536)
+
+`ko_same_folder` takes any door between two partitions of one folder for a house door. The
+survey shows such doors between whole areas: in Act 2 quarry / harpy lair / secret passage,
+old tower / its cave, assassins' cave / ravine (16-64 layers a side); in Act 3 every pair under
+`outdoor\` (the centre has 166-218 layers of its own) and the rooms under the Vran tower; in the
+prologue `Basement` / `AfterBasement`. On those the area left behind stays loaded apart from
+sound, occluders and its interior environment, so the way back loads nothing, and in Loc Muinne
+every quarter visited stays. Up to 0.12.0 only the memory door (`door_memory_mb`, 1 024 MB)
+ended that, together with every interior.
+
+How much room there is, from the owner's Act 2 session of 2026-11-10 (Steam, DXVK), in which
+the mod kept nothing extra (no interior was found in Act 2 yet and no area door was used): free
+address space 2 191 MB after the first load, 1 469 MB after 52 minutes, 1 048-1 143 MB after
+2 h 10 min, and 870-1 210 MB for the two hours after that (`with only 884-987 MB ... the game's
+door` on most doors). A save loaded late in the session started from 1 122 MB free: the game
+itself does not give the room back. What one kept area costs has not been measured.
+
+So keeping whole areas is tied to the room left (owner's request, 2026-11-11):
+
+* **A house door** has a side that is a building or a small place: a partition that lists an
+  interior environment (any size: Flotsam's inn has 11 groups) or has at most 8 groups of its
+  own (`kx_small`, `ko_house_door`). In the five worlds that is 70 same-folder door pairs: all
+  of Act 1's, the prologue village's and `TowerCemetery`'s, Vergen's. They keep their street
+  down to `door_memory_mb`, as before: the street is needed again on the way out.
+* **An area door** is every other same-folder door: 21 pairs, 11-82 groups a side (the list
+  above). With less than `area_memory_mb` free when it starts, it runs as `g_koMemLow = 2`: the
+  game's job unloads the area left behind and whatever older areas were still kept, its GC
+  runs, the fade is `area_fade`, and its occluders wait as on a memory door. The preloaded
+  interiors stay loaded and the fake rooms stay out. With more free, it keeps as before.
+  Log: `doors: '...' -> '...' joins two areas with N MB of address space free (under 1536) -
+  the area left behind unloads, interiors stay, 0.25 s fades`, then `partition: area door kept
+  K of N layers, ...`.
+* 1 536 is above `preload_memory_mb` (1 280) on purpose: kept areas should not use the room the
+  interiors need. Not tuned in game. 0 = never (0.12.0's behaviour).
+
+`kx_small` was run in the harness for every partition of the five worlds and agrees with the
+model. Not seen in game: no area door has been used with this build, and Act 3 not at all.
+
+### Seen in game (owner, 2026-11-11, Steam, DXVK, 3840x2160, a fresh session)
+
+`docs/validation/vergen-interiors-2026-11-11.log`. Roche's path, where only part of Vergen is
+open: houses 04, 06, 07 and 17 in and out, some of them several times, then a save made inside
+house 04, loaded, and out. Owner: everything works, no problem leaving the house of the save.
+
+| | 0.12.0, same save, same morning | This build |
+|---|---|---|
+| Area load | 801 layers, 0 preloaded, 4 432 ms | 859 layers, `59 of 59 preloaded layers loaded`, fake rooms left out, 3 528 ms |
+| Private memory after the load | 1 293 MB (2 184 MB free) | 1 328 MB (2 130 MB free): +35 MB for the 59 layers |
+| Door in | `loaded 3 layer(s) not preloaded (172 ms)`, `keeps its fade`, the fake rooms kept inside | `no fade (0 to load)`, job 11-22 ms, unloads 2 (awning, outdoor occluders), loads 1-2 (the house's environment) |
+| Door out | - | `no fade`, job 10-28 ms, unloads 1-2, loads the awning, fake rooms skipped; the occluders 3.4-3.9 s later in 10-13 ms |
+| Save inside house 04 | - | `'...building04_deco' is inside 'city_dec_unload' - its 8 layers load now too`, `60 of 60`, then out without a fade in 28 ms |
+
+No `loaded N layer(s) not preloaded` and no `keeps its fade` line in the session. The lighting
+lines show the house's environment blending in and out at each door (`'building04_dec' 100`).
+A kept door's unload list is now 59-62 layers (the other houses' rooms, which the target does
+not list), of which it keeps all but the swap layers.
+
+**A crash while quitting, not from this change.** That session ended with the pause menu's Quit
+and, one second after the exit flag, `crash: access violation executing 0x4906E000` on the main
+thread, with the world already gone. It is the UI library's shutdown destroying the heap of a
+loading-screen movie that was still alive; the door code does not run once the world is gone
+and holds no UI object. `quit-crash.md`, "A loading-screen movie still alive at the GUI
+shutdown", has the dump analysis and what is not proven.
+
+### Act 1 with the same build (owner, 2026-11-11, same setup)
+
+`docs/validation/flotsam-regression-2026-11-11.log`, one session: Vergen from the main menu
+(house 17 in and out), then a Flotsam save loaded from the in-game Load menu, starting inside
+the inn: out, the clerk's house and the barracks' house in and out, the inn in and out and in
+again, a second save inside the inn loaded, out, then the pause menu's Quit. Owner: looked right.
+
+* Both Flotsam loads: `9 building(s) with interior lighting of their own ..., 10 layer groups
+  only they list`, `0 interior layers from the indoor partitions, 19 from the buildings with
+  their own lighting, 46 more by folder name (83 known in this world)`, `111 of 112 preloaded
+  layers loaded, 0 left for their first visit`, `64 building interiors, 64 loaded`. 0.12.0
+  logged `110 of 111` for the same kind of load (`door-transitions.md`): the one layer more is
+  the one the offline check predicted (`animals\floatsam_03commoners_house`). One layer of the list
+  does not load, as before.
+* No fake-room line on these loads, as expected: the load starts inside the inn, so the job
+  holds no fake-room layer and there is nothing to report (`fakeN` 0). The first door out
+  skips it (`skipped 1 (fake rooms, low-poly)`), as does every later door to the street.
+* All 9 Flotsam doors and both Vergen doors: `is loaded - no fade (0 to load)`, jobs of
+  13-35 ms, picture back after 31-63 ms. No `loaded N layer(s) not preloaded`, no `keeps its
+  fade`, no memory door.
+* Memory: 1 348 MB private and 2 147 MB free after the first Flotsam load, 1 456 MB and
+  2 071 MB after the second, the third area load of the session.
+* The quit was clean: `quit: quitting from the main menu, 2609 ms after Quit, no loading screen
+  up`, `exit: ExitProcess(0)`, `unloaded`, no dump.
+
+### Still to check in game
+
+Not seen: Vergen's other 20 houses (Iorveth's path opens the whole town; they are covered by
+the offline check only), open doors and windows looked at from the street on purpose, the
+prologue and Act 3 with this build. For the memory path: `preload_memory_mb=4000` skips every
+preloaded layer, and the fake rooms must then stand behind the doors as in the game. An area
+door with `area_memory_mb` above the free address space.

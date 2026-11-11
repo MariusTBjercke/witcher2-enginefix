@@ -194,6 +194,7 @@ static int cfg_preload_street = 1; // [loading] preload_street: a save inside a 
 static int cfg_door_spinner;    // [loading] door_spinner: 1 = the loading spinner also on instant doors (game)
 static int cfg_preload_memory_mb = 1280; // [loading] preload_memory_mb: preloaded layers load only while this much address space is free (0 = no limit)
 static int cfg_door_memory_mb = 1024;    // [loading] door_memory_mb: less free than this at a door -> the game's own door (0 = never)
+static int cfg_area_memory_mb = 1536;    // [loading] area_memory_mb: less free than this at a door between two areas -> the area left behind unloads (0 = never)
 static int cfg_book_marker = 1; // [scriptpatches] book_marker: Read/Nothing new/Unread in lists
 static int cfg_continue = 1;    // [scriptpatches] continue: Continue button in the main menu
 static int cfg_pause_quit = 1;  // [scriptpatches] pause_quit: Quit asks first in the pause menu
@@ -547,6 +548,8 @@ static void load_config(void)
     if (cfg_preload_memory_mb < 0 || cfg_preload_memory_mb > 3500) cfg_preload_memory_mb = 1280;
     cfg_door_memory_mb = ini_int("loading", "door_memory_mb", 1024);
     if (cfg_door_memory_mb < 0 || cfg_door_memory_mb > 3500) cfg_door_memory_mb = 1024;
+    cfg_area_memory_mb = ini_int("loading", "area_memory_mb", 1536);
+    if (cfg_area_memory_mb < 0 || cfg_area_memory_mb > 3500) cfg_area_memory_mb = 1536;
     if (cfg_door_fade < 0.05f || cfg_door_fade > 2.0f) cfg_door_fade = 0.5f;
     cfg_book_marker = ini_int("scriptpatches", "book_marker", 1);
     cfg_continue = ini_int("scriptpatches", "continue", 1);
@@ -3559,17 +3562,33 @@ static void pt_job(const char* why, const void* job)
 }
 
 // Layer classes for the door rules, from the layer info's path (+0x68) and name (+0x78):
-//   FAKE      the area's flat "fake room" boxes (fake_interiors\<area>\fake.w2l)
+//   FAKE      the area's flat "fake room" boxes behind doors and windows: Act 1's
+//             `fake_interiors\<area>\fake.w2l`, Vergen's
+//             `dwarf_city\windows_outside\windows_outside.w2l` (the only layers of the game's
+//             five worlds that hold `fake_inside*.w2mesh`, docs/fixes/interior-preload.md)
 //   SWAP      what each partition swaps for its own and must not be kept: ambient sound
 //             (`\sounds\`), occluders (`occ` in the name, or any layer under an
 //             `\occluders\` folder: the prologue's `occluders\basement\basement.w2l`; outdoor
-//             occluders around a building the camera is inside, or an interior's own) and the
-//             indoor environment (`\environments\interior`)
+//             occluders around a building the camera is inside, or an interior's own), the
+//             indoor environment (an `interior` folder or file under `\environments\`: Act 1's
+//             `environments\interior_city`, Vergen's `environments\environment_interior\<house>`)
+//             and the rest of Vergen's `windows_outside` group (an awning), which the game takes
+//             away inside every house
 //   LOWPOLY   low-poly stand-ins an interior loads for the view out of its windows
 //             (`city_building_lowpoly\ships_lowpoly`); the real objects stay when kept
 //   INTERIOR  a building's own rooms (`\buildings\<name>\interior\`; the prologue village's
 //             `island\village_b_ints\interior<N>\`)
 enum { LC_OTHER, LC_FAKE, LC_SWAP, LC_LOWPOLY, LC_INTERIOR };
+
+// Does a layer path or a layer group path name an interior's environment: `interior` somewhere
+// after an `environments` folder.
+static int ko_env_interior(const wchar_t* s)
+{
+    const wchar_t* e;
+    for (e = wcsistr(s, L"environments\\"); e; e = wcsistr(e + 1, L"environments\\"))
+        if ((e == s || e[-1] == L'\\') && wcsistr(e + 13, L"interior")) return 1;
+    return 0;
+}
 
 static int ko_class(const void* layer)
 {
@@ -3577,9 +3596,9 @@ static int ko_class(const void* layer)
     if (!layer) return LC_OTHER;
     pt_text((const char*)layer + 0x78, name, 64);
     pt_text((const char*)layer + 0x68, path, 260);
-    if (!_wcsicmp(name, L"fake")) return LC_FAKE;
+    if (!_wcsicmp(name, L"fake") || !_wcsicmp(name, L"windows_outside")) return LC_FAKE;
     if (wcsistr(path, L"\\sounds\\") || wcsistr(name, L"occ") || wcsistr(path, L"\\occluders\\") ||
-        wcsistr(path, L"\\environments\\interior"))
+        ko_env_interior(path) || wcsistr(path, L"\\windows_outside\\"))
         return LC_SWAP;
     if (wcsistr(path, L"_lowpoly\\")) return LC_LOWPOLY;
     if ((wcsistr(path, L"\\buildings\\") && wcsistr(path, L"\\interior\\")) || wcsistr(path, L"_ints\\"))
@@ -3813,12 +3832,135 @@ static int kp_in_set(void* info)
     return g_kpSetCount && bsearch(&info, g_kpSet, g_kpSetCount, sizeof(void*), kp_cmp) != NULL;
 }
 
-typedef struct { void** out; DWORD added, max; } kp_collect_t;
+// Does the layer file sit directly in one of these group folders? The way the game takes a
+// partition's layers: FUN_00a83097 resolves each group path and takes that group's own layer
+// infos only (FUN_00b0582e with "recursive" 0).
+static int grp_holds(const wchar_t (*groups)[200], int count, const wchar_t* path)
+{
+    int g;
+    for (g = 0; g < count; g++) {
+        size_t n = wcslen(groups[g]);
+        const wchar_t* hit;
+        for (hit = wcsistr(path, groups[g]); hit; hit = wcsistr(hit + 1, groups[g]))
+            if ((hit == path || hit[-1] == L'\\') && hit[n] == L'\\' && !wcschr(hit + n + 1, L'\\')) return 1;
+    }
+    return 0;
+}
+
+// Buildings by their lighting. Vergen's houses are not LT_INDOOR and no folder is called
+// `interior`, so neither rule above found one (a player and the owner, 0.12.0: nothing
+// preloaded, and the town's fake rooms stood inside the real ones). What every one of them has
+// is an interior environment of its own: a layer group `environments\...interior...` among its
+// partition's groups (`environments\environment_interior\building04_dec`). 13 of Flotsam's 14
+// houses have one too (`environments\interior_city`); no street and no outdoor area does, in any
+// of the game's five worlds. So a partition with such a group and at most KX_HOUSE_GROUPS groups
+// of its own is a building, wherever it is in the tree. Its rooms are the layers of its own
+// groups that neither a parent nor a sibling that is no building lists as well, i.e. what its
+// door loads: Flotsam's houses also list parts of the street (`pier\buildings\01_crane_pier`).
+// These groups are matched the way the game does (grp_holds), not as path prefixes.
+// The cap keeps whole areas out: the Arena's `room` (17 groups) and `arena_cutscene` (22) list
+// an interior environment and are no houses. Vergen's largest is Philippa's house with 7.
+#define KX_HOUSE_GROUPS 8
+#define KX_GROUPS 256
+static wchar_t g_kxGroup[KX_GROUPS][200];
+static int     g_kxGroups, g_kxHouses;
+
+static int kx_is_house(const void* node)
+{
+    const char* groups = node ? (const char*)read_ptr((const char*)node + 0x74) : NULL;
+    DWORD n = node ? (DWORD)(uintptr_t)read_ptr((const char*)node + 0x78) : 0, j;
+    wchar_t g[200];
+    if (!groups || !n || n > KX_HOUSE_GROUPS) return 0;
+    for (j = 0; j < n; j++)
+        if (ko_env_interior(pt_text(groups + 0x10 * j, g, 200))) return 1;
+    return 0;
+}
+
+static int kx_lists(const void* node, const wchar_t* group)
+{
+    const char* groups = node ? (const char*)read_ptr((const char*)node + 0x74) : NULL;
+    DWORD n = node ? (DWORD)(uintptr_t)read_ptr((const char*)node + 0x78) : 0, j;
+    wchar_t g[200];
+    for (j = 0; groups && n < 10000 && j < n; j++)
+        if (!_wcsicmp(pt_text(groups + 0x10 * j, g, 200), group)) return 1;
+    return 0;
+}
+
+// One family (a partition's children): its buildings' own groups into g_kxGroup, then down.
+static void kx_family(const void* parent, int depth)
+{
+    void** kids = parent ? (void**)read_ptr((const char*)parent + 0x64) : NULL;
+    DWORD k = parent ? (DWORD)(uintptr_t)read_ptr((const char*)parent + 0x68) : 0, i, j;
+    if (!kids || k > 10000 || depth > 32) return;
+    for (i = 0; i < k; i++) {
+        void* c = read_ptr(kids + i);
+        const char* groups;
+        DWORD n;
+        if (!c || !kx_is_house(c)) continue;
+        g_kxHouses++;
+        groups = (const char*)read_ptr((char*)c + 0x74);
+        n = (DWORD)(uintptr_t)read_ptr((char*)c + 0x78);
+        for (j = 0; j < n && g_kxGroups < KX_GROUPS; j++) {
+            wchar_t* g = g_kxGroup[g_kxGroups];
+            const void* up;
+            DWORD s;
+            int d, taken = 0;
+            if (!pt_text(groups + 0x10 * j, g, 200)[0]) continue;
+            for (d = 0; d < g_kxGroups && !taken; d++) taken = !_wcsicmp(g_kxGroup[d], g);
+            for (up = parent, d = 0; up && d < 32 && !taken; up = read_ptr((const char*)up + 0x60), d++)
+                taken = kx_lists(up, g);
+            for (s = 0; s < k && !taken; s++) {
+                void* sib = read_ptr(kids + s);
+                taken = sib && sib != c && !kx_is_house(sib) && kx_lists(sib, g);
+            }
+            if (!taken) g_kxGroups++;
+        }
+    }
+    for (i = 0; i < k; i++) kx_family(read_ptr(kids + i), depth + 1);
+}
+
+// Every building of the world; the number found.
+static int kx_groups(void* world)
+{
+    void* parts = world ? read_ptr((char*)world + 0x358) : NULL;
+    g_kxGroups = g_kxHouses = 0;
+    kx_family(parts ? read_ptr((char*)parts + 0x48) : NULL, 0);
+    logf_("preload: %d building(s) with interior lighting of their own in the partition tree, %d layer groups "
+          "only they list", g_kxHouses, g_kxGroups);
+    return g_kxHouses;
+}
+
+// Is a door between these two partitions a house door? One side is a building (it lists an
+// interior environment, whatever its size: Flotsam's inn has 11 groups) or a small place with
+// at most KX_HOUSE_GROUPS groups of its own (Binduga's houses, the prologue's, Vergen's street).
+// Every other door within one folder joins two whole areas: Act 2's quarry and harpy lair,
+// every pair in Loc Muinne, the prologue's dungeon halves (11-82 groups a side). In the game's
+// five worlds that is 70 house doors and 21 area doors. A partition the tree does not know
+// counts as small, so such a door is treated as before.
+static int kx_small(const void* node)
+{
+    const char* groups = node ? (const char*)read_ptr((const char*)node + 0x74) : NULL;
+    DWORD n = node ? (DWORD)(uintptr_t)read_ptr((const char*)node + 0x78) : 0, j;
+    wchar_t g[200];
+    if (!node || n <= KX_HOUSE_GROUPS) return 1;
+    for (j = 0; groups && n < 10000 && j < n; j++)
+        if (ko_env_interior(pt_text(groups + 0x10 * j, g, 200))) return 1;
+    return 0;
+}
+
+static int ko_house_door(void* world, const wchar_t* from, const wchar_t* to)
+{
+    return kx_small(kp_find(world, from)) || kx_small(kp_find(world, to));
+}
+
+// `exact` 0: layers under g_kpGroup's folders (the indoor siblings); 1: layers directly in
+// g_kxGroup's folders (the buildings). `known` counts every layer that qualifies, loaded or not.
+typedef struct { void** out; DWORD added, max, known; int exact; } kp_collect_t;
 
 static void kp_walk(const void* group, int depth, kp_collect_t* t)
 {
     void** infos;
-    DWORD n, i;
+    DWORD n, i, k;
     if (!group || depth > 40) return;
     infos = (void**)read_ptr((const char*)group + 0x90);
     n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x94);
@@ -3828,17 +3970,19 @@ static void kp_walk(const void* group, int depth, kp_collect_t* t)
         int c;
         if (!info) continue;
         pt_text((char*)info + 0x68, path, 260);
-        if (!kp_in_groups(path)) continue;
+        if (!(t->exact ? grp_holds(g_kxGroup, g_kxGroups, path) : kp_in_groups(path))) continue;
         c = ko_class(info);
         if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
         pt_text((char*)info + 0x78, name, 64);
-        if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\community")) continue;
+        if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\communit")) continue;
+        t->known++;
         if (g_kpSetCount < KP_SET && !kp_in_set(info)) {
             g_kpSet[g_kpSetCount++] = info;
             qsort(g_kpSet, g_kpSetCount, sizeof(void*), kp_cmp);
         }
         if (read_ptr((char*)info + 0x38) || read_ptr((char*)info + 0x5C)) continue;
-        if (t->added < t->max) t->out[t->added++] = info;
+        for (k = 0; k < t->added && t->out[k] != info; k++) {}   // both rules may name it
+        if (k == t->added && t->added < t->max) t->out[t->added++] = info;
     }
     infos = (void**)read_ptr((const char*)group + 0x80);
     n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x84);
@@ -3874,14 +4018,7 @@ static void ks_take_groups(const void* node)
 // Does the layer file sit directly in one of g_ksGroup's folders?
 static int ks_in_groups(const wchar_t* path)
 {
-    int g;
-    for (g = 0; g < g_ksGroups; g++) {
-        size_t n = wcslen(g_ksGroup[g]);
-        const wchar_t* hit;
-        for (hit = wcsistr(path, g_ksGroup[g]); hit; hit = wcsistr(hit + 1, g_ksGroup[g]))
-            if ((hit == path || hit[-1] == L'\\') && hit[n] == L'\\' && !wcschr(hit + n + 1, L'\\')) return 1;
-    }
-    return 0;
+    return grp_holds(g_ksGroup, g_ksGroups, path);
 }
 
 // What a kept door would still have to load for these groups: layer infos not loaded or
@@ -3915,22 +4052,28 @@ static void ks_walk(const void* group, int depth, ks_walk_t* t)
 // The street of an interior partition: the sibling that clearly has the most groups of its
 // own (Flotsam 51 against at most 18, Binduga 32 against 2-3, the prologue village's
 // `outside` 7 against 1-2). NULL when `target` is that street itself, has children of its
-// own, or no sibling stands out (Act 2's buildings hang under their street instead).
+// own, or no sibling stands out. Vergen's street (`city_dec_unload`, 5 groups) is smaller than
+// some of its houses (Philippa's, 7), with the town itself in their parent: there the street of
+// a building (kx_is_house) is its one sibling that is no building.
 static void* ks_street(void* world, const wchar_t* target)
 {
     void* node = kp_find(world, target);
     void* parent = node ? read_ptr((char*)node + 0x60) : NULL;
     void** kids = parent ? (void**)read_ptr((char*)parent + 0x64) : NULL;
     DWORD k = parent ? (DWORD)(uintptr_t)read_ptr((char*)parent + 0x68) : 0, i, best = 0, second = 0;
-    void* street = NULL;
-    if (!node || read_ptr((char*)node + 0x68)) return NULL;
+    void *street = NULL, *plain = NULL;
+    int plains = 0;
+    if (!node) return NULL;
     for (i = 0; kids && k < 10000 && i < k; i++) {
         void* c = read_ptr(kids + i);
         DWORD n = ks_count(c);
         if (!c) continue;
+        if (c != node && !kx_is_house(c)) { plain = c; plains++; }
         if (n > best) { second = best; best = n; street = c; }
         else if (n > second) second = n;
     }
+    if (kx_is_house(node) && plains == 1) return plain;
+    if (read_ptr((char*)node + 0x68)) return NULL;
     if (!street || street == node || best < 5 || best < 2 * second) return NULL;
     return street;
 }
@@ -3968,14 +4111,27 @@ static DWORD ks_missing(void* world, const wchar_t* target)
 #define KM_SET              1024          // preloaded layers watched per load
 #define KM_ORIG             8192          // the job's own load list, sorted
 
+#define KM_FAKE             16            // fake-room layers of one area load (the game has one each)
+
 static void* g_kmSet[KM_SET];
 static void* g_kmOrig[KM_ORIG];
 static int   g_kmCount;
 static volatile int g_kmActive;
 static DWORD g_kmLoaded, g_kmSkipped, g_kmFreeMin;
+// The area's fake rooms go to the very end of the load, after the preloaded layers: they are
+// left out when every building loaded and loaded when one could not (kp_layer_ok). g_kpFakeKeep
+// says they are in use, until the next area load: a door then swaps them the way the game does
+// and keeps its fade. Up to 0.12.0 they were left out whatever the memory guard skipped, so
+// with little address space every open door showed nothing behind it.
+static void* g_kmFake[KM_FAKE];
+static int   g_kmFakeCount;
+static int   g_kpFakeKeep, g_kpFakeSeen;
 static uintptr_t g_layerLoad;   // this build's FUN_00a5ac6c
 static int g_layerHooked;
-static int g_koMemLow;          // the door in progress was left to the game for memory
+// The door in progress was left to the game for memory: 1 = wholly (door_memory_mb: the
+// outdoors and the other interiors unload), 2 = a door between two areas (area_memory_mb: the
+// area left behind unloads, the preloaded interiors stay).
+static int g_koMemLow;
 static void* g_koMemLowTask;    // that door's task: fast_doors leaves its timing to the game
 
 // Free user address space of the process, in MB (cheap: no address space walk).
@@ -3990,7 +4146,11 @@ static DWORD ko_free_mb(void)
 static int __stdcall kp_layer_ok(void* info)
 {
     DWORD freeMb;
-    if (!g_kmActive || !g_kmCount || !info) return 1;
+    int i;
+    if (!g_kmActive || !info) return 1;
+    for (i = 0; i < g_kmFakeCount; i++)
+        if (g_kmFake[i] == info) return g_kmSkipped != 0;
+    if (!g_kmCount) return 1;
     if (!bsearch(&info, g_kmSet, g_kmCount, sizeof(void*), kp_cmp)) return 1;
     freeMb = ko_free_mb();
     if (freeMb < g_kmFreeMin) g_kmFreeMin = freeMb;
@@ -4210,9 +4370,11 @@ static void __stdcall hook_PartRun(void* job)
     LONG savedN[5];
     LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
     int on = 0, area = 0, mem = 0, filter, coarseSkip = 0;
+    int dropFake, fakeN = 0, fakeLast = 0, fakeKeep = -1, noInteriors = 0, memTier = g_koMemLow;
     LONGLONG tRun;
     void* world = read_ptr((char*)job);
     void** kmBase = NULL;
+    void* fakeHold[KM_FAKE];
     DWORD kmN = 0;
     if (cfg_load_trace) pt_job("sync", job);
     g_ptGcSkipped = 0;
@@ -4228,21 +4390,27 @@ static void __stdcall hook_PartRun(void* job)
         // of Geralt while he was still in the doorway.
         mem = g_koMemLow && g_ptMode == 4 && g_partRequest && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo);
     }
-    filter = nb >= 0 && (on || mem || (cfg_preload_interiors && !g_koMemLow));
+    filter = nb >= 0 && (on || mem || (cfg_preload_interiors && g_koMemLow != 1));
     if (area && !g_layerHooked && cfg_preload_memory_mb &&
         ko_free_mb() < (DWORD)(cfg_preload_memory_mb + KM_COARSE_MB))
         coarseSkip = 1;
-    if (area && g_ptMode == 1) g_kpSetCount = 0;
+    if (area && g_ptMode == 1) g_kpSetCount = g_kpFakeSeen = 0;
     if (nb >= 0 && !cfg_preload_interiors && (g_ptMode == 1 || (g_ptMode == 4 && !ko_same_folder(g_ptFrom, g_ptTo))))
         g_koPairCount = g_koSlowCount = 0;
     if (area) ko_count("before the switch", world);
+    // A memory door unloads the other interiors: the fake rooms are needed again.
+    if (nb >= 0 && g_koMemLow == 1 && g_ptMode == 4 && cfg_preload_interiors) g_kpFakeKeep = 1;
+    // Fake rooms stay out while every interior is loaded (preload), or once a house has been
+    // visited (keep_interiors alone). An area load decides it for itself below.
+    dropFake = g_koMemLow != 1 && (cfg_preload_interiors ? g_koPreloaded && !g_kpFakeKeep : on && cfg_keep_interiors);
     if (filter) {
         // Unload: a kept door unloads only what each partition swaps; preload keeps interiors.
         for (i = 0; i < unloadN; i++) {
             void* l = unloadData[i];
             int c = ko_class(l);
             int go = on ? (c == LC_FAKE || c == LC_SWAP || c == LC_LOWPOLY)
-                        : g_koMemLow || !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
+                        : g_koMemLow == 1 || !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
+            if (c == LC_FAKE) g_kpFakeSeen = 1;
             if (go) g_koUnloadOut[unloaded++] = l; else kept++;
         }
         *(void**)((char*)job + 0x0C) = g_koUnloadOut;
@@ -4258,8 +4426,10 @@ static void __stdcall hook_PartRun(void* job)
             if (!bk || n < 0 || n > KO_LIST || (n && !d)) { savedN[b] = -1; continue; }
             for (i = 0; i < n; i++) {
                 int c = ko_class(d[i]);
-                if ((c == LC_FAKE && !g_koMemLow && (cfg_preload_interiors || (on && cfg_keep_interiors))) ||
-                    (on && c == LC_LOWPOLY))
+                if (c == LC_FAKE) g_kpFakeSeen = 1;
+                if (c == LC_FAKE && area && fakeN < KM_FAKE)
+                    fakeHold[fakeN++] = d[i];   // placed with the last bucket, below
+                else if ((c == LC_FAKE && dropFake) || (on && c == LC_LOWPOLY))
                     skipped++;
                 else if ((on || mem) && g_ptMode == 4 && g_partRequest && ko_frames_alive() &&
                          _wcsicmp(g_ptFrom, g_ptTo) && ko_is_occluder(d[i]))
@@ -4271,25 +4441,39 @@ static void __stdcall hook_PartRun(void* job)
                 logf_("preload: only %lu MB of address space free before the load - nothing preloaded "
                       "(interiors load on their first visit)", ko_free_mb());
                 g_koPreloaded = 1;
-            } else if (area && b == nb - 1) {
+                fakeKeep = 1;
+            } else if (area && b == nb - 1 && m + fakeN <= KO_LIST) {
                 kp_collect_t t;
+                DWORD tree, houses, known;
+                void* root = world ? read_ptr((char*)world + 0x50) : NULL;
+                memset(&t, 0, sizeof t);
                 t.out = &g_koLoadOut[b][m];
-                t.added = 0;
-                t.max = KO_LIST - m;
-                if (kp_interior_groups(world, g_ptTo) && g_kpGroups)
-                    kp_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &t);
+                t.max = (DWORD)(KO_LIST - m - fakeN);
+                if (kp_interior_groups(world, g_ptTo) && g_kpGroups) kp_walk(root, 0, &t);
+                tree = t.added;
+                // Vergen's houses are neither LT_INDOOR nor in a folder called `interior`.
+                t.exact = 1;
+                if (kx_groups(world) && g_kxGroups) kp_walk(root, 0, &t);
+                houses = t.added - tree;
                 {
                     // Act 1's houses are not marked LT_INDOOR (run 15: 0 indoor siblings for
                     // Binduga and Flotsam), so the folder names add theirs.
                     ko_tree f;
-                    DWORD tree = t.added;
                     memset(&f, 0, sizeof f);
                     f.out = t.out + t.added;
                     f.max = t.max - t.added;
-                    ko_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &f);
+                    ko_walk(root, 0, &f);
                     t.added += f.added;
-                    logf_("preload: %lu interior layers from the partition tree, %lu more by folder name", tree, f.added);
+                    known = t.known + f.interiors;
+                    logf_("preload: %lu interior layers from the indoor partitions, %lu from the buildings with their "
+                          "own lighting, %lu more by folder name (%lu known in this world)", tree, houses, f.added, known);
                 }
+                // Fake rooms: out when every interior is loaded or loads now; with the memory
+                // guard watching, at the end of the load, where they still load if it skips a
+                // building. A world with no interior the mod knows keeps its fake rooms.
+                noInteriors = known == 0;
+                fakeKeep = noInteriors;
+                fakeLast = known && t.added && g_layerHooked && cfg_preload_memory_mb;
                 // A save (or a script's LoadWorldPartition) inside a house: its street's own
                 // layers were not part of the load, so the first way out loaded them on the
                 // spot without a fade (Flotsam inn: 49 layers, 391 ms). Load them now, without
@@ -4316,6 +4500,11 @@ static void __stdcall hook_PartRun(void* job)
                 if (cfg_load_trace) pt_layers("preload", t.out, t.added, PT_MAX_NAMES - 400);
                 m += added;
             }
+            if (area && b == nb - 1) {
+                LONG k;
+                if (fakeKeep != 1 && !fakeLast) skipped += fakeN;
+                else for (k = 0; k < fakeN && m < KO_LIST; k++) g_koLoadOut[b][m++] = fakeHold[k];
+            }
             loaded += m;
             *(void***)((char*)bk + 0x08) = g_koLoadOut[b];
             *(LONG*)((char*)bk + 0x0C) = m;
@@ -4325,6 +4514,8 @@ static void __stdcall hook_PartRun(void* job)
     // Preloaded layers come last in the job and load only while the address space allows.
     if (kmN && g_layerHooked && cfg_preload_memory_mb) {
         km_watch((void* const**)savedData, savedN, nb, kmBase, kmN);
+        g_kmFakeCount = fakeLast ? fakeN : 0;
+        if (g_kmFakeCount) memcpy(g_kmFake, fakeHold, (size_t)fakeN * sizeof(void*));
         g_kmActive = 1;
     }
     tRun = qpc_us();
@@ -4334,9 +4525,21 @@ static void __stdcall hook_PartRun(void* job)
     g_koSkipGc = 0;
     if (g_kmActive) {
         g_kmActive = 0;
+        if (g_kmFakeCount && !g_kmSkipped) { loaded -= fakeN; skipped += fakeN; }
+        g_kmFakeCount = 0;
         logf_("preload: %lu of %d preloaded layers loaded, %lu left for their first visit (free address space "
               "at the lowest %lu MB, floor %d MB)", g_kmLoaded, g_kmCount, g_kmSkipped,
               g_kmFreeMin == 0xFFFFFFFFu ? ko_free_mb() : g_kmFreeMin, cfg_preload_memory_mb);
+        if (g_kmSkipped) fakeKeep = 1;
+    }
+    // The outcome of an area load for the fake rooms, until the next one.
+    if (area && fakeKeep >= 0) {
+        if (fakeN || (g_kpFakeSeen && fakeKeep != g_kpFakeKeep))
+            logf_("preload: the fake rooms behind doors and windows %s", !fakeKeep
+                  ? "are left out - every interior is loaded"
+                  : noInteriors ? "stay - no interior found to preload in this world"
+                  : "stay in use - not every interior is loaded (doors keep their fade)");
+        g_kpFakeKeep = fakeKeep;
     }
     g_koMemLow = 0;
     // Its occluders wait: the memory door's picture may come back early (fast_door_tick).
@@ -4357,7 +4560,8 @@ static void __stdcall hook_PartRun(void* job)
               on ? " - keep_outdoors: outdoor layers left loaded" : "");
     if (filter)
         logf_("partition: %s kept %ld of %ld layers, unloaded %ld; loaded %ld (%ld interiors added), skipped %ld (fake rooms, low-poly)%s",
-              on ? "keep_outdoors" : mem ? "memory door" : "preload", kept, unloadN, unloaded, loaded, added, skipped,
+              on ? "keep_outdoors" : memTier == 2 ? "area door" : mem ? "memory door" : "preload", kept, unloadN, unloaded,
+              loaded, added, skipped,
               deferred ? ", occluders wait until Geralt is through the door" : "");
     if (deferred) ko_defer_occluders();
     if (area) ko_count("after the switch", world);
@@ -4386,7 +4590,7 @@ static void __stdcall hook_PartRun(void* job)
                 if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
                 pt_text((char*)l + 0x78, name, 64);
                 pt_text((char*)l + 0x68, path, 260);
-                if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\community")) continue;
+                if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\communit")) continue;
                 missed++;
                 if (used < sizeof line - 1)
                     used += (size_t)_snprintf_s(line + used, sizeof line - used, _TRUNCATE, " %ls", path);
@@ -4958,20 +5162,31 @@ static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
     g_koInstantTick = 0;
     // Little address space left: this door is the game's own (hook_PartRun lets its job unload
     // the outdoors and the other interiors), behind the area fade (docs/fixes/door-transitions.md).
+    // Sooner than that, a door between two whole areas stops keeping the one left behind: an
+    // area is 16-218 layers that only come back into use if the player returns, and in Loc
+    // Muinne every area visited would stay. House doors keep their street down to door_memory_mb.
     g_koMemLow = 0;
-    if (!area && cfg_keep_outdoors && cfg_door_memory_mb) {
+    if (!area && cfg_keep_outdoors && (cfg_door_memory_mb || cfg_area_memory_mb)) {
         DWORD freeMb = ko_free_mb();
-        if (freeMb < (DWORD)cfg_door_memory_mb) {
+        if (cfg_door_memory_mb && freeMb < (DWORD)cfg_door_memory_mb) {
             g_koMemLow = 1;
             g_doorFade = cfg_area_fade;
             logf_("doors: '%ls' -> '%ls' with only %lu MB of address space free - the game's door "
                   "(the outdoors unloads), %.2f s fades", from, to, freeMb, g_doorFade);
+        } else if (cfg_area_memory_mb && freeMb < (DWORD)cfg_area_memory_mb && _wcsicmp(from, to) &&
+                   !ko_house_door(world, from, to)) {
+            g_koMemLow = 2;
+            g_doorFade = cfg_area_fade;
+            logf_("doors: '%ls' -> '%ls' joins two areas with %lu MB of address space free (under %d) - "
+                  "the area left behind unloads, interiors stay, %.2f s fades", from, to, freeMb,
+                  cfg_area_memory_mb, g_doorFade);
         }
     }
     if (area) logf_("doors: '%ls' -> '%ls' changes area - %.2f s fades", from, to, g_doorFade);
     else if (g_koMemLow) {}
     else if (cfg_instant_doors && g_fadeExecHooked && cfg_keep_outdoors && !ko_pair_in(g_koSlow, g_koSlowCount, from, to) &&
-             ((cfg_preload_interiors && g_koPreloaded) || (cfg_keep_interiors && ko_pair_known(from, to)))) {
+             ((cfg_preload_interiors && g_koPreloaded && !(g_kpFakeKeep && g_kpFakeSeen)) ||
+              (cfg_keep_interiors && ko_pair_known(from, to)))) {
         // The door decides before its job exists: count what the target's own groups still
         // have to load (a save inside a house left its street out; 49 layers took 391 ms).
         DWORD missing = ks_missing(world, to);
@@ -8300,7 +8515,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d fast_start=%d", cfg_skip_intro, cfg_fast_start);
         logf_("diagnostics: file_trace=%d load_trace=%d mem_trace=%d", cfg_file_trace, cfg_load_trace, cfg_mem_trace);
-        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb);
+        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",

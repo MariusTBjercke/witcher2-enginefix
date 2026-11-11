@@ -136,8 +136,9 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
                                  0 restores the game's doors
   [loading] fast_doors=1         0 restores the game's door timing
   [loading] door_light_blend=1.0 0 switches the lighting at once at doors
-  [loading] preload_memory_mb=1280, door_memory_mb=1024
-                                 memory guard for the preloaded interiors
+  [loading] preload_memory_mb=1280, area_memory_mb=1536, door_memory_mb=1024
+                                 memory guard for the preloaded interiors,
+                                 doors between whole areas and all doors
   [hotkeys] windows_keys=1       0 blocks the Windows keys in game again
   [window]  borderless=0         start-up fallback; Options owns it after
   [startup] skip_intro=0         1 starts at the main menu (no logos, no intro)

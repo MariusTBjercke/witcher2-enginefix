@@ -1,0 +1,146 @@
+# Act 1 regression check of the buildings-by-lighting preload, and the quit diagnostic: owner, 2026-11-11,
+# Steam 3.5.0.26, DXVK, 3840x2160, [loading] interiors=2, one session. Vergen from the main menu (house 17
+# in and out), then two saves loaded from the in-game Load menu: Flotsam, starting inside the inn (out,
+# the clerk's and the barracks' house in and out, the inn in and out, in again), then a save inside the
+# inn, out, pause menu, Quit. From the first area load on; 'distance stats' and 'billboards' lines left out.
+
+13:35:27.657 interiors: before the switch - 1542 layers in the world, 0 loaded; 0 building interiors, 0 loaded
+13:35:27.670 savelist: before the switch private=1054 MB commit=1413 reserve=280 free=2402 largest_free=2044 MB, previews held=316
+13:35:27.671 preload: 'common\dwarf_city\city_dec_unload' found (type 0); siblings by location type: default 24, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+13:35:27.671 preload: 24 building(s) with interior lighting of their own in the partition tree, 57 layer groups only they list
+13:35:27.683 preload: 0 interior layers from the indoor partitions, 59 from the buildings with their own lighting, 0 more by folder name (59 known in this world)
+13:35:30.677 preload: 59 of 59 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2126 MB, floor 1280 MB)
+13:35:30.677 preload: the fake rooms behind doors and windows are left out - every interior is loaded
+13:35:30.677 partition: sync job ran 3020 ms (GC  32 ms)
+13:35:30.677 partition: preload kept 0 of 0 layers, unloaded 0; loaded 859 (59 interiors added), skipped 1 (fake rooms, low-poly)
+13:35:30.678 interiors: after the switch - 1542 layers in the world, 859 loaded; 0 building interiors, 0 loaded
+13:35:30.693 savelist: after the switch private=1331 MB commit=1702 reserve=266 free=2126 largest_free=2044 MB, previews held=316
+13:35:50.157 doors: 'common\dwarf_city\city_dec_unload' -> 'common\dwarf_city\building17_deco' is loaded - no fade (0 to load)
+13:35:50.220 partition: sync job ran 35 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:35:50.220 partition: keep_outdoors kept 60 of 62 layers, unloaded 2; loaded 2 (0 interiors added), skipped 0 (fake rooms, low-poly)
+13:35:50.228 doors: interior ready after 63 ms - picture back now (state 2)
+13:35:50.235 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+13:35:53.098 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building07_dec0' 100 at 1.00 (+1.00/s)
+13:36:00.959 doors: 'common\dwarf_city\building17_deco' -> 'common\dwarf_city\city_dec_unload' is loaded - no fade (0 to load, spinner hidden)
+13:36:01.013 partition: sync job ran 25 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:36:01.013 partition: keep_outdoors kept 59 of 61 layers, unloaded 2; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:36:01.021 doors: interior ready after 47 ms - picture back now (state 2)
+13:36:01.028 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building07_dec0' 100 at 1.00 (+1.00/s)
+13:36:03.496 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+13:36:04.359 doors: Geralt is through the door - loading the occluders (3344 ms after the door)
+13:36:04.378 partition: sync job ran 10 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:36:04.378 partition: keep_outdoors kept 59 of 59 layers, unloaded 0; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly)
+13:36:49.414 stability: layer storage: 1 saved entity state(s) freed so far (0 MB) that the game would have kept
+13:36:51.238 interiors: before the switch - 1690 layers in the world, 0 loaded; 64 building interiors, 0 loaded
+13:36:51.252 savelist: before the switch private=1267 MB commit=1609 reserve=230 free=2255 largest_free=1814 MB, previews held=316
+13:36:51.253 preload: 'Outdoor\global\landing_site\outside\inn_interior' found (type 0); siblings by location type: default 15, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+13:36:51.253 preload: 9 building(s) with interior lighting of their own in the partition tree, 10 layer groups only they list
+13:36:51.257 preload: 0 interior layers from the indoor partitions, 19 from the buildings with their own lighting, 46 more by folder name (83 known in this world)
+13:36:51.268 preload: 'Outdoor\global\landing_site\outside\inn_interior' is inside 'Flotsam' - its 61 layers load now too (51 groups of its own)
+13:36:56.066 preload: 111 of 112 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2147 MB, floor 1280 MB)
+13:36:56.066 partition: sync job ran 4830 ms (GC  5 ms)
+13:36:56.066 partition: preload kept 0 of 0 layers, unloaded 0; loaded 1027 (126 interiors added), skipped 0 (fake rooms, low-poly)
+13:36:56.068 interiors: after the switch - 1690 layers in the world, 1012 loaded; 64 building interiors, 64 loaded
+13:36:56.083 savelist: after the switch private=1348 MB commit=1713 reserve=235 free=2147 largest_free=1858 MB, previews held=316
+13:36:56.083 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 695E6264
+13:36:56.084 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+13:36:56.084 input: keyboard state filter installed
+13:37:19.450 stability: layer storage: 5761 saved entity state(s) freed so far (14 MB) that the game would have kept
+13:37:44.005 doors: 'Outdoor\global\landing_site\outside\inn_interior' -> 'Outdoor\global\landing_site\outside\Flotsam' is loaded - no fade (0 to load, spinner hidden)
+13:37:44.058 partition: sync job ran 35 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:37:44.058 partition: keep_outdoors kept 71 of 78 layers, unloaded 7; loaded 3 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:37:44.070 doors: interior ready after 62 ms - picture back now (state 2)
+13:37:44.112 doors: lighting blends over 1.00 s instead of switching at once - 'house_01_inn_basement' 16 at 1.00 (+1.00/s)
+13:37:46.612 doors: lighting blends over 1.00 s instead of switching at once - no area environment active
+13:37:47.706 doors: Geralt is through the door - loading the occluders (3656 ms after the door)
+13:37:47.722 partition: sync job ran 14 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:37:47.722 partition: keep_outdoors kept 71 of 71 layers, unloaded 0; loaded 2 (0 interiors added), skipped 1 (fake rooms, low-poly)
+13:37:53.507 doors: 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\03_clerk_marketplace' is loaded - no fade (0 to load, spinner hidden)
+13:37:53.555 partition: sync job ran 20 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:37:53.555 partition: keep_outdoors kept 120 of 122 layers, unloaded 2; loaded 1 (0 interiors added), skipped 0 (fake rooms, low-poly)
+13:37:53.567 doors: interior ready after 46 ms - picture back now (state 2)
+13:37:53.585 doors: lighting blends over 1.00 s instead of switching at once - 'clerk_marketplace_0' 15 at 0.00 (+1.00/s)
+13:37:56.437 doors: lighting blends over 1.00 s instead of switching at once - 'clerk_marketplace_0' 15 at 1.00 (+1.00/s)
+13:37:59.977 doors: 'Outdoor\global\landing_site\outside\03_clerk_marketplace' -> 'Outdoor\global\landing_site\outside\Flotsam' is loaded - no fade (0 to load, spinner hidden)
+13:38:00.015 partition: sync job ran 13 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:38:00.015 partition: keep_outdoors kept 71 of 72 layers, unloaded 1; loaded 0 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:38:00.028 doors: interior ready after 32 ms - picture back now (state 2)
+13:38:00.044 doors: lighting blends over 1.00 s instead of switching at once - 'clerk_marketplace_0' 15 at 1.00 (+1.00/s)
+13:38:02.521 doors: lighting blends over 1.00 s instead of switching at once - no area environment active
+13:38:03.346 doors: Geralt is through the door - loading the occluders (3344 ms after the door)
+13:38:03.368 partition: sync job ran 15 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:38:03.368 partition: keep_outdoors kept 71 of 71 layers, unloaded 0; loaded 2 (0 interiors added), skipped 1 (fake rooms, low-poly)
+13:38:43.369 doors: 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\inn_interior' is loaded - no fade (0 to load, spinner hidden)
+13:38:43.416 partition: sync job ran 19 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:38:43.416 partition: keep_outdoors kept 111 of 116 layers, unloaded 5; loaded 3 (0 interiors added), skipped 2 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:38:43.429 doors: interior ready after 47 ms - picture back now (state 2)
+13:38:43.451 doors: lighting blends over 1.00 s instead of switching at once - 'house_01_inn' 15 at 0.00 (+1.00/s)
+13:38:46.376 doors: lighting blends over 1.00 s instead of switching at once - 'house_01_inn' 15 at 1.00 (+1.00/s)
+13:38:48.516 doors: 'Outdoor\global\landing_site\outside\inn_interior' -> 'Outdoor\global\landing_site\outside\Flotsam' is loaded - no fade (0 to load, spinner hidden)
+13:38:48.554 partition: sync job ran 14 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:38:48.554 partition: keep_outdoors kept 71 of 74 layers, unloaded 3; loaded 3 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:38:48.564 doors: interior ready after 46 ms - picture back now (state 2)
+13:38:48.578 doors: lighting blends over 1.00 s instead of switching at once - 'house_01_inn' 15 at 1.00 (+1.00/s)
+13:38:51.049 doors: lighting blends over 1.00 s instead of switching at once - no area environment active
+13:38:51.964 doors: Geralt is through the door - loading the occluders (3406 ms after the door)
+13:38:51.981 partition: sync job ran 11 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:38:51.981 partition: keep_outdoors kept 71 of 71 layers, unloaded 0; loaded 2 (0 interiors added), skipped 1 (fake rooms, low-poly)
+13:38:56.103 doors: 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\02_barracks_marketplace' is loaded - no fade (0 to load, spinner hidden)
+13:38:56.148 partition: sync job ran 17 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:38:56.148 partition: keep_outdoors kept 120 of 122 layers, unloaded 2; loaded 1 (0 interiors added), skipped 0 (fake rooms, low-poly)
+13:38:56.158 doors: interior ready after 47 ms - picture back now (state 2)
+13:38:56.175 doors: lighting blends over 1.00 s instead of switching at once - 'barracks_marketplace_0' 15 at 0.00 (+1.00/s)
+13:38:59.032 doors: lighting blends over 1.00 s instead of switching at once - 'barracks_marketplace_0' 15 at 1.00 (+1.00/s)
+13:39:02.094 doors: 'Outdoor\global\landing_site\outside\02_barracks_marketplace' -> 'Outdoor\global\landing_site\outside\Flotsam' is loaded - no fade (0 to load, spinner hidden)
+13:39:02.129 partition: sync job ran 14 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:39:02.129 partition: keep_outdoors kept 71 of 72 layers, unloaded 1; loaded 0 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:39:02.141 doors: interior ready after 31 ms - picture back now (state 2)
+13:39:02.154 doors: lighting blends over 1.00 s instead of switching at once - 'barracks_marketplace_0' 15 at 1.00 (+1.00/s)
+13:39:04.650 doors: lighting blends over 1.00 s instead of switching at once - no area environment active
+13:39:05.477 doors: Geralt is through the door - loading the occluders (3344 ms after the door)
+13:39:05.496 partition: sync job ran 12 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:39:05.496 partition: keep_outdoors kept 71 of 71 layers, unloaded 0; loaded 2 (0 interiors added), skipped 1 (fake rooms, low-poly)
+13:39:11.422 doors: 'Outdoor\global\landing_site\outside\Flotsam' -> 'Outdoor\global\landing_site\outside\inn_interior' is loaded - no fade (0 to load, spinner hidden)
+13:39:11.471 partition: sync job ran 22 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:39:11.471 partition: keep_outdoors kept 111 of 116 layers, unloaded 5; loaded 3 (0 interiors added), skipped 2 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:39:11.485 doors: interior ready after 47 ms - picture back now (state 2)
+13:39:11.508 doors: lighting blends over 1.00 s instead of switching at once - 'house_01_inn' 15 at 0.00 (+1.00/s)
+13:39:14.375 doors: lighting blends over 1.00 s instead of switching at once - 'house_01_inn' 15 at 1.00 (+1.00/s)
+13:39:15.428 doors: Geralt is through the door - loading the occluders (3953 ms after the door)
+13:39:15.447 partition: sync job ran 12 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:39:15.447 partition: keep_outdoors kept 111 of 111 layers, unloaded 0; loaded 2 (0 interiors added), skipped 2 (fake rooms, low-poly)
+13:39:23.464 stability: layer storage: 5810 saved entity state(s) freed so far (15 MB) that the game would have kept
+13:39:23.926 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 695E6264
+13:39:23.926 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+13:39:23.926 input: keyboard state filter installed
+13:39:26.250 thumbnail: menu reloads QuickSave_640x360.bmp
+13:39:27.592 interiors: before the switch - 1690 layers in the world, 0 loaded; 64 building interiors, 0 loaded
+13:39:27.608 savelist: before the switch private=1500 MB commit=1843 reserve=227 free=2024 largest_free=1659 MB, previews held=316
+13:39:27.609 preload: 'Outdoor\global\landing_site\outside\inn_interior' found (type 0); siblings by location type: default 15, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+13:39:27.609 preload: 9 building(s) with interior lighting of their own in the partition tree, 10 layer groups only they list
+13:39:27.614 preload: 0 interior layers from the indoor partitions, 19 from the buildings with their own lighting, 46 more by folder name (83 known in this world)
+13:39:27.625 preload: 'Outdoor\global\landing_site\outside\inn_interior' is inside 'Flotsam' - its 61 layers load now too (51 groups of its own)
+13:39:30.575 preload: 111 of 112 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2071 MB, floor 1280 MB)
+13:39:30.575 partition: sync job ran 2985 ms (GC  7 ms)
+13:39:30.575 partition: preload kept 0 of 0 layers, unloaded 0; loaded 1027 (126 interiors added), skipped 0 (fake rooms, low-poly)
+13:39:30.577 interiors: after the switch - 1690 layers in the world, 1012 loaded; 64 building interiors, 64 loaded
+13:39:30.594 savelist: after the switch private=1456 MB commit=1820 reserve=203 free=2071 largest_free=1703 MB, previews held=316
+13:39:47.924 doors: 'Outdoor\global\landing_site\outside\inn_interior' -> 'Outdoor\global\landing_site\outside\Flotsam' is loaded - no fade (0 to load, spinner hidden)
+13:39:47.978 partition: sync job ran 32 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:39:47.978 partition: keep_outdoors kept 71 of 78 layers, unloaded 7; loaded 3 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+13:39:47.988 doors: interior ready after 62 ms - picture back now (state 2)
+13:39:48.032 doors: lighting blends over 1.00 s instead of switching at once - 'house_01_inn_basement' 16 at 1.00 (+1.00/s)
+13:39:50.475 doors: lighting blends over 1.00 s instead of switching at once - no area environment active
+13:39:51.404 doors: Geralt is through the door - loading the occluders (3422 ms after the door)
+13:39:51.421 partition: sync job ran 11 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+13:39:51.421 partition: keep_outdoors kept 71 of 71 layers, unloaded 0; loaded 2 (0 interiors added), skipped 1 (fake rooms, low-poly)
+13:39:53.487 stability: layer storage: 11869 saved entity state(s) freed so far (33 MB) that the game would have kept
+13:39:54.973 quit: an area is loaded - ending the game session first
+13:39:55.416 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 695E6264
+13:39:55.416 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+13:39:55.416 input: keyboard state filter installed
+13:39:56.019 quit: the game session ended 1047 ms after Quit
+13:39:57.586 quit: quitting from the main menu, 2609 ms after Quit, no loading screen up
+13:39:58.620 exit: ExitProcess(0) from witcher2.EXE+0x272388 on thread 26204 (the main thread)
+13:39:58.679 stability: layer storage: 17964 saved entity state(s) freed this session (52 MB)
+13:39:58.679 unloaded

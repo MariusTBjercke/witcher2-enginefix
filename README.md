@@ -122,7 +122,7 @@ To check that it works, open `bin\witcher2_enginefix.log` after starting the gam
 | `[loading] fast_doors`, `door_fade`, `area_fade` | 1, 0.05, 0.25 | fade lengths for house doors and area changes; `fast_doors=0` and 0.5 restore the game's timing |
 | `[loading] door_light_blend` | 1.0 | seconds the lighting takes to change at a house door without a fade; 0 switches at once as the game does |
 | `[loading] preload_street`, `door_spinner` | 1, 0 | a save made inside a house also loads its street; the loading spinner stays hidden on doors without a fade |
-| `[loading] preload_memory_mb`, `door_memory_mb` | 1280, 1024 | memory guard: preloaded interiors load only while this much address space is free; below the second, a door is the game's own again; 0 turns each off |
+| `[loading] preload_memory_mb`, `area_memory_mb`, `door_memory_mb` | 1280, 1536, 1024 | memory guard: preloaded interiors load only while this much address space is free; below the second, a door between two whole areas unloads the one you leave; below the third, every door is the game's own again; 0 turns each off |
 | `[stability] raycast_guard` | 1 | 0 turns the ray-cast crash guard off |
 | `[stability] cpu32_guard` | 1 | 0 lets the game run its own CPU count (hangs on 32 or more logical processors) |
 | `[stability] quit_guard` | 1 | 0 lets the shutdown after Quit crash again (it only leaves a dump) |

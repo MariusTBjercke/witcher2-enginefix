@@ -485,6 +485,17 @@ was changed. Format notes for the next reader (W2 CR2W version 115):
   `loadingScreenPath`, `soundAmbient`, `musicCue`, `locationType`, `hasWindows`) followed by an
   encoded child count and the children. A partition's groups are its own plus its parents'
   (`Root` -> `Outdoor` -> `global` -> `landing_site` -> `outside` -> `inn_interior`).
+* A `.w2w` also holds the world's `CLayerGroup` and `CLayerInfo` objects; a layer info's
+  `depotFilePath` is its `.w2l`. A partition's layers are the layers directly in its groups'
+  folders (its own groups and its parents').
+* A `CStreamingDoor` in a `.w2l` has `inside` and `outside` (`SDoorPartition`: a nested property
+  list with `worldPartition`, the full partition name without the root, and `transitionType`
+  when it is not the default).
+* An entity's `transform` (`EngineTransform`) is a flag byte (seen: `03` with position and
+  rotation, `07` with scale too) followed by the position as three floats. A cooked layer of static meshes only
+  (the fake rooms) is one `CLayer` object: after its property list, one record per mesh with
+  the mesh's import index (a negative `i32`, -1 the first import) and a 4x4 float matrix whose
+  last row is the position.
 * Survey of all 210 `CAreaEnvironmentComponent`s in `pack0.dzip`: interiors with explicit
   0/0 times: Act 1 12 of 20, `03_camp` 22 of 26 (a few 2/2 or 3/3), the prologue castle's 19
   interiors 0.3/0.3, `04_city` 5 at the class default (1 s, see above). Outdoor areas mostly

@@ -1,0 +1,149 @@
+# Vergen with the buildings-by-lighting preload: owner, 2026-11-11, Steam 3.5.0.26, DXVK, 3840x2160,
+# [loading] interiors=2, a fresh session. Roche's path, so only part of Vergen is open: houses 04, 06, 07
+# and 17 in and out, a save made inside house 04, loaded, then out. From the first area load on;
+# 'distance stats' and 'billboards' lines left out. The crash at the end is in the UI shutdown after
+# Quit, see docs/fixes/quit-crash.md.
+
+11:57:47.981 interiors: before the switch - 1542 layers in the world, 0 loaded; 0 building interiors, 0 loaded
+11:57:47.992 savelist: before the switch private=1052 MB commit=1410 reserve=279 free=2405 largest_free=2044 MB, previews held=315
+11:57:47.993 preload: 'common\dwarf_city\city_dec_unload' found (type 0); siblings by location type: default 24, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+11:57:47.993 preload: 24 building(s) with interior lighting of their own in the partition tree, 57 layer groups only they list
+11:57:48.005 preload: 0 interior layers from the indoor partitions, 59 from the buildings with their own lighting, 0 more by folder name (59 known in this world)
+11:57:51.508 preload: 59 of 59 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2130 MB, floor 1280 MB)
+11:57:51.508 preload: the fake rooms behind doors and windows are left out - every interior is loaded
+11:57:51.508 partition: sync job ran 3528 ms (GC  32 ms)
+11:57:51.508 partition: preload kept 0 of 0 layers, unloaded 0; loaded 859 (59 interiors added), skipped 1 (fake rooms, low-poly)
+11:57:51.510 interiors: after the switch - 1542 layers in the world, 859 loaded; 0 building interiors, 0 loaded
+11:57:51.523 savelist: after the switch private=1328 MB commit=1700 reserve=265 free=2130 largest_free=2044 MB, previews held=315
+11:58:10.675 doors: 'common\dwarf_city\city_dec_unload' -> 'common\dwarf_city\building04_deco' is loaded - no fade (0 to load)
+11:58:10.719 partition: sync job ran 22 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+11:58:10.719 partition: keep_outdoors kept 60 of 62 layers, unloaded 2; loaded 1 (0 interiors added), skipped 0 (fake rooms, low-poly)
+11:58:10.728 doors: interior ready after 32 ms - picture back now (state 2)
+11:58:10.736 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+11:58:13.642 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building04_dec' 100 at 1.00 (+1.00/s)
+11:58:28.593 doors: 'common\dwarf_city\building04_deco' -> 'common\dwarf_city\city_dec_unload' is loaded - no fade (0 to load)
+11:58:28.632 partition: sync job ran 18 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+11:58:28.632 partition: keep_outdoors kept 59 of 60 layers, unloaded 1; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+11:58:28.642 doors: interior ready after 47 ms - picture back now (state 2)
+11:58:28.653 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building04_dec' 100 at 1.00 (+1.00/s)
+11:58:31.143 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+11:58:32.316 doors: Geralt is through the door - loading the occluders (3687 ms after the door)
+11:58:32.337 partition: sync job ran 13 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+11:58:32.337 partition: keep_outdoors kept 59 of 59 layers, unloaded 0; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly)
+11:58:36.683 doors: 'common\dwarf_city\city_dec_unload' -> 'common\dwarf_city\building06_deco' is loaded - no fade (0 to load, spinner hidden)
+11:58:36.721 partition: sync job ran 11 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+11:58:36.721 partition: keep_outdoors kept 59 of 61 layers, unloaded 2; loaded 2 (0 interiors added), skipped 0 (fake rooms, low-poly)
+11:58:36.731 doors: interior ready after 32 ms - picture back now (state 2)
+11:58:36.738 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+11:58:39.676 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building06_dec0' 100 at 1.00 (+1.00/s)
+11:59:12.603 doors: 'common\dwarf_city\building06_deco' -> 'common\dwarf_city\city_dec_unload' is loaded - no fade (0 to load, spinner hidden)
+11:59:12.635 partition: sync job ran 11 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+11:59:12.635 partition: keep_outdoors kept 59 of 61 layers, unloaded 2; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+11:59:12.646 doors: interior ready after 32 ms - picture back now (state 2)
+11:59:12.658 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building06_dec0' 100 at 1.00 (+1.00/s)
+11:59:15.168 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+11:59:16.517 doors: Geralt is through the door - loading the occluders (3891 ms after the door)
+11:59:16.534 partition: sync job ran 11 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+11:59:16.534 partition: keep_outdoors kept 59 of 59 layers, unloaded 0; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly)
+11:59:38.456 doors: 'common\dwarf_city\city_dec_unload' -> 'common\dwarf_city\building04_deco' is loaded - no fade (0 to load, spinner hidden)
+11:59:38.497 partition: sync job ran 13 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+11:59:38.497 partition: keep_outdoors kept 60 of 62 layers, unloaded 2; loaded 1 (0 interiors added), skipped 0 (fake rooms, low-poly)
+11:59:38.507 doors: interior ready after 31 ms - picture back now (state 2)
+11:59:38.515 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+11:59:41.385 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building04_dec' 100 at 1.00 (+1.00/s)
+12:00:25.361 stability: layer storage: 1 saved entity state(s) freed so far (0 MB) that the game would have kept
+12:00:25.794 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 69446264
+12:00:25.795 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+12:00:25.795 input: keyboard state filter installed
+12:00:27.949 thumbnail: menu reloads ManualSave_0328_640x360.bmp
+12:00:27.951 thumbnail: menu reloads QuickSave_640x360.bmp
+12:00:29.405 interiors: before the switch - 1542 layers in the world, 0 loaded; 0 building interiors, 0 loaded
+12:00:29.419 savelist: before the switch private=1301 MB commit=1645 reserve=254 free=2196 largest_free=1776 MB, previews held=316
+12:00:29.420 preload: 'common\dwarf_city\building04_deco' found (type 0); siblings by location type: default 24, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+12:00:29.421 preload: 24 building(s) with interior lighting of their own in the partition tree, 57 layer groups only they list
+12:00:29.434 preload: 0 interior layers from the indoor partitions, 59 from the buildings with their own lighting, 0 more by folder name (59 known in this world)
+12:00:29.435 preload: 'common\dwarf_city\building04_deco' is inside 'city_dec_unload' - its 8 layers load now too (5 groups of its own)
+12:00:32.517 preload: 60 of 60 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2119 MB, floor 1280 MB)
+12:00:32.517 partition: sync job ran 3113 ms (GC  6 ms)
+12:00:32.517 partition: preload kept 0 of 0 layers, unloaded 0; loaded 865 (67 interiors added), skipped 0 (fake rooms, low-poly)
+12:00:32.518 interiors: after the switch - 1542 layers in the world, 858 loaded; 0 building interiors, 0 loaded
+12:00:32.534 savelist: after the switch private=1344 MB commit=1699 reserve=259 free=2136 largest_free=1842 MB, previews held=316
+12:00:51.375 doors: 'common\dwarf_city\building04_deco' -> 'common\dwarf_city\city_dec_unload' is loaded - no fade (0 to load, lighting fades out slowly, spinner hidden)
+12:00:51.423 partition: sync job ran 28 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:00:51.423 partition: keep_outdoors kept 59 of 60 layers, unloaded 1; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+12:00:51.433 doors: interior ready after 47 ms - picture back now (state 2)
+12:00:51.444 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building04_dec' 100 at 1.00 (+100.00/s)
+12:00:53.931 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+12:00:55.079 doors: Geralt is through the door - loading the occluders (3656 ms after the door)
+12:00:55.093 partition: sync job ran 12 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:00:55.093 partition: keep_outdoors kept 59 of 59 layers, unloaded 0; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly)
+12:00:55.399 stability: layer storage: 5757 saved entity state(s) freed so far (14 MB) that the game would have kept
+12:01:38.524 doors: 'common\dwarf_city\city_dec_unload' -> 'common\dwarf_city\building07_deco' is loaded - no fade (0 to load, spinner hidden)
+12:01:38.566 partition: sync job ran 14 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:01:38.566 partition: keep_outdoors kept 60 of 62 layers, unloaded 2; loaded 2 (0 interiors added), skipped 0 (fake rooms, low-poly)
+12:01:38.573 doors: interior ready after 31 ms - picture back now (state 2)
+12:01:38.581 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+12:01:41.519 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building07_dec' 100 at 1.00 (+1.00/s)
+12:01:45.125 doors: 'common\dwarf_city\building07_deco' -> 'common\dwarf_city\city_dec_unload' is loaded - no fade (0 to load, spinner hidden)
+12:01:45.164 partition: sync job ran 10 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:01:45.164 partition: keep_outdoors kept 59 of 61 layers, unloaded 2; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+12:01:45.172 doors: interior ready after 31 ms - picture back now (state 2)
+12:01:45.181 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building07_dec' 100 at 1.00 (+1.00/s)
+12:01:47.676 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+12:01:48.568 doors: Geralt is through the door - loading the occluders (3406 ms after the door)
+12:01:48.586 partition: sync job ran 10 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:01:48.586 partition: keep_outdoors kept 59 of 59 layers, unloaded 0; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly)
+12:02:11.185 doors: 'common\dwarf_city\city_dec_unload' -> 'common\dwarf_city\building17_deco' is loaded - no fade (0 to load, spinner hidden)
+12:02:11.224 partition: sync job ran 11 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:02:11.224 partition: keep_outdoors kept 60 of 62 layers, unloaded 2; loaded 2 (0 interiors added), skipped 0 (fake rooms, low-poly)
+12:02:11.232 doors: interior ready after 32 ms - picture back now (state 2)
+12:02:11.241 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+12:02:14.153 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building07_dec0' 100 at 1.00 (+1.00/s)
+12:03:40.273 doors: 'common\dwarf_city\building17_deco' -> 'common\dwarf_city\city_dec_unload' is loaded - no fade (0 to load, spinner hidden)
+12:03:40.311 partition: sync job ran 10 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:03:40.311 partition: keep_outdoors kept 59 of 61 layers, unloaded 2; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly), occluders wait until Geralt is through the door
+12:03:40.318 doors: interior ready after 31 ms - picture back now (state 2)
+12:03:40.329 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s) 'building07_dec0' 100 at 1.00 (+1.00/s)
+12:03:42.837 doors: lighting blends over 1.00 s instead of switching at once - 'dwarf_city' 10 at 1.00 (+0.50/s)
+12:03:43.782 doors: Geralt is through the door - loading the occluders (3484 ms after the door)
+12:03:43.796 partition: sync job ran 12 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+12:03:43.796 partition: keep_outdoors kept 59 of 59 layers, unloaded 0; loaded 1 (0 interiors added), skipped 1 (fake rooms, low-poly)
+12:03:55.876 quit: an area is loaded - ending the game session first
+12:03:55.976 stability: layer storage: 5758 saved entity state(s) freed so far (14 MB) that the game would have kept
+12:03:56.439 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 69446264
+12:03:56.439 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+12:03:56.439 input: keyboard state filter installed
+12:03:56.940 quit: the game session ended 1062 ms after Quit
+12:03:58.507 quit: quitting from the main menu, 2625 ms after Quit
+12:03:58.573 thumbnail: menu reloads QuickSave_640x360.bmp
+12:03:59.601 crash: unhandled exception 0xC0000005 at 0x4906E000 (?), thread 37972
+12:03:59.601 crash: access violation executing 0x4906E000
+12:03:59.601 crash: eax=4906E000 ebx=00002000 ecx=476FF018 edx=3BF13C10 esi=473AC920 edi=3BF13C80
+12:03:59.601 crash: eip=4906E000 esp=001AFC04 ebp=001AFEE4
+12:03:59.601 crash:   [esp+0000] 0077E991 witcher2.EXE+0x37E991
+12:03:59.601 crash:   [esp+0018] 0077F82C witcher2.EXE+0x37F82C
+12:03:59.601 crash:   [esp+0028] 006E068B witcher2.EXE+0x2E068B
+12:03:59.601 crash:   [esp+0038] 006E0679 witcher2.EXE+0x2E0679
+12:03:59.601 crash:   [esp+0048] 006DFC68 witcher2.EXE+0x2DFC68
+12:03:59.601 crash:   [esp+0050] 006E0CA5 witcher2.EXE+0x2E0CA5
+12:03:59.601 crash:   [esp+0054] 006D171B witcher2.EXE+0x2D171B
+12:03:59.601 crash:   [esp+0058] 00A7A50E witcher2.EXE+0x67A50E
+12:03:59.601 crash:   [esp+0064] 00AA62E6 witcher2.EXE+0x6A62E6
+12:03:59.601 crash:   [esp+0070] 00AC8C3B witcher2.EXE+0x6C8C3B
+12:03:59.601 crash:   [esp+0074] 029262EE witcher2.EXE+0x25262EE
+12:03:59.601 crash:   [esp+0084] 00637000 witcher2.EXE+0x237000
+12:03:59.601 crash:   [esp+00D8] 00690000 witcher2.EXE+0x290000
+12:03:59.601 crash:   [esp+00DC] 006B0073 witcher2.EXE+0x2B0073
+12:03:59.601 crash:   [esp+00E0] 006F0056 witcher2.EXE+0x2F0056
+12:03:59.601 crash:   [esp+00E4] 0075006C witcher2.EXE+0x35006C
+12:03:59.601 crash:   [esp+00E8] 0065006D witcher2.EXE+0x25006D
+12:03:59.601 crash:   [esp+00EC] 005C0036 witcher2.EXE+0x1C0036
+12:03:59.601 crash:   [esp+00F0] 00740053 witcher2.EXE+0x340053
+12:03:59.601 crash:   [esp+00F4] 00610065 witcher2.EXE+0x210065
+12:03:59.601 crash:   [esp+00F8] 004C006D witcher2.EXE+0xC006D
+12:03:59.601 crash:   [esp+00FC] 00620069 witcher2.EXE+0x220069
+12:03:59.601 crash:   [esp+0100] 00610072 witcher2.EXE+0x210072
+12:03:59.601 crash:   [esp+0104] 00790072 witcher2.EXE+0x390072
+12:03:59.601 crash: memory private=1077 MB working set=1076 MB
+12:04:00.168 crash: dump written: <game>\bin\witcher2_enginefix_crash_2026-11-11_12-03-59.dmp (1.5 MB)
+12:04:00.168 crash: passing on to the previous filter at 0x66E92571
