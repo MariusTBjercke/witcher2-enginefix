@@ -458,6 +458,11 @@ from adding to the load where room is short. Not measured: native Direct3D 9 at 
 * `environmentType` (`SWorldPartition` `+0x24`, a CName) has no reader found; `hasWindows`
   (`+0x2C`) none outside the data.
 * The ground circle: what the player actually sees (DOF, mip falloff or something else).
+* A spinner that still shows: on GOG (owner, 2026-11-11, 0.12.1) the loading spinner flashed
+  once on the way out of the craftsmen's bar, on a door without a fade and with nothing to
+  load. "Show" commands are dropped for 2 s after the door starts and for 2 s after the
+  occluder switch, which came 3.4-3.9 s after the door, so one arriving between the two gets
+  through; that it was such a command is a guess, since a command that passes is not logged.
 
 No in-game run was needed for this research: the installed `load_trace` does not log the
 environment manager, so a run with the current DLL could not show it. The proof run belongs to

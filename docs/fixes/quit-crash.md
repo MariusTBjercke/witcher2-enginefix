@@ -245,6 +245,11 @@ matter: its last load was a Vergen save (the movie in the dump is Vergen's loadi
 the menu reloaded `QuickSave_640x360.bmp` 66 ms after the exit flag; here the last two loads
 were Flotsam saves and no picture was reloaded after the flag.
 
+GOG the same day (`docs/validation/gog-0.12.1-2026-11-11.log`): the session ended 1 063 ms
+after Quit; the owner saw the main menu and pressed its Quit 1 470 ms later, 30 ms before the
+1.5 s wait was over (`quit: no area loaded - quitting at once, no loading screen up`), and the
+game closed normally. On GOG the menu is drawn during that wait, on Steam it is not.
+
 To reproduce: load a save, open the Load menu in game and load a save (one from the same area is
 enough), play a little, Esc, Quit. With the segment-order condition it may take a few tries; the
 crash is silent (the game closes) and leaves a dump plus a `crash:` block in the log.

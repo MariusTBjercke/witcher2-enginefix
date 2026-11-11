@@ -695,6 +695,11 @@ again, a second save inside the inn loaded, out, then the pause menu's Quit. Own
 * The quit was clean: `quit: quitting from the main menu, 2609 ms after Quit, no loading screen
   up`, `exit: ExitProcess(0)`, `unloaded`, no dump.
 
+GOG 3.5.0.26g, the same DLL and day (`docs/validation/gog-0.12.1-2026-11-11.log`, DXVK): a
+Flotsam save from the main menu, the same 9 buildings and 10 groups, `63 of 63 preloaded layers
+loaded` (0.11.0 on GOG: `62 of 62`), the fake rooms left out, and the craftsmen's bar in and out
+twice without a fade (jobs of 13-18 ms). Vergen was not visited on GOG.
+
 ### Still to check in game
 
 Not seen: Vergen's other 20 houses (Iorveth's path opens the whole town; they are covered by

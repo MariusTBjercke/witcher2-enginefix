@@ -92,6 +92,10 @@ the player's class `CVideoInstance` (vtable `00D43F3C`, the same layout). Same o
 The startup list's column (`Release`) was not checked against GOG's csv, which also has a GOG
 column (`bumpers_GOG`); the log's `movie list built (N entries)` shows what GOG plays.
 
+Run on GOG with 0.12.1 (owner, 2026-11-11, `docs/validation/gog-0.12.1-2026-11-11.log`):
+`movie list built (2 entries), skip armed`, `2 startup movie(s) marked as played, none started`,
+and `skipped without starting them, main menu reached` 431 ms later.
+
 ## In-game test
 
 Start the game: the main menu appears without the CD PROJEKT RED logo (or, without the intro

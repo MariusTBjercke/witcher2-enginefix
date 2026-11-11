@@ -73,7 +73,8 @@ If the bytes differ: `stability: text file reader not recognised at ... - text_g
 
 ## Not proven
 
-- The fix has not run in game yet. Needed: the install line in the log, and loads and area
-  changes without problems (every CSV read goes through it).
+- Installed and run on both builds (owner, 2026-11-11): the install line (Steam `00AC6ACA`,
+  GOG `00B1B4C2`, logged relocated as `0111B4C2`), then starts, save loads and doors without problems on
+  Steam (three area loads) and GOG (one). Every CSV read goes through it.
 - The crash is not reproducible on demand, so the evidence will be no more crashes at
   `004020F9` from `00AC6AFB`.
