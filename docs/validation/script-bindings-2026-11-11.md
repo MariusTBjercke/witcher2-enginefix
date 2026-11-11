@@ -69,6 +69,27 @@ memory and must not be destroyed.**
 Main menu reached. Registration, declaration, resolution, call and one `int` argument
 are proved in the running game.
 
+## Run 6 - an int result back into the script: menu
+
+The declaration became `import function W2EF_TestParam( value : int ) : int;`, the native
+writes `1234` and the type id `2` into argument 3, and the probe feeds the answer into a
+second call:
+
+```
+n = W2EF_TestParam( 42 );
+W2EF_TestParam( n );
+```
+
+```
+17:44:10  hooked CompileScriptsFromSources at 00AA69A0
+17:44:11  W2EF_TestParam registered at slot 1691
+17:44:24  argument slot 2A 00 00 00 00 00 00 00 00 00 00 00 02 00 00 00
+17:44:24  argument slot D2 04 00 00 00 00 00 00 00 00 00 00 02 00 00 00
+```
+
+`2A` = 42 in, `D2 04` = 1234 back as the next call's argument. The result crosses the VM
+correctly, so the contract is complete for `int`: arguments in, result out.
+
 ## State after the runs
 
 The probe was removed from `book_helpers.ws` and `continue_button.ws` again,

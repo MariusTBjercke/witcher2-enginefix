@@ -8598,9 +8598,15 @@ __declspec(naked) static void sb_test_param(void)
         push eax
         call sb_log_slot
         add  esp, 4
-        // No FUN_004021ee here: it releases the value's payload as a heap block, and an int
-        // value holds the number itself at +0 (measured: 42 at +0, the type id 2 at +12), so
-        // destroying it frees address 42. Only types that own memory may be destroyed.
+        // The result goes into argument 3 when it is not null: an int is the number at +0 and
+        // the type id 2 at +12 (measured, docs/engine-script-bindings.md). No FUN_004021ee:
+        // it releases the payload as a heap block, and an int value holds the number itself.
+        mov  ecx, dword ptr [ebp+0x10]
+        test ecx, ecx
+        jz   sb_no_result
+        mov  dword ptr [ecx], 1234
+        mov  dword ptr [ecx+0x0c], 2
+    sb_no_result:
         pop  esi
         mov  esp, ebp
         pop  ebp

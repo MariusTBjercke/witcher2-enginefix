@@ -2,9 +2,10 @@
 
 Status: research plus in-game tests, Steam 3.5.0.26. Proved end to end in the running
 game: the DLL registers a function before the compile, the `.ws` declares it with
-`import function`, the compiler resolves the name, the game calls it with one `int`
-argument, the native evaluates that argument out of the interpreter frame, and the game
-continues to the menu. The first two attempts crashed; both causes are in this file.
+`import function`, the compiler resolves the name, the game calls it with an `int`
+argument, the native evaluates that argument out of the interpreter frame, answers with
+an `int`, and the script uses the answer - a second call receives `1234` back. Three
+attempts crashed; every cause is in this file.
 
 This answers one question: **can the engine be given new script functions from
 outside, without touching `witcher2.exe` on disk?** The answer is yes, with the
@@ -136,8 +137,9 @@ The body has a fixed shape:
 2. **Consume one byte**: `[frame+0x18]++`. This is the call's terminator in the byte
    stream.
 3. Compute.
-4. If `result` is not null, store the value there (a scalar as `*result = n`, a string by
-   copying the 16-byte value).
+4. If `result` is not null, store the value there: an `int` is the number at `+0` and the
+   type id `2` at `+12`. Proved round trip: the native answered `1234` and the next call
+   in the same script received it as its argument (`D2 04` in the log).
 5. Destroy a slot **only when its type owns memory**. `FUN_004021ee` releases the
    value's payload as a heap block, so a slot holding an `int` must be left alone: the
    number sits at `+0`, and destroying it calls the allocator with 42 - which is exactly
@@ -227,13 +229,10 @@ the registration, which is also how every native in the engine is declared.
 
 ## Unproven
 
-* **Return values.** The result pointer (argument 3) was null in every test, because the
-  probe was called as a statement. The layout is now known - an `int` is the number at
-  `+0` and the type id `2` at `+12` - so writing one should be a store, but it has not
-  been seen in game.
 * The other value types: `float`, `bool`, `string`, `name` and object references. A
   string is not a plain pointer (a 16-byte `String` is copied, and it owns memory), and
-  each type's id is still to be measured.
+  each type's id is still to be measured - the same one-start-test method that measured
+  `int` works for them.
 * Thread safety: only the registry's creation takes a critical section; insert and
   lookup are unsynchronised. Boot-time single-threaded execution is an assumption.
 * The GOG build: every address here is Steam's, and none of the `ga()` rows exist yet.
