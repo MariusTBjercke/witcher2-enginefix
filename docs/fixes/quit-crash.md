@@ -164,3 +164,87 @@ In game (Steam, owner, 2026-11-06), Esc, Quit, Yes each time:
 
 On Steam the game closed before the main menu was drawn; on GOG the owner saw the menu for a
 moment. The GOG run confirms the ECX convention of its exit flag setter and ExitGame.
+
+## A loading-screen movie still alive at the GUI shutdown (2026-11-11, open)
+
+One dump on Steam (DXVK), after the pause menu's Quit with `clean_quit` on. The session ended
+and the exit flag was set as usual (`the game session ended 1062 ms after Quit`, `quitting from
+the main menu, 2625 ms after Quit`); a second later:
+
+```text
+crash: access violation executing 0x4906E000
+crash: eax=4906E000 ebx=00002000 ecx=476FF018 edx=3BF13C10 esi=473AC920 edi=3BF13C80
+```
+
+Stack: `00AC8C3B` -> `00AA62E6` -> the engine's GUI shutdown `FUN_00a7a475` (`DAT_01404bcc`) ->
+`FUN_006d1700` -> `FUN_006dfc30`, which destroys Scaleform's root memory heap (`DAT_013e7cb8`,
+vtable `00D578C0` slot `0x74` = `FUN_006e0650`). That walks the child heaps still alive and
+destroys each one the same way; the child's segment loop `FUN_0077f810` frees its segments one by
+one through `FUN_0077e970(engine, segment)`, which first calls
+`engine[0x89]->vtbl[2](heap, size)` - the heap's limit handler, `OnFreeSegment`.
+
+What the dump shows (read offline with `cdb -z`; the minidump holds 1 KB around each register):
+
+* The child heap is `EDX = 3BF13C10`, named `MovieView "ls_akt2_vergen.swf"` - the Act 2 Vergen
+  loading screen's movie. Its refcount is 1 and its auto-release pointer (`heap+0x18`) is
+  `476FF000`.
+* `FUN_006ed3d0` is Scaleform's CreateMemoryContext: it creates the `MovieView "<file>"` heap
+  (flags 3, limit `0x20000`, as in the dump), allocates the 0x30-byte memory context *inside that
+  heap*, sets the heap's limit handler (heap vtable slot `0x14` = `FUN_006dfd10`, which writes
+  `engine+0x224`) to `context+0x18` (handler vtable `00D5AFF8`: `OnExceedLimit` `00728030`,
+  `OnFreeSegment` `00725CB0`), and makes the context the heap's auto-release pointer
+  (`FUN_006cfb40`, `heap+0x18`). The string manager (`FUN_006e9a40`, vtable `00D5AE84`) and the
+  GC object hang off it. So `476FF000` is the memory context and `ECX = 476FF018` its handler.
+* The context's destructor `FUN_006ed0d0` clears the handler first (`heap->SetLimitHandler(0)`
+  at `006ED0D3..006ED0E3`). The handler is still set, so the context was never destroyed: the
+  loading-screen movie was still alive when the engine shut the GUI down.
+* The context's own bytes no longer hold it: `+0x00/+0x04` read `40DEC000`, `+0x18` (the
+  handler's vtable) reads `476C0000`, `+0x08` (its heap) is 0. The string manager right after it
+  (`476FF030`, vtable `00D5AE84`, heap `3BF13C10`) is intact. The segment being freed at the crash
+  (`473AC920`: `476FD000`, `0x2000`) is the last one in the list (both links point at the list
+  head `engine+0x1AC`), so the segment holding the context had already been freed in an earlier
+  pass of the same loop, and the page allocator's bookkeeping now sits where the handler's vtable
+  was. Calling `OnFreeSegment` for the next segment jumps through it.
+
+So the crash is Scaleform's shutdown destroying a movie heap whose limit handler lives inside that
+heap; it only happens when a movie view is still alive at the GUI shutdown, and only when the
+segment holding its memory context is not the last one freed (which is why a live movie does not
+always crash).
+
+Not proven: why the loading screen was still alive. Two candidates, both consistent with the log:
+
+1. The loading screen of the in-game load at 12:00:29 (Load menu -> save; the `thumbnail: menu
+   reloads` lines at 12:00:27 and 12:03:58 come from that Load menu having been opened in the
+   session, not from a save made in it) was never released. The session before it (same save,
+   same Quit, clean exit) loaded only once, from the main menu, and never opened the Load menu.
+2. Ending the session shows a loading screen, and `clean_quit` sets the exit flag 1.5 s after the
+   world is gone while it is still up.
+
+The mod's code does not create, hold or release Scaleform movies: the image registry hook and
+`light_previews` act on the Load menu's save previews (a different movie and heap), and
+`clean_quit` sets the same exit flag the main menu's own Quit sets. Candidate 2 would still make
+`clean_quit`'s timing the trigger.
+
+Diagnostic (0.12.1): the `quit:` line that sets the exit flag now says whether the render thread
+holds a loading screen (`+0x268` movie, `+0x26C` screen object, see `load-times.md`), e.g.
+`quit: quitting from the main menu, 2625 ms after Quit, no loading screen up`; the main menu's own
+Quit logs `quit: no area loaded - quitting at once, ...`. `LOADING SCREEN UP` there points at
+candidate 2, and the fix would be to wait in `cq_poll` until it is gone (still bounded by
+`CQ_GIVEUP_MS`). `no loading screen up` followed by the same crash points at candidate 1, a game
+leak that a later quit cannot avoid.
+
+First run with the diagnostic (owner, 2026-11-11 13:35-13:39, same setup,
+`docs/validation/flotsam-regression-2026-11-11.log`): three area loads, two of them from the
+in-game Load menu (Vergen, then Flotsam twice), then the pause menu's Quit with the same timing
+as the crash run (`the game session ended 1047 ms after Quit`, `quitting from the main menu,
+2609 ms after Quit, no loading screen up`) and a clean exit one second later (`ExitProcess(0)`,
+`unloaded`, no dump). So an in-game load before the quit does not crash every time, and in this
+run no loading screen was up when the flag was set. It does not say which candidate applied in
+the crash run: the crash did not come back. Two differences from that run, neither shown to
+matter: its last load was a Vergen save (the movie in the dump is Vergen's loading screen) and
+the menu reloaded `QuickSave_640x360.bmp` 66 ms after the exit flag; here the last two loads
+were Flotsam saves and no picture was reloaded after the flag.
+
+To reproduce: load a save, open the Load menu in game and load a save (one from the same area is
+enough), play a little, Esc, Quit. With the segment-order condition it may take a few tries; the
+crash is silent (the game closes) and leaves a dump plus a `crash:` block in the log.

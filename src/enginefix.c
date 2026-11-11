@@ -5871,12 +5871,28 @@ __declspec(naked) static void __stdcall cq_call_exit(void* game)
     }
 }
 
+// Passive, for the log line when the exit flag is set: is a loading screen up (render thread
+// +0x268 movie, +0x26C screen object)? A loading-screen movie still alive at the GUI shutdown
+// crashes in Scaleform's heap teardown (2026-11-11 dump, docs/fixes/quit-crash.md).
+static const char* cq_loading_note(void)
+{
+    static char buf[96];
+    char* rt = (char*)read_ptr((void*)ga(VA_RENDER_THREAD));
+    void* movie = rt ? read_ptr(rt + OFF_RT_LOAD_MOVIE) : NULL;
+    void* screen = rt ? read_ptr(rt + OFF_RT_LOAD_SCREEN) : NULL;
+    if (!rt) return "render thread not found";
+    if (!movie && !screen) return "no loading screen up";
+    _snprintf_s(buf, sizeof buf, _TRUNCATE, "LOADING SCREEN UP (movie %p, screen %p)", movie, screen);
+    return buf;
+}
+
 // On the game thread, from quit_stub: 1 = the session is ending (ExitGame), 0 = quit at once.
 static int __cdecl cq_request(void)
 {
     char* game = (char*)read_ptr((void*)ga(VA_GAME));
     void* world = game ? read_ptr(game + 0x40) : NULL;
     unsigned char ending = 0;
+    if (!world) logf_("quit: no area loaded - quitting at once, %s", cq_loading_note());
     if (!world || !cfg_clean_quit || !g_cqExit) return 0;
     if (g_cqWorld) return 1;   // Quit again while the session ends
     __try {
@@ -5937,11 +5953,12 @@ static void cq_poll(int gameThread)
         }
         if (now - g_cqGoneTick < CQ_SETTLE_MS) return;
         if (InterlockedCompareExchangePointer((void* volatile*)&g_cqWorld, NULL, w) != w) return;
-        logf_("quit: quitting from the main menu, %lu ms after Quit", now - g_cqTick);
+        logf_("quit: quitting from the main menu, %lu ms after Quit, %s", now - g_cqTick, cq_loading_note());
         cq_set_exit_flag();
     } else if (now - g_cqTick >= CQ_GIVEUP_MS) {
         if (InterlockedCompareExchangePointer((void* volatile*)&g_cqWorld, NULL, w) != w) return;
-        logf_("quit: the game session did not end within %d s - quitting as the game does", CQ_GIVEUP_MS / 1000);
+        logf_("quit: the game session did not end within %d s - quitting as the game does, %s",
+              CQ_GIVEUP_MS / 1000, cq_loading_note());
         cq_set_exit_flag();
     }
 }
