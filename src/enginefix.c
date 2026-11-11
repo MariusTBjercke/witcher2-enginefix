@@ -4965,6 +4965,7 @@ static void fade_exec_install(void)
 #define OFF_WORLD_ENVMGR      0x2B8
 #define KO_LIGHT_MS           4000
 #define KO_SPINNER_MS         2000
+#define KO_SPINNER_LOG_MS     10000         // a "show" this long after an instant door is logged
 #define KO_MISSING_MAX        16            // more layers than this to load: no instant door
 
 typedef void (__fastcall *SpinnerExec_t)(void* cmd, void* edx);
@@ -5108,6 +5109,31 @@ static void __fastcall hook_SpinnerExec(void* cmd, void* edx)
         (ko_instant_recent(KO_SPINNER_MS) || (occ && GetTickCount() - occ < KO_SPINNER_MS))) {
         InterlockedIncrement(&g_spinnerDropped);
         return;
+    }
+    // Passive: a spinner that still shows near a door without a fade (seen once on GOG with
+    // 0.12.1, on the way out of a house). Which command it is shows in when it comes: between
+    // the two windows above, while the occluders wait, or after them. Render thread.
+    if (!cfg_door_spinner) {
+        static DWORD door, shown;
+        static int lines;
+        DWORD inst = g_koInstantTick, now = GetTickCount();
+        if (inst != door) { door = inst; shown = 0; lines = 0; }
+        if (inst && now - inst < KO_SPINNER_LOG_MS && lines < 8) {
+            if (show) {
+                char when[64] = "no occluder switch for this door";
+                if (g_koDeferOcc) strcpy_s(when, sizeof when, "its occluders still wait");
+                else if (occ && (LONG)(occ - inst) >= 0)
+                    _snprintf_s(when, sizeof when, _TRUNCATE, "%lu ms after its occluder switch", now - occ);
+                shown = now | 1;
+                lines++;
+                logf_("doors: loading spinner shown %lu ms after a door without a fade (%s) - hidden only "
+                      "for %d ms after each", now - inst, when, KO_SPINNER_MS);
+            } else if (shown) {
+                lines++;
+                logf_("doors: loading spinner taken away again %lu ms later", now - shown);
+                shown = 0;
+            }
+        }
     }
     ((SpinnerExec_t)g_spinnerExec)(cmd, edx);
 }

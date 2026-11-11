@@ -462,7 +462,13 @@ from adding to the load where room is short. Not measured: native Direct3D 9 at 
   once on the way out of the craftsmen's bar, on a door without a fade and with nothing to
   load. "Show" commands are dropped for 2 s after the door starts and for 2 s after the
   occluder switch, which came 3.4-3.9 s after the door, so one arriving between the two gets
-  through; that it was such a command is a guess, since a command that passes is not logged.
+  through; that it was such a command is a guess, since a command that passed was not logged.
+  After 0.12.1 one is: for 10 s after a door without a fade, `doors: loading spinner shown N ms
+  after a door without a fade (its occluders still wait | M ms after its occluder switch | no
+  occluder switch for this door) - hidden only for 2000 ms after each`, and `doors: loading
+  spinner taken away again N ms later` (at most 8 lines a door; passive, render thread). A
+  `shown` between 2 000 ms and the occluder switch confirms the guess; the fix would then hide
+  it from the door until 2 s after the switch.
 
 No in-game run was needed for this research: the installed `load_trace` does not log the
 environment manager, so a run with the current DLL could not show it. The proof run belongs to
