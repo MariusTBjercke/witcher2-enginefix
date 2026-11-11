@@ -57,6 +57,9 @@ running exe's import directory.
 | `VA_INDOOR_IMM` | `009C0232` | `00A11295` |  |
 | `VA_LAYER_LOAD` | `00A5AC6C` | `00AAE95E` |  |
 | `VA_LAYER_LOAD_CALL` | `00A91709` | `00AE5D66` | call FUN_00a5ac6c in FUN_00a91600, its only caller |
+| `VA_LAYER_SYNC` | `00A5A90E` | `00AAE727` | EAX = layer info: attach or detach to match the predicate |
+| `VA_LAYER_VISIBLE` | `00A5A568` | `00AAE25A` | EAX = layer info -> AL: should be attached |
+| `VA_LAYER_VISIBLE_CALL` | `00A5A92A` | `00AAE743` | its only call, in FUN_00a5a90e |
 | `VA_LS_CLEAR_CALL` | `004461C8` | `0044F348` | E8 in the array clear 004461B1 (after mov eax,edi) |
 | `VA_LS_RECORD_FREE` | `00AFE0A2` | `00B37334` | record destructor, EAX = record, plain RET |
 | `VA_LS_REMOVE_CALL` | `00AFE1C3` | `00B3746F` | E8 in the single removal 00AFE12C (after mov eax,edi) |

@@ -813,6 +813,52 @@ detached layer leaves the visibility pass (expected: entities leave the world), 
 detach/attach does to the layer storage (`[stability] layer_storage_leak`). GOG has not been
 looked at; the `HideLayerGroup()` warning string is the anchor there.
 
+### `[loading] hide_kept` (default 1, only with `release_kept`; seen working in game once, Steam)
+
+At the same point where `release_kept` would unload, the kept layers are hidden instead
+while at least `area_memory_mb` (1 536 MB) of address space is free:
+
+* **How.** The call `00A5A92A` (GOG `00AAE743`) to the visibility predicate goes through
+  `kh_pred_stub`, which answers "not visible" for the layer infos in a DLL-owned sorted set and
+  passes every other layer to the game's predicate. The release switch to the current partition
+  is queued as for an unload; `hook_PartRun` fills the set before the job runs, and the job's own
+  attach stage (`FUN_00b05a52` on the root group) detaches them. No unload, no GC, no game flag
+  written.
+* **Back.** Within half of `release_kept` from the door the same kind of switch empties the
+  set and the job attaches them again, before Geralt reaches the door. Any other switch (a door,
+  an area load) first empties the set, and its own job attaches them; a stream switch (mode 0)
+  gets them synced at once with `FUN_00a5a90e` (GOG `00AAE727`). A save load never touches the
+  old world's pointers.
+* **Memory.** Less than `area_memory_mb` free while hidden: the next check unloads them as
+  `release_kept` does. `hide_kept=0`: always unload.
+* **GOG.** Same functions, bytes and convention (EAX = layer info); found from
+  `HideLayerGroup() called when no world is loaded.` (`00ECE518`, native `00AE70B8`, group setter
+  `00B3F3F7`), and the GOG predicate reads the game object at `01475740`, GOG's `VA_GAME`. Not run
+  in game on GOG.
+* **Log.** `interiors: hid N kept outdoor layers D m from the door (job T ms, F MB free); shown
+  again within D/2 m of it or at the next switch`, `interiors: showed N hidden layers again,
+  Geralt D m from the door (job T ms)`, `interiors: N hidden layers out of the hidden set before
+  a door - its job attaches them`.
+
+#### Seen in game (owner, 2026-11-11, Steam, DXVK, 4K, `release_kept=30`, `hide_kept=1`)
+
+`docs/validation/hide-kept-2026-11-11.log`: the save in front of the cave, two rounds in to the
+cliff and out again, then Quit.
+
+| Step | Log |
+|---|---|
+| Hide, 30-31 m in | `hid 53 kept outdoor layers ... (job 38-39 ms, 2081 / 1997 MB free)`; no GC (the unload took 72-74 ms) |
+| Hidden | `distance stats` ~0.34-0.40 M range calls per 5 s at the cliff, ~3.2 M just before the hide |
+| Show, 14 m from the door | `showed 53 hidden layers again ... (job 11 ms)` |
+| Door out | `is loaded - no fade (1 to load, spinner hidden)`, jobs of 8-11 ms, both rounds |
+| Quit | clean, no dump |
+
+Owner: everything as expected. Through a crack in the tunnel roof before the cliff the sky now
+shows where the kept state showed rock: the hidden layers include the quarry's rocks above the
+tunnel; with the game's own unloading the sky shows there too (not compared with
+`interiors=0` at that spot). Free address space went from 2 081 to 1 997 MB between the two
+hides, three minutes apart; whether hide and show cost memory over many rounds is not known yet.
+
 ### Still to check in game
 
 Not seen: Vergen's other 20 houses (Iorveth's path opens the whole town; they are covered by

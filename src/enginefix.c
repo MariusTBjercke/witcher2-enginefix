@@ -188,6 +188,7 @@ static int cfg_interiors = 2;   // [loading] interiors: 0 game, 1 keep the outdo
 static int cfg_keep_outdoors = 1; // [loading] keep_outdoors: house doors leave the outdoor layers loaded
 static int cfg_skip_door_gc = 1; // [loading] skip_door_gc: no full object GC on a keep_outdoors house door
 static int cfg_release_kept;    // [loading] release_kept: metres from the door after which kept outdoor layers unload (0 = never)
+static int cfg_hide_kept = 1;   // [loading] hide_kept: with release_kept, hide them instead while area_memory_mb is free
 static int cfg_instant_doors = 1; // [loading] instant_doors: no fade on a house door known to load nothing
 static int cfg_indoor_outdoors = 1; // [loading] indoor_outdoors: keep drawing terrain/grass behind kept doors
 static int cfg_preload_interiors = 1; // [loading] preload_interiors: load every building interior with the area
@@ -549,6 +550,7 @@ static void load_config(void)
     cfg_skip_door_gc = ini_int("loading", "skip_door_gc", 1);
     cfg_release_kept = ini_int("loading", "release_kept", 0);
     if (cfg_release_kept < 0 || cfg_release_kept > 1000) cfg_release_kept = 0;
+    cfg_hide_kept = ini_int("loading", "hide_kept", 1);
     cfg_instant_doors = ini_int("loading", "instant_doors", 1);
     cfg_door_light_blend = ini_float("loading", "door_light_blend", 1.0f);
     if (cfg_door_light_blend < 0.0f || cfg_door_light_blend > 5.0f) cfg_door_light_blend = 1.0f;
@@ -3662,9 +3664,25 @@ static int ko_allowed(const void* job)
 // The way out is an ordinary door job: the partition being entered lists them and the loader
 // loads them again (it skips only layers still loaded, +0x38). The switch lists for unloading the
 // loaded layers its partition does not hold, so only recorded layers in the release job's own
-// unload list go: a layer of the partition Geralt is in is never released. A layer any job loads
-// is also struck off the list; a stream or area switch, or another world, forgets it. A release
-// forgets the instant-door pairs, so the door that loads the layers back keeps its fade.
+// unload list go: a layer of the partition Geralt is in is never released. Every job also keeps
+// only the recorded layers its own unload list holds; a stream or area switch, or another world,
+// forgets the list. A release forgets the instant-door pairs, so the door that loads the layers
+// back keeps its fade.
+//
+// hide_kept: while at least area_memory_mb of address space is free the same switch hides the
+// layers instead (docs/fixes/interior-preload.md, "Research: hiding the kept layers"). Every
+// loaded layer's attachment is synced by FUN_00a5a90e (EAX = layer info), which asks
+// FUN_00a5a568 whether it should be attached; its one call (VA_LAYER_VISIBLE_CALL) goes through
+// kh_pred_stub, which answers "no" for the layer infos in g_khSet. hook_PartRun fills the set
+// before the job runs, and the job's own attach stage (FUN_00b05a52 on the root group) detaches
+// them, as HideLayerGroup() would, without unloading anything and without a GC. Back within half
+// the distance, the same kind of switch empties the set and the job attaches them again. Any
+// other switch first empties the set (kh_show_now): a door's or an area load's own job then
+// attaches them, a stream switch gets them synced at once. Less memory free while hidden:
+// unloaded as above.
+#define VA_LAYER_SYNC         0x00A5A90Eu   // EAX = layer info: attach or detach to match the predicate
+#define VA_LAYER_VISIBLE      0x00A5A568u   // EAX = layer info -> AL: should be attached
+#define VA_LAYER_VISIBLE_CALL 0x00A5A92Au   // its only call, in FUN_00a5a90e
 #define KR_MAX          1024
 #define KR_SETTLE_MS    3000   // no release this soon after the kept door
 #define KR_PENDING_MS   5000   // the queued switch must run within this
@@ -3679,11 +3697,88 @@ static float g_krDist;
 static int   g_krBlockLogged;
 static void* g_krGone[KR_MAX];   // released layers: the way out does not report them as missed
 static int   g_krGoneCount;
+enum { KR_UNLOAD, KR_HIDE, KR_SHOW };
+static int   g_krAction;         // what the queued switch does
+static uintptr_t g_khPred, g_khSync;   // this build's FUN_00a5a568 / FUN_00a5a90e; 0 = no hide mode
+static void* g_khSet[KR_MAX];    // hidden layer infos, sorted (game thread; read by kh_pred_stub)
+static volatile LONG g_khCount;
+static void* g_khTmp[KR_MAX];
+
+static int kp_cmp(const void* a, const void* b);
+
+static int __cdecl kh_is_hidden(void* info)
+{
+    return g_khCount && bsearch(&info, g_khSet, (size_t)g_khCount, sizeof(void*), kp_cmp) != NULL;
+}
+
+// Replaces `call FUN_00a5a568` (EAX = layer info, result in AL; the original keeps EBX, ESI, EDI
+// and EDX). A hidden layer reads as "not visible", every other one gets the game's answer.
+__declspec(naked) static void kh_pred_stub(void)
+{
+    __asm {
+        push ecx
+        push edx
+        push eax
+        push eax
+        call kh_is_hidden
+        add esp, 4
+        test eax, eax
+        pop eax
+        pop edx
+        pop ecx
+        jnz hidden
+        jmp dword ptr [g_khPred]
+    hidden:
+        xor al, al
+        ret
+    }
+}
+
+#pragma warning(push)
+#pragma warning(disable: 4100)   // the argument is read by the asm
+__declspec(naked) static void __stdcall kh_sync(void* info)
+{
+    __asm {
+        push ebx
+        push esi
+        push edi
+        mov eax, [esp + 16]
+        call dword ptr [g_khSync]
+        pop edi
+        pop esi
+        pop ebx
+        ret 4
+    }
+}
+#pragma warning(pop)
+
+// Empty the set before a switch that is not the DLL's (hook_PartSwitch, game thread). A door or
+// an area load runs its job at once, and the job's attach stage attaches every loaded layer
+// that is out of the set: nothing more to do, and no pointer of a world a save load replaced is
+// touched. A stream switch runs its job over later frames: there the layers are synced here.
+static void kh_show_now(void* world, int mode)
+{
+    LONGLONG t0 = qpc_us();
+    int n = (int)g_khCount, i, attached = 0;
+    if (!n) return;
+    memcpy(g_khTmp, g_khSet, (size_t)n * sizeof(void*));
+    g_khCount = 0;
+    if (mode != 0 || world != g_krWorld || !g_khSync) {
+        logf_("interiors: %d hidden layers out of the hidden set before %s - its job attaches them", n,
+              mode == 4 ? "a door" : mode == 1 ? "an area load" : "a switch");
+        return;
+    }
+    for (i = 0; i < n; i++)
+        if (read_ptr((char*)g_khTmp[i] + 0x38)) { kh_sync(g_khTmp[i]); attached++; }
+    logf_("interiors: %d hidden layers shown again before a stream switch (%lu ms)", attached,
+          (DWORD)((qpc_us() - t0) / 1000));
+}
 
 static void kr_clear(const char* why)
 {
     if (g_krCount && cfg_release_kept) logf_("interiors: %d kept outdoor layers forgotten (%s)", g_krCount, why);
     g_krCount = g_krFull = g_krPending = g_krGoneCount = 0;
+    g_khCount = 0;   // callers show them first while the world is the same
     g_krWorld = NULL;
 }
 
@@ -3694,22 +3789,15 @@ static int kr_find(void* const* set, int n, const void* layer)
     return -1;
 }
 
-// Strike every layer this job loads off the list: it belongs to the partition being entered.
-// The job's own lists, before hook_PartRun points them at its arrays.
-static void kr_forget_loads(const void* job)
+// Keep only the recorded layers this job lists for unloading (loaded, and not in the partition it
+// switches to); the rest belong to that partition now. The job's own list, before hook_PartRun
+// points it at its array.
+static void kr_keep_listed(void* const* unloadData, LONG unloadN)
 {
-    const void* bucketData = read_ptr((const char*)job + 0x1C);
-    DWORD buckets = (DWORD)(uintptr_t)read_ptr((const char*)job + 0x20), b, k;
-    for (b = 0; b < buckets && b < 5 && g_krCount; b++) {
-        void* bk = read_ptr((const char*)bucketData + 4 * b);
-        void** d = bk ? (void**)read_ptr((char*)bk + 0x08) : NULL;
-        DWORD n = bk ? (DWORD)(uintptr_t)read_ptr((char*)bk + 0x0C) : 0;
-        if (!d || n > 4096) continue;
-        for (k = 0; k < n && g_krCount; k++) {
-            int at = kr_find(g_krList, g_krCount, read_ptr(d + k));
-            if (at >= 0) g_krList[at] = g_krList[--g_krCount];
-        }
-    }
+    int i, n = 0;
+    for (i = 0; i < g_krCount; i++)
+        if (kr_find(unloadData, unloadN, g_krList[i]) >= 0) g_krList[n++] = g_krList[i];
+    g_krCount = n;
     if (!g_krCount) g_krFull = 0;
 }
 
@@ -3730,6 +3818,9 @@ static unsigned char __fastcall hook_PartSwitch(void* world, void* edx, void* na
     }
     g_ptMode = mode;
     g_koDeferOcc = 0;
+    // hide_kept: every switch but the DLL's own finds the hidden layers attached again.
+    if (g_khCount && !(g_krPending && mode == 4 && !_wcsicmp(from, to)))
+        kh_show_now(world, mode);
     // A stream job is never seen by hook_PartRun, and an area load rebuilds the area.
     if (mode != 4 && g_krCount) kr_clear(mode == 0 ? "a stream switch" : "an area load");
     ok = ((PartSwitch_t)g_partSwitch)(world, edx, name, mode, screen);
@@ -4394,7 +4485,7 @@ static void kr_record(void* const* unloadData, LONG unloadN, void* world)
     LONG i;
     int added = 0, wasFull = g_krFull;
     if (!cfg_release_kept || !g_partRequest) return;
-    if (g_krWorld != world) { g_krCount = g_krFull = g_krGoneCount = 0; g_krWorld = world; }
+    if (g_krWorld != world) { g_krCount = g_krFull = g_krGoneCount = 0; g_khCount = 0; g_krWorld = world; }
     for (i = 0; i < unloadN; i++) {
         void* l = unloadData[i];
         if (!l || ko_class(l) != LC_OTHER || kp_in_set(l) || kr_find(g_krList, g_krCount, l) >= 0) continue;
@@ -4425,6 +4516,7 @@ static void kr_frame(void)
     char* rt;
     float p[3], dx, dy, dz, d;
     const char* block = NULL;
+    int action, hideOk;
     if (!cfg_release_kept || !g_krCount) return;
     if (g_krPending) {
         if (now - g_krPendingTick < KR_PENDING_MS) return;
@@ -4440,7 +4532,16 @@ static void kr_frame(void)
     if (g_krFull || !kr_player_pos(p)) return;
     dx = p[0] - g_krAnchor[0]; dy = p[1] - g_krAnchor[1]; dz = p[2] - g_krAnchor[2];
     d = sqrtf(dx * dx + dy * dy + dz * dz);
-    if (d < (float)cfg_release_kept || now - g_krSince < KR_SETTLE_MS) return;
+    hideOk = g_khPred && cfg_hide_kept && (!cfg_area_memory_mb || ko_free_mb() >= (DWORD)cfg_area_memory_mb);
+    if (g_khCount) {
+        // Hidden: shown again on the way back, unloaded if the address space runs short.
+        if (d < 0.5f * (float)cfg_release_kept) action = KR_SHOW;
+        else if (!hideOk) action = KR_UNLOAD;
+        else return;
+    } else {
+        if (d < (float)cfg_release_kept || now - g_krSince < KR_SETTLE_MS) return;
+        action = hideOk ? KR_HIDE : KR_UNLOAD;
+    }
     rt = (char*)read_ptr((void*)ga(VA_RENDER_THREAD));
     if (g_ptMode != -1 || read_ptr((char*)game + 0xE8)) block = "a switch is queued";
     else if (read_ptr((char*)world + 0x30C)) block = "a stream job is running";
@@ -4454,6 +4555,8 @@ static void kr_frame(void)
     g_krPending = 1;
     g_krPendingTick = now;
     g_krDist = d;
+    g_krAction = action;
+    g_krBlockLogged = 0;
     g_koOccTick = now | 1;   // the switch's spinner is hidden as for the occluders (hook_SpinnerExec)
     ko_part_request(game, (char*)world + 0x310, 4, (void*)ga(VA_EMPTY_STRING));
 }
@@ -4525,7 +4628,7 @@ static void __stdcall hook_PartRun(void* job)
     void* savedData[5];
     LONG savedN[5];
     LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
-    int on = 0, area = 0, mem = 0, filter, coarseSkip = 0, rel = 0, relN = 0, relSkip = 0;
+    int on = 0, area = 0, mem = 0, filter, coarseSkip = 0, rel = 0, relN = 0, relSkip = 0, relAct = KR_UNLOAD;
     int dropFake, fakeN = 0, fakeLast = 0, fakeKeep = -1, noInteriors = 0, memTier = g_koMemLow;
     LONGLONG tRun;
     void* world = read_ptr((char*)job);
@@ -4545,12 +4648,19 @@ static void __stdcall hook_PartRun(void* job)
         // the job is done (fast_door_tick): loaded with the job, they culled the town in front
         // of Geralt while he was still in the doorway.
         mem = g_koMemLow && g_ptMode == 4 && g_partRequest && ko_frames_alive() && _wcsicmp(g_ptFrom, g_ptTo);
-        // release_kept: what this job loads is no longer released; the queued switch to the
-        // current partition (kr_frame) is the release.
+        // release_kept: only what this job lists for unloading stays recorded; the queued switch
+        // to the current partition (kr_frame) is the release, the hide or the show.
         if (g_krCount && world != g_krWorld) kr_clear("another world");
-        if (g_krCount) kr_forget_loads(job);
         rel = g_krPending && g_ptMode == 4 && !_wcsicmp(g_ptFrom, g_ptTo);
-        if (rel) g_krPending = 0;
+        if (g_krCount) {
+            int before = g_krCount;
+            kr_keep_listed((void* const*)unloadData, unloadN);
+            if (rel) relSkip = before - g_krCount;
+        }
+        if (rel) {
+            g_krPending = 0;
+            relAct = g_krAction;
+        }
     }
     filter = nb >= 0 && (on || mem || rel || (cfg_preload_interiors && g_koMemLow != 1));
     if (area && !g_layerHooked && cfg_preload_memory_mb &&
@@ -4575,15 +4685,24 @@ static void __stdcall hook_PartRun(void* job)
             if (c == LC_FAKE) g_kpFakeSeen = 1;
             if (go) g_koUnloadOut[unloaded++] = l; else kept++;
         }
-        // Only what the job itself lists for unloading: the switch diffs the loaded layers
-        // against the partition (run of 2026-11-11: the release job listed the 112 kept layers),
-        // so a recorded layer missing there belongs to the partition Geralt is in and stays.
-        if (rel && g_krCount && !g_krFull && unloaded + g_krCount <= KO_LIST) {
-            for (i = 0; i < g_krCount; i++) {
-                if (kr_find(unloadData, unloadN, g_krList[i]) < 0) { relSkip++; continue; }
+        // The list now holds only what the job itself lists for unloading: the switch diffs the
+        // loaded layers against the partition (run of 2026-11-11: the release job listed the 112
+        // kept layers), so nothing of the partition Geralt is in is touched (kr_keep_listed).
+        if (rel && relAct == KR_UNLOAD && g_krCount && !g_krFull && unloaded + g_krCount <= KO_LIST) {
+            g_khCount = 0;   // unloaded now; the attach stage skips unloaded layers
+            for (i = 0; i < g_krCount; i++)
                 if (kr_find(g_koUnloadOut, unloaded, g_krList[i]) < 0) g_koUnloadOut[unloaded++] = g_krList[i];
-                g_krList[relN++] = g_krList[i];
-            }
+            relN = g_krCount;
+        } else if (rel && relAct == KR_HIDE && g_krCount && !g_krFull) {
+            // The job's attach stage (FUN_00b05a52) detaches them through kh_pred_stub.
+            memcpy(g_khSet, g_krList, (size_t)g_krCount * sizeof(void*));
+            qsort(g_khSet, (size_t)g_krCount, sizeof(void*), kp_cmp);
+            g_khCount = g_krCount;
+            relN = g_krCount;
+        } else if (rel && relAct == KR_SHOW) {
+            // ... and attaches them again once they are out of the set.
+            relN = (int)g_khCount;
+            g_khCount = 0;
         }
         *(void**)((char*)job + 0x0C) = g_koUnloadOut;
         *(LONG*)((char*)job + 0x10) = unloaded;
@@ -4683,7 +4802,7 @@ static void __stdcall hook_PartRun(void* job)
         }
     }
     // A release frees what it unloaded at once: the GC runs.
-    g_koSkipGc = on && cfg_skip_door_gc && !relN;
+    g_koSkipGc = on && cfg_skip_door_gc && !(relN && relAct == KR_UNLOAD);
     // Preloaded layers come last in the job and load only while the address space allows.
     if (kmN && g_layerHooked && cfg_preload_memory_mb) {
         km_watch((void* const**)savedData, savedN, nb, kmBase, kmN);
@@ -4738,7 +4857,14 @@ static void __stdcall hook_PartRun(void* job)
               deferred ? ", occluders wait until Geralt is through the door" : "");
     if (deferred) ko_defer_occluders();
     if (area) ko_count("after the switch", world);
-    if (rel) {
+    if (rel && relAct == KR_HIDE) {
+        logf_("interiors: hid %d kept outdoor layers %.0f m from the door (job %lu ms, %lu MB free%s); shown again "
+              "within %d m of it or at the next switch", relN, g_krDist, (DWORD)(tRun / 1000), ko_free_mb(),
+              relSkip ? ", some recorded layers belong to this partition and stay" : "", cfg_release_kept / 2);
+    } else if (rel && relAct == KR_SHOW) {
+        logf_("interiors: showed %d hidden layers again, Geralt %.0f m from the door (job %lu ms)", relN, g_krDist,
+              (DWORD)(tRun / 1000));
+    } else if (rel) {
         if (relN) {
             for (i = 0; i < relN && g_krGoneCount < KR_MAX; i++)
                 if (kr_find(g_krGone, g_krGoneCount, g_krList[i]) < 0) g_krGone[g_krGoneCount++] = g_krList[i];
@@ -4855,6 +4981,19 @@ static int pt_install(void)
         c = patch_call(runCall, g_partRun, (void*)hook_PartRun);
     if (!code_matches(g_gc, pt_gc_bytes()) || !patch_call(ga(VA_PART_GC_CALL), g_gc, (void*)hook_PartGc))
         logf_("partition: GC call not recognised - skip_door_gc off");
+    // hide_kept: the layer visibility predicate's one call (both builds; GOG not run in game).
+    if (cfg_release_kept && cfg_hide_kept && g_partRequest) {
+        uintptr_t pred = ga(VA_LAYER_VISIBLE), sync = ga(VA_LAYER_SYNC), call = ga(VA_LAYER_VISIBLE_CALL);
+        if (pred && sync && call && code_matches(pred, "80 78 58 00 75 03 32 c0 c3") &&
+            code_matches(sync, "53 56 33 db 57 8b f8 38 1d")) {
+            g_khPred = pred;
+            g_khSync = sync;
+            if (!patch_call(call, pred, (void*)kh_pred_stub)) g_khPred = g_khSync = 0;
+        }
+        logf_("interiors: %s", g_khPred
+              ? "layer visibility hooked - kept outdoor layers are hidden far from the door while area_memory_mb is free"
+              : "layer visibility not recognised on this build - kept outdoor layers unload instead (hide_kept off)");
+    }
     logf_("partition: switch calls %s/%s, sync run %s (load_trace=%d keep_outdoors=%d)", a ? "hooked" : "NOT hooked",
           b ? "hooked" : "NOT hooked", c ? "hooked" : "NOT hooked", cfg_load_trace, cfg_keep_outdoors);
     done = 1;
@@ -8277,6 +8416,9 @@ static const ga_row k_gog[] = {
     { VA_INDOOR_IMM,         0x00A11295u },
     { VA_LAYER_LOAD,         0x00AAE95Eu },   // stdcall (info, ctx), RET 8 on GOG
     { VA_LAYER_LOAD_CALL,    0x00AE5D66u },   // in the bucket loader 00AE5C5A ("Loading layer '%s'...")
+    { VA_LAYER_SYNC,         0x00AAE727u },   // EAX = info; called by HideLayerGroup's 00B3F3F7 ("HideLayerGroup() called when no world is loaded." 00ECE518, native 00AE70B8)
+    { VA_LAYER_VISIBLE,      0x00AAE25Au },   // same bytes; reads the game at 01475740 (VA_GAME)
+    { VA_LAYER_VISIBLE_CALL, 0x00AAE743u },   // its only call
     { VA_LS_CLEAR_CALL,      0x0044F348u },   // in the array clear 0044F334 (after mov eax,ebx), from the load 00B37C82
     { VA_LS_RECORD_FREE,     0x00B37334u },   // EAX = record; frees +0x18 only, as on Steam
     { VA_LS_REMOVE_CALL,     0x00B3746Fu },   // in the single removal 00B373CD (after mov eax,edx)
@@ -8500,8 +8642,8 @@ static void build_gate(void)
         cfg_skip_intro = 0;
     }
     if (!partitions && (cfg_keep_outdoors || cfg_keep_interiors || cfg_preload_interiors)) {
-        gate_off("loading", "interiors (keep_outdoors, keep_interiors, preload_interiors, skip_door_gc, release_kept)");
-        cfg_keep_outdoors = cfg_keep_interiors = cfg_preload_interiors = cfg_skip_door_gc = cfg_release_kept = 0;
+        gate_off("loading", "interiors (keep_outdoors, keep_interiors, preload_interiors, skip_door_gc, release_kept, hide_kept)");
+        cfg_keep_outdoors = cfg_keep_interiors = cfg_preload_interiors = cfg_skip_door_gc = cfg_release_kept = cfg_hide_kept = 0;
     }
     if (!indoor && cfg_indoor_outdoors) {
         if (cfg_keep_outdoors) gate_off("loading", "indoor_outdoors");
@@ -9359,7 +9501,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d fast_start=%d", cfg_skip_intro, cfg_fast_start);
         logf_("diagnostics: file_trace=%d load_trace=%d mem_trace=%d script_bindings=%d", cfg_file_trace, cfg_load_trace, cfg_mem_trace, cfg_script_bindings);
-        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d release_kept=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_release_kept, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
+        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d release_kept=%d hide_kept=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_release_kept, cfg_hide_kept, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",
