@@ -859,6 +859,38 @@ tunnel; with the game's own unloading the sky shows there too (not compared with
 `interiors=0` at that spot). Free address space went from 2 081 to 1 997 MB between the two
 hides, three minutes apart; whether hide and show cost memory over many rounds is not known yet.
 
+### Research: preloading the small areas behind an area's doors (2026-11-11, not built)
+
+`preload_interiors` loads building interiors only. A small area behind a door of the same
+folder (the quarry's `common\secret_passage`: 16 layers, 96 ms) is loaded on the first visit,
+behind the 0.25 s area fade, and only kept from then on. Owner's wish: load such areas with the
+area while memory allows, so the first visit has no fade either.
+
+Which partitions are behind the area's doors is in the doors themselves (Steam, static):
+
+| What | Where |
+|---|---|
+| `CStreamingDoor` | class size `0x250`, vtable `00EF0084` (slot 78 = `00EF01BC` OnTimer, slot 153 = `00EF02E8` start, both already mapped); registered by `FUN_00502779` |
+| `inside` / `outside` | `SDoorPartition` at door `+0x200` / `+0x214` (property registration `FUN_0050282a`); its first field is the partition name String (the door start reads it so) |
+| A layer's entities | layer object (info `+0x38`) `+0x50` array, `+0x54` count (`FUN_00a8ba97`, `FUN_00a8bb48`) |
+
+Two ways to use it:
+
+1. **At run time.** After an area load, walk the loaded layers' entities for that vtable and
+   read both partitions of each door. The neighbours are only known once the area is loaded,
+   so they would load in a second job (a queued switch to the current partition, as for
+   `release_kept`) right after the loading screen: a short hitch there instead of a fade at the
+   first door.
+2. **From the offline survey.** The survey of `pack0.dzip` read every door's partitions (153
+   doors, 106 pairs, 21 of them area doors). A table of the area-door pairs in the DLL would let
+   the area load add the small neighbours to its own last bucket, behind the loading screen, as
+   it does for interiors. The survey output was not kept; it has to be run again.
+
+Either way: only neighbours in the same folder that are not houses, at most a few dozen layers
+each, under the `preload_memory_mb` guard; their black planes (`black_plane*`, `dark_plane*`,
+which belong to the area changes, see "The survey behind the new rules") could then be left out
+like the fake rooms. GOG: the door offsets are still to be found (`CStreamingDoorClassBuilder`).
+
 ### Still to check in game
 
 Not seen: Vergen's other 20 houses (Iorveth's path opens the whole town; they are covered by
