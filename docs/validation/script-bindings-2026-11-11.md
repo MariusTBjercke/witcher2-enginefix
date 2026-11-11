@@ -90,6 +90,32 @@ W2EF_TestParam( n );
 `2A` = 42 in, `D2 04` = 1234 back as the next call's argument. The result crosses the VM
 correctly, so the contract is complete for `int`: arguments in, result out.
 
+## Run 7 - three types, then a heap corruption: a bug in the wrapper
+
+The wrapper was refactored into plain C with naked shims, and three natives were
+registered (`W2EF_Echo` string, `W2EF_Num` float, `W2EF_Flag` bool). The game died with
+`0xc0000374` (STATUS_HEAP_CORRUPTION) after `enter W2EF_Num` and before the body ran.
+
+Cause: the hand-written version zeroed the 16-byte slot before calling `FUN_00401faf`,
+the C version did not. That helper *releases* `[slot+0]` before it writes, so an
+uninitialised slot frees whatever the stack held. Fixed with a `memset` before the init.
+
+## Run 8 - all four value types, both directions: menu
+
+```
+18:03:52  W2EF_Echo registered at slot 1691
+18:03:52  W2EF_Num registered at slot 1692
+18:03:52  W2EF_Flag registered at slot 1693
+18:04:04  enter W2EF_Num      enter W2EF_Num      float 1.5   float 1.5
+18:04:04  enter W2EF_Flag     enter W2EF_Flag     bool 1      bool 1
+18:04:04  enter W2EF_Echo     enter W2EF_Echo     string "hei"  string "hei"
+```
+
+Each function is called nested (`W2EF_Num( W2EF_Num( 1.5 ) )`), so the inner result is
+the outer call's argument: the outer line proves the result crossed back. `string` also
+proves the deep copy into the result slot and the release of the argument slot. Main
+menu reached, no crash.
+
 ## State after the runs
 
 The probe was removed from `book_helpers.ws` and `continue_button.ws` again,

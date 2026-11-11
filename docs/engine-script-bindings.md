@@ -1,11 +1,11 @@
 # WitcherScript bindings: how native functions are registered and called
 
 Status: research plus in-game tests, Steam 3.5.0.26. Proved end to end in the running
-game: the DLL registers a function before the compile, the `.ws` declares it with
-`import function`, the compiler resolves the name, the game calls it with an `int`
-argument, the native evaluates that argument out of the interpreter frame, answers with
-an `int`, and the script uses the answer - a second call receives `1234` back. Three
-attempts crashed; every cause is in this file.
+game: the DLL registers functions before the compile, `.ws` declares them with
+`import function`, the compiler resolves the names, and the game calls them with
+arguments and results - `int`, `float`, `bool` and `string` (the string including the
+deep copy out and the release afterwards). Four attempts crashed; every cause is in
+this file.
 
 This answers one question: **can the engine be given new script functions from
 outside, without touching `witcher2.exe` on disk?** The answer is yes, with the
@@ -130,30 +130,42 @@ uses the call as a statement, and points at a 16-byte value slot otherwise.
 
 The body has a fixed shape:
 
-1. **One evaluation per declared parameter.** Initialise a 16-byte value slot with the
-   empty-script default (`FUN_00401faf` with `0x0160FBA0`), then call `FUN_00abc328` with
-   `EAX = frame` and the slot as destination: it executes exactly one bytecode
-   instruction, which produces that argument.
+1. **One evaluation per declared parameter**, in order. Zero a 16-byte value slot first -
+   `FUN_00401faf` *releases* whatever `[slot+0]` holds before it writes, so an
+   uninitialised slot frees a stack value (measured: `STATUS_HEAP_CORRUPTION`). Then
+   initialise it with the empty-script default (`FUN_00401faf`, `EAX` = slot,
+   `[0x0160FBA0]` pushed) and call `FUN_00abc328` with `EAX = frame`, the slot as
+   destination: it executes exactly one bytecode instruction, which produces that
+   argument.
 2. **Consume one byte**: `[frame+0x18]++`. This is the call's terminator in the byte
    stream.
 3. Compute.
-4. If `result` is not null, store the value there: an `int` is the number at `+0` and the
-   type id `2` at `+12`. Proved round trip: the native answered `1234` and the next call
-   in the same script received it as its argument (`D2 04` in the log).
-5. Destroy a slot **only when its type owns memory**. `FUN_004021ee` releases the
-   value's payload as a heap block, so a slot holding an `int` must be left alone: the
-   number sits at `+0`, and destroying it calls the allocator with 42 - which is exactly
-   how the first parameter test died (`free(42)` read `[0x24]`).
+4. If `result` is not null, store the value there (see the slot layout below).
+5. Release the argument slots **only for types that own memory** - a `string` does, an
+   `int`, `float` or `bool` does not. `FUN_004021ee` releases `[slot+0]` as a heap
+   block, so destroying an `int` calls the allocator with 42 - which is how the first
+   parameter test died (`free(42)` read `[0x24]`).
 
-Measured layout of an `int` argument (the value `42`, from a log line in game):
+### The value slot
 
-```
-+0        2A 00 00 00   the number
-+4..+11   00 ...        unused
-+12       02 00 00 00   the type id (2 = int)
-```
+All types share one 16-byte slot, and there is **no type id in it**. The engine writes
+`2` at `+12` because that is `sizeof(wchar_t)` for the wide-string container, not a tag:
 
-That is what a native reads and what a result has to look like.
+| Type | Payload | Release? |
+|---|---|---|
+| `int` | dword at `+0` | no |
+| `float` | 32-bit IEEE at `+0` | no |
+| `bool` | one byte at `+0` | no |
+| `string` | `+0` `wchar_t*` buffer, `+4` length in code units incl. the NUL, `+8` capacity, `+12` element size = 2 | **yes**, `FUN_004021ee` |
+
+A string slot owns its buffer. Two consequences: a string result is produced by a deep
+copy (`FUN_00401faf`, `EAX` = destination, source pushed) and never by a 16-byte
+`memcpy`, which would leave two slots owning one block; and the slot must be released
+exactly once.
+
+All four types were proved round trip in the running game - the argument evaluated in,
+the result passed back into a nested call
+(`docs/validation/script-bindings-2026-11-11.md`, runs 7-9).
 
 The count of `FUN_00abc328` calls is the parameter count, measured on three natives:
 
@@ -229,10 +241,10 @@ the registration, which is also how every native in the engine is declared.
 
 ## Unproven
 
-* The other value types: `float`, `bool`, `string`, `name` and object references. A
-  string is not a plain pointer (a 16-byte `String` is copied, and it owns memory), and
-  each type's id is still to be measured - the same one-start-test method that measured
-  `int` works for them.
+* The remaining value types: `name` and object references. `int`, `float`, `bool` and
+  `string` are proved; a `name` is likely a wide-string container of its own and an
+  object reference a pointer, but neither has been measured - one start test each, the
+  same method.
 * Thread safety: only the registry's creation takes a critical section; insert and
   lookup are unsynchronised. Boot-time single-threaded execution is an assumption.
 * The GOG build: every address here is Steam's, and none of the `ga()` rows exist yet.
@@ -240,20 +252,22 @@ the registration, which is also how every native in the engine is declared.
 
 ## What an SDK on top of this still needs
 
-1. **A wrapper** that takes a plain C function and does the contract: evaluate N slots,
-   consume the terminator, write the result, destroy only owned values. Our test native
-   is that logic written out longhand for one `int`.
-2. **The value type table**: the id for each type and how to read and write it.
+1. ~~**A wrapper**~~ - done, `sb_call` in `src/enginefix.c`: evaluate N slots, consume the
+   terminator, run a plain C body, write the result, release only the types that own
+   memory. All four value types are proved through it.
+2. ~~**The value type table**~~ - done: `int`/`float`/`bool` at `+0`, `string` as the
+   16-byte wide-string container.
 3. **A plugin loader**, so a mod ships as a DLL that registers its natives instead of
    patching this one.
 4. **GOG rows** for the six addresses, the `ga()` discipline the rest of the project
    already follows.
 5. **A build story**: registration must happen before `CompileScriptsFromSources`, which
    is one known call site - the hook this file describes is that mechanism.
+6. **A first real consumer**: a native that reads engine state through an address already
+   proved in `docs/addresses.md`, so the layer has a user rather than a demonstration.
 
 The cost is now visible and it is engineering, not research: the mechanism is proved,
-the two failure modes are known, and the value layout is measurable the same way the
-`int` one was.
+the failure modes are known, and the value layout is measured.
 
 ## One trap worth remembering
 

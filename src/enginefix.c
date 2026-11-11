@@ -8547,71 +8547,191 @@ typedef char (__stdcall *sb_compile_fn)(char from_release);
 static void* sb_real_compile;    // trampoline: the replaced prologue, then a jump back
 static LONG  sb_registered;
 
-// The native. docs/engine-script-bindings.md, "The native's contract": called as
-// native(ctx, frame, result), cdecl. The native evaluates its own arguments - one
-// FUN_00abc328 per declared parameter - and then consumes the call's terminator byte.
+// The native side of docs/engine-script-bindings.md, "The native's contract". A script call
+// arrives as native(ctx, frame, result), cdecl; the native evaluates its own arguments - one
+// FUN_00abc328 per declared parameter - then consumes the call's terminator byte, and writes
+// its result into `result` when that is not null.
 //
-// This follows StrLen (0x008E514C) instruction for instruction, minus the computation: the
-// slot is initialised with the empty-script default, one argument is evaluated into it, the
-// terminator is consumed, the 16 bytes are logged and the slot is destroyed. That answers
-// what an int argument looks like inside a value slot.
+// sb_run() is that sequence once, so a new script function is a plain C body instead of
+// hand-written assembly. The three engine helpers go through naked shims: two of them take
+// their first argument in EAX, and their stack cleaning is not a C function's - the shims
+// restore ESP from EBP, so it does not matter which way the callee cleans.
 #define SB_FRAME_CODE 0x18
 #define SB_FRAME_CTX  0x08
 #define SB_INIT_VALUE 0x00401FAFu   // EAX = slot, stack = the empty-script default
-#define SB_EVAL      0x00ABC328u   // EAX = frame, stack (ctx, destination)
-#define SB_FREE_VALUE 0x004021EEu   // EAX = slot
+#define SB_EVAL       0x00ABC328u   // EAX = frame, stack (ctx, destination); cdecl
+#define SB_FREE_VALUE 0x004021EEu   // EAX = slot, no stack arguments
+#define SB_VALUE_SIZE 16
+#define SB_MAX_ARGS   3u
+
+typedef struct { unsigned char b[SB_VALUE_SIZE]; } sb_value;
 
 static uintptr_t sb_init_ptr, sb_eval_ptr, sb_free_ptr;
-static LONG sb_calls;
+static LONG sb_calls, sb_enters;
 
-static void __cdecl sb_log_slot(const unsigned char* p)
-{
-    if (InterlockedIncrement(&sb_calls) > 3) return;
-    logf_("script bindings: argument slot %02X %02X %02X %02X %02X %02X %02X %02X "
-          "%02X %02X %02X %02X %02X %02X %02X %02X",
-          p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
-          p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
-}
+// The shims read their arguments out of [ebp+..] in assembly, so C sees them as unused.
+#pragma warning(push)
+#pragma warning(disable: 4100)
 
-__declspec(naked) static void sb_test_param(void)
+// EAX = slot, the source pushed. EAX-first, so a shim is the only way in.
+__declspec(naked) static void sb_value_init(sb_value* slot)
 {
     __asm {
         push ebp
         mov  ebp, esp
-        sub  esp, 0x18
-        and  dword ptr [ebp-0x14], 0
-        and  dword ptr [ebp-0x10], 0
-        and  dword ptr [ebp-0x0c], 0
-        and  dword ptr [ebp-0x08], 0
-        push esi
-        push 0x0160fba0                     // the empty-script default (DAT_0160FBA0)
-        lea  eax, [ebp-0x14]                // the value slot
+        mov  eax, dword ptr [ebp+0x8]
+        push 0x0160fba0                 // DAT_0160FBA0, the empty-script default
         call dword ptr [sb_init_ptr]
-        mov  esi, dword ptr [ebp+0x0c]      // frame, the second argument
-        lea  eax, [ebp-0x14]
-        push eax                            // destination
-        push dword ptr [esi+SB_FRAME_CTX]   // the frame's evaluation context
-        mov  eax, esi                       // the evaluator's `this`
-        call dword ptr [sb_eval_ptr]        // one bytecode instruction = one argument
-        inc  dword ptr [esi+SB_FRAME_CODE]  // the call's terminator byte
-        lea  eax, [ebp-0x14]
-        push eax
-        call sb_log_slot
-        add  esp, 4
-        // The result goes into argument 3 when it is not null: an int is the number at +0 and
-        // the type id 2 at +12 (measured, docs/engine-script-bindings.md). No FUN_004021ee:
-        // it releases the payload as a heap block, and an int value holds the number itself.
-        mov  ecx, dword ptr [ebp+0x10]
-        test ecx, ecx
-        jz   sb_no_result
-        mov  dword ptr [ecx], 1234
-        mov  dword ptr [ecx+0x0c], 2
-    sb_no_result:
-        pop  esi
         mov  esp, ebp
         pop  ebp
         ret
     }
+}
+
+// EAX = frame, stack (frame->ctx, destination); one bytecode instruction per call.
+__declspec(naked) static void sb_value_eval(char* frame, sb_value* dest)
+{
+    __asm {
+        push ebp
+        mov  ebp, esp
+        mov  eax, dword ptr [ebp+0x8]
+        push dword ptr [ebp+0xc]        // destination
+        push dword ptr [eax+SB_FRAME_CTX]
+        call dword ptr [sb_eval_ptr]
+        mov  esp, ebp
+        pop  ebp
+        ret
+    }
+}
+
+// Releases the value's payload as a heap block. Only for a type that owns memory: an int slot
+// holds the number itself at +0, so this would call the allocator with the number.
+__declspec(naked) static void sb_value_free(sb_value* slot)
+{
+    __asm {
+        push ebp
+        mov  ebp, esp
+        mov  eax, dword ptr [ebp+0x8]
+        call dword ptr [sb_free_ptr]
+        mov  esp, ebp
+        pop  ebp
+        ret
+    }
+}
+
+// A value slot is a 16-byte wide-string container: +0 the buffer, +4 the length in code units
+// including the NUL, +8 the capacity, +12 sizeof(wchar_t). All four fields are written by
+// FUN_00401faf, which is why an int slot that was initialised carries 2 at +12 as well - it is
+// not a type id. An int uses +0 as the number; a string owns the buffer at +0 and must be
+// deep-copied, never memcpy'd, or two slots free the same block.
+
+// EAX = slot, the source pushed: also the copy constructor, and the way a string result is
+// produced (FUN_00401faf deep-copies the source's buffer).
+__declspec(naked) static void sb_value_copy(sb_value* dst, const sb_value* src)
+{
+    __asm {
+        push ebp
+        mov  ebp, esp
+        mov  eax, dword ptr [ebp+0x8]
+        push dword ptr [ebp+0xc]
+        call dword ptr [sb_init_ptr]
+        mov  esp, ebp
+        pop  ebp
+        ret
+    }
+}
+
+#pragma warning(pop)
+
+static void sb_log_text(const wchar_t* text)
+{
+    char buf[256];
+    int n = WideCharToMultiByte(CP_UTF8, 0, text ? text : L"", -1, buf, sizeof buf, NULL, NULL);
+
+    if (n > 0) logf_("script bindings: string \"%s\"", buf);
+}
+
+// One script call: evaluate nargs arguments, consume the terminator, run the body, release the
+// types that own memory. `kinds` is one entry per argument; only a string owns its buffer.
+enum { SB_ARG_PLAIN = 0, SB_ARG_STRING = 1 };
+
+typedef void (__cdecl *sb_body_fn)(void* ctx, char* frame, sb_value* args, void* result);
+
+static void __cdecl sb_call(void* ctx, char* frame, void* result, const unsigned char* kinds,
+                            unsigned nargs, sb_body_fn body)
+{
+    sb_value args[SB_MAX_ARGS];
+    unsigned i;
+
+    if (nargs > SB_MAX_ARGS) nargs = SB_MAX_ARGS;
+    for (i = 0; i < nargs; i++) {
+        // Zero before FUN_00401faf: it releases whatever [slot+0] holds, so an uninitialised
+        // slot frees a stack value (measured: heap corruption at STATUS_HEAP_CORRUPTION).
+        memset(&args[i], 0, sizeof args[i]);
+        sb_value_init(&args[i]);
+        sb_value_eval(frame, &args[i]);
+    }
+    ++*(int*)(frame + SB_FRAME_CODE);
+    body(ctx, frame, args, result);
+    for (i = 0; i < nargs; i++)
+        if (kinds[i] == SB_ARG_STRING) sb_value_free(&args[i]);
+}
+
+// One string in, the same string out: proves the string layout, the deep copy and the release.
+static void __cdecl sb_echo_body(void* ctx, char* frame, sb_value* args, void* result)
+{
+    const wchar_t* text = *(const wchar_t* const*)args[0].b;
+
+    (void)ctx;
+    (void)frame;
+    if (InterlockedIncrement(&sb_calls) <= 6) sb_log_text(text);
+    if (result) sb_value_copy((sb_value*)result, &args[0]);
+}
+
+static void __cdecl sb_echo(void* ctx, char* frame, void* result)
+{
+    static const unsigned char kinds[1] = { SB_ARG_STRING };
+
+    if (InterlockedIncrement(&sb_enters) <= 12) logf_("script bindings: enter W2EF_Echo");
+    sb_call(ctx, frame, result, kinds, 1, sb_echo_body);
+}
+
+// One float in, the same float out: the payload is a 32-bit IEEE value at +0.
+static void __cdecl sb_num_body(void* ctx, char* frame, sb_value* args, void* result)
+{
+    float value = *(const float*)args[0].b;
+
+    (void)ctx;
+    (void)frame;
+    if (InterlockedIncrement(&sb_calls) <= 6) logf_("script bindings: float %g", (double)value);
+    if (result) *(float*)result = value;
+}
+
+static void __cdecl sb_num(void* ctx, char* frame, void* result)
+{
+    static const unsigned char kinds[1] = { SB_ARG_PLAIN };
+
+    if (InterlockedIncrement(&sb_enters) <= 12) logf_("script bindings: enter W2EF_Num");
+    sb_call(ctx, frame, result, kinds, 1, sb_num_body);
+}
+
+// One bool in, the same bool out: the payload is a single byte at +0.
+static void __cdecl sb_flag_body(void* ctx, char* frame, sb_value* args, void* result)
+{
+    unsigned char value = args[0].b[0] ? 1 : 0;
+
+    (void)ctx;
+    (void)frame;
+    if (InterlockedIncrement(&sb_calls) <= 6) logf_("script bindings: bool %u", value);
+    if (result) *(unsigned char*)result = value;
+}
+
+static void __cdecl sb_flag(void* ctx, char* frame, void* result)
+{
+    static const unsigned char kinds[1] = { SB_ARG_PLAIN };
+
+    if (InterlockedIncrement(&sb_enters) <= 12) logf_("script bindings: enter W2EF_Flag");
+    sb_call(ctx, frame, result, kinds, 1, sb_flag_body);
 }
 
 // Register one global script function the way RegisterEnvironmentScriptNatives (0x00A76637) does.
@@ -8660,15 +8780,23 @@ static void sb_register_native(const wchar_t* name, void* fn)
         call ebx                           // RET 4
         pop  ebx
     }
-    logf_("script bindings: W2EF_TestParam registered at slot %u",
-          *(unsigned*)((char*)desc + SB_DESC_SLOT));
+    {
+        char narrow[64];
+
+        if (WideCharToMultiByte(CP_UTF8, 0, name, -1, narrow, sizeof narrow, NULL, NULL) > 0)
+            logf_("script bindings: %s registered at slot %u", narrow,
+                  *(unsigned*)((char*)desc + SB_DESC_SLOT));
+    }
 }
 
 // Runs before the compiler: register once, then continue into the engine's own body.
 static char __stdcall sb_compile_hook(char from_release)
 {
-    if (InterlockedExchange(&sb_registered, 1) == 0)
-        sb_register_native(L"W2EF_TestParam", (void*)sb_test_param);
+    if (InterlockedExchange(&sb_registered, 1) == 0) {
+        sb_register_native(L"W2EF_Echo", (void*)sb_echo);
+        sb_register_native(L"W2EF_Num", (void*)sb_num);
+        sb_register_native(L"W2EF_Flag", (void*)sb_flag);
+    }
     return ((sb_compile_fn)sb_real_compile)(from_release);
 }
 
