@@ -179,6 +179,7 @@ static int cfg_fast_start = 1;  // [startup] fast_start: no idle waiting for FMO
 static int cfg_file_trace;      // [diagnostics] file_trace: how the game opens its data files
 static int cfg_load_trace;      // [diagnostics] load_trace: where loading-screen time goes
 static int cfg_mem_trace;       // [diagnostics] mem_trace: minutes between memory censuses (0 = off)
+static int cfg_script_bindings; // [diagnostics] script_bindings: register W2EF_TestParam (research, see the header)
 static int cfg_fast_doors = 1;  // [loading] fast_doors: picture back once a house interior is in
 static float cfg_door_fade = 0.05f; // [loading] door_fade: seconds of the door fade-out/in (game: 0.5)
 static float cfg_area_fade = 0.25f; // [loading] area_fade: door fade when the door changes area (Flotsam gate)
@@ -527,6 +528,7 @@ static void load_config(void)
     cfg_mem_trace = ini_int("diagnostics", "mem_trace", 0);
     if (cfg_mem_trace < 0) cfg_mem_trace = 0;
     if (cfg_mem_trace > 240) cfg_mem_trace = 240;
+    cfg_script_bindings = ini_int("diagnostics", "script_bindings", 0);
     cfg_fast_doors = ini_int("loading", "fast_doors", 1);
     cfg_door_fade = ini_float("loading", "door_fade", 0.05f);
     cfg_area_fade = ini_float("loading", "area_fade", 0.25f);
@@ -8507,6 +8509,236 @@ static int host_is_game(void)
     return _wcsicmp(name, L"witcher2.exe") == 0 || _wcsicmp(name, L"probe.exe") == 0;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Script bindings, [diagnostics] script_bindings=1. Research, Steam only, off by default.
+//
+// Registers one native of our own before the engine compiles base_scripts.dzip. The registration
+// works: the compiler resolves the name, an `import function` declaration supplies the signature,
+// and the function is called. The registration is not enough on its own, though - see
+// docs/engine-script-bindings.md:
+//
+//   The VM has no ordinary C calling convention. A native receives the interpreter frame in its
+//   second argument, consumes its own inline operand bytes from the frame's code pointer
+//   ([frame+0x18]) and writes its result through the VM's value stack. Engine natives do this by
+//   hand (ScriptAreaEnvironmentActivate, 0x00A75295, is the smallest example). sb_test_param below
+//   does none of it, so a script that calls it desynchronises the interpreter and the game then
+//   executes a data byte as an opcode. The probe was removed for that reason; do not point a
+//   script at this function until the contract is implemented.
+//
+// The call shapes used here are the engine's own (docs/engine-script-bindings.md):
+//   alloc    00ABE94A  cdecl (0xAC) -> zeroed block
+//   build    00B0F409  EDX = descriptor, stack (CName, fn), RET 8
+//   register 00B102A4  EAX = descriptor, stack (registry), RET 4
+//   registry 0040387C  -> [0x02589018]
+//   CName    00B28D76  __stdcall (DWORD* out, const wchar_t*), RET 8
+#define SB_COMPILE_SITE 0x00AA69A0u   // CompileScriptsFromSources, __stdcall (bool), RET 4
+#define SB_COMPILE_ORIG "55 8b ec a1 34 24 0d 01"   // push ebp; mov ebp,esp; mov eax,[0x010d2434]
+#define SB_ALLOC        0x00ABE94Au
+#define SB_BUILD        0x00B0F409u
+#define SB_REGISTER     0x00B102A4u
+#define SB_REGISTRY     0x0040387Cu
+#define SB_CNAME        0x00B28D76u
+#define SB_DESC_SIZE    0xAC
+#define SB_DESC_SLOT    0xA0          // the descriptor's own index, written by the builder
+
+typedef void (__stdcall *sb_cname_fn)(DWORD* out, const wchar_t* name);
+typedef char (__stdcall *sb_compile_fn)(char from_release);
+
+static void* sb_real_compile;    // trampoline: the replaced prologue, then a jump back
+static LONG  sb_registered;
+
+// The native. docs/engine-script-bindings.md, "The native's contract": called as
+// native(ctx, frame, result), cdecl. The native evaluates its own arguments - one
+// FUN_00abc328 per declared parameter - and then consumes the call's terminator byte.
+//
+// This follows StrLen (0x008E514C) instruction for instruction, minus the computation: the
+// slot is initialised with the empty-script default, one argument is evaluated into it, the
+// terminator is consumed, the 16 bytes are logged and the slot is destroyed. That answers
+// what an int argument looks like inside a value slot.
+#define SB_FRAME_CODE 0x18
+#define SB_FRAME_CTX  0x08
+#define SB_INIT_VALUE 0x00401FAFu   // EAX = slot, stack = the empty-script default
+#define SB_EVAL      0x00ABC328u   // EAX = frame, stack (ctx, destination)
+#define SB_FREE_VALUE 0x004021EEu   // EAX = slot
+
+static uintptr_t sb_init_ptr, sb_eval_ptr, sb_free_ptr;
+static LONG sb_calls;
+
+static void __cdecl sb_log_slot(const unsigned char* p)
+{
+    if (InterlockedIncrement(&sb_calls) > 3) return;
+    logf_("script bindings: argument slot %02X %02X %02X %02X %02X %02X %02X %02X "
+          "%02X %02X %02X %02X %02X %02X %02X %02X",
+          p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+          p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
+}
+
+__declspec(naked) static void sb_test_param(void)
+{
+    __asm {
+        push ebp
+        mov  ebp, esp
+        sub  esp, 0x18
+        and  dword ptr [ebp-0x14], 0
+        and  dword ptr [ebp-0x10], 0
+        and  dword ptr [ebp-0x0c], 0
+        and  dword ptr [ebp-0x08], 0
+        push esi
+        push 0x0160fba0                     // the empty-script default (DAT_0160FBA0)
+        lea  eax, [ebp-0x14]                // the value slot
+        call dword ptr [sb_init_ptr]
+        mov  esi, dword ptr [ebp+0x0c]      // frame, the second argument
+        lea  eax, [ebp-0x14]
+        push eax                            // destination
+        push dword ptr [esi+SB_FRAME_CTX]   // the frame's evaluation context
+        mov  eax, esi                       // the evaluator's `this`
+        call dword ptr [sb_eval_ptr]        // one bytecode instruction = one argument
+        inc  dword ptr [esi+SB_FRAME_CODE]  // the call's terminator byte
+        lea  eax, [ebp-0x14]
+        push eax
+        call sb_log_slot
+        add  esp, 4
+        // No FUN_004021ee here: it releases the value's payload as a heap block, and an int
+        // value holds the number itself at +0 (measured: 42 at +0, the type id 2 at +12), so
+        // destroying it frees address 42. Only types that own memory may be destroyed.
+        pop  esi
+        mov  esp, ebp
+        pop  ebp
+        ret
+    }
+}
+
+// Register one global script function the way RegisterEnvironmentScriptNatives (0x00A76637) does.
+static void sb_register_native(const wchar_t* name, void* fn)
+{
+    uintptr_t p_alloc = ga(SB_ALLOC), p_build = ga(SB_BUILD), p_register = ga(SB_REGISTER);
+    uintptr_t p_registry = ga(SB_REGISTRY), p_cname = ga(SB_CNAME);
+    DWORD cn = 0;
+    void* desc = NULL;
+    void* registry = NULL;
+
+    if (!p_alloc || !p_build || !p_register || !p_registry || !p_cname) {
+        logf_("script bindings: an engine address is missing on this build - not registered");
+        return;
+    }
+    __asm {
+        mov  eax, p_alloc
+        push SB_DESC_SIZE
+        call eax
+        pop  ecx                       // the allocator is cdecl: the caller removes the size
+        mov  desc, eax
+    }
+    if (!desc) { logf_("script bindings: the 0xAC descriptor allocation failed"); return; }
+
+    ((sb_cname_fn)p_cname)(&cn, name);   // __stdcall, RET 8
+    __asm {
+        mov  eax, p_build
+        mov  edx, desc                     // the builder takes its `this` in EDX
+        push fn
+        push cn
+        call eax                           // RET 8: the callee removes both arguments
+    }
+
+    __asm {
+        mov  eax, p_registry
+        call eax
+        mov  registry, eax
+    }
+    if (!registry) { logf_("script bindings: no registry object"); return; }
+
+    __asm {
+        push ebx
+        mov  ebx, p_register
+        mov  eax, desc                     // EAX = descriptor, the builder's return value
+        push registry
+        call ebx                           // RET 4
+        pop  ebx
+    }
+    logf_("script bindings: W2EF_TestParam registered at slot %u",
+          *(unsigned*)((char*)desc + SB_DESC_SLOT));
+}
+
+// Runs before the compiler: register once, then continue into the engine's own body.
+static char __stdcall sb_compile_hook(char from_release)
+{
+    if (InterlockedExchange(&sb_registered, 1) == 0)
+        sb_register_native(L"W2EF_TestParam", (void*)sb_test_param);
+    return ((sb_compile_fn)sb_real_compile)(from_release);
+}
+
+// Entry replacement: "jmp sb_compile_hook" over the 8-byte prologue, which the trampoline runs.
+static int sb_install(uintptr_t at)
+{
+    static const unsigned char prologue[8] = { 0x55, 0x8B, 0xEC, 0xA1, 0x34, 0x24, 0x0D, 0x01 };
+    unsigned char code[8];
+    unsigned char* tramp;
+    pb_range range;
+    HANDLE peers[256];
+    unsigned count = 0;
+    DWORD old = 0, tmp = 0;
+    int64_t delta = (int64_t)(uintptr_t)sb_compile_hook - (int64_t)(at + 5);
+
+    if (delta < INT32_MIN || delta > INT32_MAX) return 0;   // the jump must be reachable
+    if (!code_matches(at, SB_COMPILE_ORIG)) return 0;
+    tramp = (unsigned char*)wf_make_trampoline((void*)at, prologue, sizeof prologue);
+    if (!tramp) return 0;
+    sb_real_compile = tramp;
+    code[0] = 0xE9;
+    *(uint32_t*)(code + 1) = (uint32_t)(int32_t)delta;
+    code[5] = 0x90;
+    code[6] = 0x90;
+    code[7] = 0x90;
+    range.start = (const unsigned char*)at;
+    range.len = (unsigned)sizeof prologue;
+    if (!pb_stop_peers(peers, &count, &range, 1)) goto failed;
+    if (!code_matches(at, SB_COMPILE_ORIG) ||
+        !VirtualProtect((void*)at, sizeof code, PAGE_EXECUTE_READWRITE, &old)) {
+        pb_resume_peers(peers, count);
+        goto failed;
+    }
+    memcpy((void*)at, code, sizeof code);
+    VirtualProtect((void*)at, sizeof code, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), (void*)at, sizeof code);
+    pb_resume_peers(peers, count);
+    return 1;
+failed:
+    sb_real_compile = NULL;
+    VirtualFree(tramp, 0, MEM_RELEASE);
+    return 0;
+}
+
+// Started from DllMain while script_bindings=1. The SteamStub decrypts .text after every
+// DllMain, so wait for the fingerprint; the barrier can refuse while threads are still being
+// created, hence the retry (the window patches' pattern).
+static DWORD WINAPI scriptbind_thread(LPVOID param)
+{
+    uintptr_t at = ga(SB_COMPILE_SITE);
+    DWORD t0 = GetTickCount();
+
+    (void)param;
+    if (!at) { logf_("script bindings: address unknown on this build - off"); return 0; }
+    sb_init_ptr = ga(SB_INIT_VALUE);
+    sb_eval_ptr = ga(SB_EVAL);
+    sb_free_ptr = ga(SB_FREE_VALUE);
+    if (!sb_init_ptr || !sb_eval_ptr || !sb_free_ptr) {
+        logf_("script bindings: a value helper address is unknown on this build - off");
+        return 0;
+    }
+    if (!wf_wait_site(at, SB_COMPILE_ORIG, 30000)) {
+        logf_("script bindings: CompileScriptsFromSources never read as its real bytes - off");
+        return 0;
+    }
+    do {
+        if (sb_install(at)) {
+            logf_("script bindings: hooked CompileScriptsFromSources at %08X", (unsigned)at);
+            return 0;
+        }
+        Sleep(1);
+    } while (g_running && (long)(GetTickCount() - t0) < 3000);
+    logf_("script bindings: install failed - off (the engine compiles without our name)");
+    return 0;
+}
+
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {
     if (reason == DLL_PROCESS_ATTACH) {
@@ -8557,7 +8789,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
               cfg_distance, cfg_visibility, cfg_shadow_range);
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d fast_start=%d", cfg_skip_intro, cfg_fast_start);
-        logf_("diagnostics: file_trace=%d load_trace=%d mem_trace=%d", cfg_file_trace, cfg_load_trace, cfg_mem_trace);
+        logf_("diagnostics: file_trace=%d load_trace=%d mem_trace=%d script_bindings=%d", cfg_file_trace, cfg_load_trace, cfg_mem_trace, cfg_script_bindings);
         logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
@@ -8583,6 +8815,11 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             if (cfg_enabled) {
                 HANDLE h = CreateThread(NULL, 0, worker, NULL, 0, NULL);
                 if (h) CloseHandle(h); else logf_("CreateThread failed");
+                if (cfg_script_bindings) {
+                    h = CreateThread(NULL, 0, scriptbind_thread, NULL, 0, NULL);
+                    if (h) CloseHandle(h);
+                    else { logf_("script bindings: CreateThread failed - off"); cfg_script_bindings = 0; }
+                }
                 if (cfg_wf_enabled) {
                     h = CreateThread(NULL, 0, window_init_thread, NULL, 0, NULL);
                     if (h) CloseHandle(h); else logf_("window: CreateThread failed - borderless off");

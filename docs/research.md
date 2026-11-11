@@ -44,6 +44,22 @@ Unpacked with **Steamless v3.1.0.5** (`tools/steamless/Steamless.CLI.exe`):
 Never overwrite the game's exe — unpack a copy. Steam keeps working with the
 original file untouched.
 
+### The class map
+
+The exe is built with MSVC RTTI (`/GR`), so every polymorphic class leaves a type
+descriptor, a complete object locator and a vtable in `.rdata` / `.data`. Those are
+the only names the binary gives away for free, and they are already in it in the
+**packed** file too (`.rdata` is plaintext). `tools/dump-engine-classes.py` turns
+them into `docs/engine-classes.md` and `tools/engine-classes.json`; the Steam
+3.5.0.26 parse gives 4 356 types: 1 995 engine classes, 1 160 `*ClassBuilder`
+registrations (the classes and members WitcherScript can see) and 1 201 template
+instantiations. The script-visible half is the interesting one: it is the engine's
+own reflection layer, and it is where a modder would look for a class to extend.
+Regenerate with the unpacked exe present; `--check` verifies the parser against the
+`CGameDataStorage` vtable proved below. What the class map leads to is in
+`docs/engine-script-bindings.md`: the registry those classes are inserted into, and
+the native function table a proxy can append to before scripts compile.
+
 ## 2. Config system
 
 The engine registers its ini keys as **UTF-16LE (wide) strings in `.rdata`**, next
