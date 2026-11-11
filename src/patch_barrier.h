@@ -5,12 +5,20 @@
 // The freeze is repeated until a pass adds no new thread: a creator may have made a child during
 // an earlier pass, but after a pass adds no threads all in-process creators are stopped. Remote
 // injection by another process is outside this protocol. Shared by the renderer distance hooks
-// (distance_patch.h) and the window-mode patches (window_patch.h).
+// (distance_patch.h), the window-mode patches (window_patch.h) and the script-binding hook.
+//
+// Only one caller may freeze the process at a time: two barriers running together suspend each
+// other, and neither can resume the other. Measured 2026-11-11 (a start with the script-binding
+// hook): every thread of the game was left suspended and no hook was installed. g_pbLock is
+// taken in pb_stop_peers and released by pb_resume_peers, so a successful stop must always be
+// paired with one resume - never resume the peers by hand.
 #ifndef W2_PATCH_BARRIER_H
 #define W2_PATCH_BARRIER_H
 
 #include <windows.h>
 #include <stdint.h>
+
+extern CRITICAL_SECTION g_pbLock;
 
 // One span of engine code that must not be executing while it is rewritten.
 typedef struct {
@@ -45,6 +53,7 @@ static int pb_stop_peers(HANDLE* peers, unsigned* count, const pb_range* ranges,
 
     *count = 0;
     if (!next_thread) return 0;
+    EnterCriticalSection(&g_pbLock);   // one freeze at a time; released in pb_resume_peers
     for (pass = 0; pass < 8; pass++) {
         HANDLE cursor = NULL;
         int cursor_owned = 0;
@@ -89,6 +98,7 @@ failed:
     if (!ok) {
         for (i = 0; i < n; i++) ResumeThread(peers[i]);
         for (i = 0; i < n; i++) CloseHandle(peers[i]);
+        LeaveCriticalSection(&g_pbLock);
         return 0;
     }
     *count = n;
@@ -101,6 +111,7 @@ static void pb_resume_peers(HANDLE* peers, unsigned count)
 
     for (i = 0; i < count; i++) ResumeThread(peers[i]);
     for (i = 0; i < count; i++) CloseHandle(peers[i]);
+    LeaveCriticalSection(&g_pbLock);
 }
 
 #endif

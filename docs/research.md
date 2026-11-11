@@ -350,6 +350,12 @@ Verified for the borderless feature (`docs/fixes/borderless-window.md`).
   pass can fail while the process is still creating threads (new thread in every pass, or a thread
   exiting during enumeration). It succeeded 3 ms later in the 2026-11-02 log, so retry the install
   briefly instead of giving up.
+* **Peer-stop barrier: one freeze at a time.** SteamStub decrypts `.text` once, so every
+  `wf_wait_site` can match at the same moment and several patch threads install together. Two
+  freezes running together suspend each other and neither resumes the other: on 2026-11-11 a
+  start with the script-binding hook left all seven game threads suspended and no hook installed.
+  `g_pbLock` now serialises the barrier - taken in `pb_stop_peers`, released in `pb_resume_peers`,
+  so peers must never be resumed by hand (the distance patch uses the helper too).
 * `FUN_009d24f8` is the mouse-mode function (0 = free, 1 = `ClipCursor` to the window rect,
   2/3 = capture/exclusive DirectInput); it is not tied to full screen, so cursor clipping already
   works in windowed/borderless mode.

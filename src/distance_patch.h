@@ -188,7 +188,7 @@ static int ef_distance_install(unsigned char* base, size_t span) {
     unsigned char shadow_jump[6] = {0xe9,0,0,0,0,0x90};
     DWORD range_protect, shadow_protect, ignored;
     HANDLE peers[256];
-    unsigned count = 0, i;
+    unsigned count = 0;
     if (ef_distance_active) return 1;
     if (!base || !ef_range_rva || !ef_shadow_rva ||
         span < ef_range_rva + ef_range_sig_len ||
@@ -216,8 +216,7 @@ static int ef_distance_install(unsigned char* base, size_t span) {
         memcmp(shadow, ef_shadow_sig, ef_shadow_sig_len)) {
         VirtualProtect(shadow, 6, shadow_protect, &ignored);
         VirtualProtect(range, 8, range_protect, &ignored);
-        for (i = 0; i < count; i++) ResumeThread(peers[i]);
-        for (i = 0; i < count; i++) CloseHandle(peers[i]);
+        pb_resume_peers(peers, count);
         return 0;
     }
     // In-process peer creation has quiesced; all peers are outside both spans.
@@ -229,8 +228,7 @@ static int ef_distance_install(unsigned char* base, size_t span) {
     VirtualProtect(shadow, 6, shadow_protect, &ignored);
     VirtualProtect(range, 8, range_protect, &ignored);
     ef_distance_active = 1;
-    for (i = 0; i < count; i++) ResumeThread(peers[i]);
-    for (i = 0; i < count; i++) CloseHandle(peers[i]);
+    pb_resume_peers(peers, count);
     return 1;
 }
 
@@ -240,7 +238,7 @@ static int ef_billboard_install(unsigned char* site) {
     DWORD protect, ignored;
     HANDLE peers[256];
     pb_range range;
-    unsigned count = 0, i;
+    unsigned count = 0;
     if (ef_billboard_active) return 1;
     if (!site || memcmp(site, ef_billboard_sig, ef_billboard_sig_len)) return 0;
     ef_billboard_return = site + 8;
@@ -258,8 +256,7 @@ static int ef_billboard_install(unsigned char* site) {
         ef_billboard_active = 1;
     }
     VirtualProtect(site, 8, protect, &ignored);
-    for (i = 0; i < count; i++) ResumeThread(peers[i]);
-    for (i = 0; i < count; i++) CloseHandle(peers[i]);
+    pb_resume_peers(peers, count);
     return ef_billboard_active;
 }
 
@@ -352,8 +349,7 @@ static int ef_cascade_install(unsigned char* const sites[3], const uintptr_t len
     }
     // The sites share a page: restore in reverse order, so the first saved protection ends up on it.
     for (i = 3; i-- > 0;) VirtualProtect(sites[i], 8, protect[i], &ignored);
-    for (i = 0; i < count; i++) ResumeThread(peers[i]);
-    for (i = 0; i < count; i++) CloseHandle(peers[i]);
+    pb_resume_peers(peers, count);
     return ef_cascade_active;
 }
 

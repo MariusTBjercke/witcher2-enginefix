@@ -223,6 +223,10 @@ static volatile LONG g_scriptRedirects;
 
 static CRITICAL_SECTION g_logLock;
 
+// The peer-freeze barrier (patch_barrier.h), one caller at a time. Defined here, initialized in
+// DllMain before any of the patch threads exists.
+CRITICAL_SECTION g_pbLock;
+
 static void logf_(const char* fmt, ...)
 {
     if (!g_log || !cfg_log) return;
@@ -8897,6 +8901,9 @@ static DWORD WINAPI scriptbind_thread(LPVOID param)
         logf_("script bindings: CompileScriptsFromSources never read as its real bytes - off");
         return 0;
     }
+    // One line before the freeze: if the game ever hangs on the peer barrier again, this and the
+    // absence of the "hooked" line below name the step that was interrupted.
+    logf_("script bindings: site matched at %08X, installing", (unsigned)at);
     do {
         if (sb_install(at)) {
             logf_("script bindings: hooked CompileScriptsFromSources at %08X", (unsigned)at);
@@ -8920,6 +8927,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         g_mainTid = GetCurrentThreadId();   // DllMain runs on the game's main thread
         build_detect();
         InitializeCriticalSection(&g_logLock);
+        InitializeCriticalSection(&g_pbLock);
         InitializeCriticalSection(&g_thumbLock);
         InitializeCriticalSection(&g_ftLock);
         InitializeCriticalSection(&g_vtLock);
