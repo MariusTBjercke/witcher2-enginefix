@@ -785,6 +785,34 @@ and out again, the door out loaded nothing (the quarry was still loaded), so its
 struck nothing off and the recorded list still held the 53 quarry layers while Geralt stood in
 the quarry (`69 in all`); only the release job's unload list tells them apart.
 
+#### Research: hiding the kept layers instead of unloading them (Steam, static only)
+
+Unloading frees memory but costs a load at the door on the way out. The engine can also keep a
+layer loaded and only take its objects out of the world; quests do that during play. Steam
+3.5.0.26, unpacked copy:
+
+| What | Where | Contract |
+|---|---|---|
+| Sync a loaded layer's attachment | `FUN_00a5a90e` | EAX = layer info; info `+0x38` (the layer) must be set. If the predicate says visible and the layer is not attached (layer `+0x4C` world is 0): `FUN_00a8b3d2` (ESI = layer), then `FUN_00a8bb48` (EDI = layer, stack: world `info+0x34`). If not visible and attached: `FUN_00a8ba97` (EDI = layer). Guarded by the bytes at `01608658` (must be 0) and `010CB8FF` (must be set) |
+| The predicate | `FUN_00a5a568`, only call `00A5A92A` (`E8` rel32) in `FUN_00a5a90e` | EAX = layer info, result in AL. 0 when info `+0x58` is 0; in game (`[01404950]+0x4C` set) also 0 when the layer group of info `+0x4` (`FUN_00423cc3`) has `+0xA0` = 0; else 1 |
+| Detach | `FUN_00a8ba97` | per entity: saves its state into the layer storage (`FUN_00afe46f`) and calls entity vtable `+0x198` (detached, world); then `FUN_00a46ca7(world)` and removes the layer from the world's list (`world+0x54/+0x58`); layer `+0x4C` = 0 |
+| Attach | `FUN_00a8bb48` | layer `+0x4C` = world, adds it to the world's list, `FUN_00a46f45(world)`, per entity: restores its state (`FUN_00afe506`), vtable `+0x194` (attached, world) |
+| Group visibility | `FUN_00b05aa2` (EAX = group, CL = visible) | sets group `+0xA0` and syncs every loaded layer under it (`FUN_00b057ab`, then `FUN_00a5a90e`) |
+| Its callers | `HideLayerGroup()` `FUN_00a92654`, `ShowLayerGroup()` `FUN_00a92839` (script natives, their warning strings), quest blocks `FUN_00965dbe`/`FUN_00965ea2` (`CQuestPhaseBlock_OnDeactivate`/`OnActivate`), `FUN_00ae297c` | the game's own runtime hide/show |
+
+`FUN_00a5a90e` is also run for every loaded layer by each job's "Attaching entities..." stage
+(`FUN_00b05a52`) and by the world tick when a layer finishes loading (`FUN_00a5a95e`), so a hide
+decided in the predicate holds through door jobs.
+
+The way in this suggests: redirect the predicate's one call (`00A5A92A`) to a stub that returns 0
+for a DLL-owned set of hidden layer infos and calls the original otherwise, then run
+`FUN_00a5a90e` on those layers. No game flag is written, so the quests' own `+0xA0`/`+0x58` state
+stays theirs; showing again is removing them from the set and syncing. Not proven: that a
+detached layer leaves the visibility pass (expected: entities leave the world), what attaching
+53 layers costs (no disk reads, but every entity's components are rebuilt), and what repeated
+detach/attach does to the layer storage (`[stability] layer_storage_leak`). GOG has not been
+looked at; the `HideLayerGroup()` warning string is the anchor there.
+
 ### Still to check in game
 
 Not seen: Vergen's other 20 houses (Iorveth's path opens the whole town; they are covered by
