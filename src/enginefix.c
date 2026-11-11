@@ -44,6 +44,7 @@
 #include "sp_hooks.h"
 #include "sp_dzip.h"
 #include "version.h"
+#include "w2ef_plugin.h"
 
 #define IMAGE_BASE          0x00400000u   // preferred image base of both builds
 #define RVA_SETTINGS        0x02180E28u   // 0x02580E28 - IMAGE_BASE
@@ -8530,6 +8531,9 @@ static int host_is_game(void)
 // the first probe, since removed), W2EF_Name and W2EF_Object do the same for the name and object
 // reference slots, and W2EF_MeshDistance reads live engine state when a script calls it.
 //
+// Plugins (src/w2ef_plugin.h) register their own natives the same way: every *.dll in
+// <dinput8.dll's folder>\witcher2_enginefix_plugins is loaded from here, before the compile.
+//
 // The call shapes used here are the engine's own (docs/engine-script-bindings.md):
 //   alloc    00ABE94A  cdecl (0xAC) -> zeroed block
 //   build    00B0F409  EDX = descriptor, stack (CName, fn), RET 8
@@ -8571,7 +8575,8 @@ static LONG  sb_registered;
 #define SB_VALUE_SIZE 16
 #define SB_MAX_ARGS   3u
 
-typedef struct { unsigned char b[SB_VALUE_SIZE]; } sb_value;
+// The slot is the plugin ABI's slot as well, so a plugin body sees the same bytes we do.
+typedef w2ef_value sb_value;
 
 static uintptr_t sb_init_ptr, sb_eval_ptr, sb_free_ptr, sb_free_object_ptr;
 static LONG sb_calls, sb_enters;
@@ -8682,9 +8687,10 @@ static void sb_log_text(const wchar_t* text)
 // hands one out per argument, refs 4 -> 5 for two arguments of the same object) and is released
 // with FUN_00ABC99F. A name and an int/float/bool own nothing, and a name starts at 0 instead of
 // being built as a string container - it is a CName dword, not a 16-byte string.
-enum { SB_ARG_PLAIN = 0, SB_ARG_STRING = 1, SB_ARG_NAME = 2, SB_ARG_OBJECT = 3 };
+enum { SB_ARG_PLAIN = W2EF_ARG_PLAIN, SB_ARG_STRING = W2EF_ARG_STRING,
+       SB_ARG_NAME = W2EF_ARG_NAME, SB_ARG_OBJECT = W2EF_ARG_OBJECT };
 
-typedef void (__cdecl *sb_body_fn)(void* ctx, char* frame, sb_value* args, void* result);
+typedef w2ef_body_fn sb_body_fn;
 
 static void __cdecl sb_call(void* ctx, char* frame, void* result, const unsigned char* kinds,
                             unsigned nargs, sb_body_fn body)
@@ -8852,7 +8858,7 @@ static void __cdecl sb_object(void* ctx, char* frame, void* result)
 }
 
 // Register one global script function the way RegisterEnvironmentScriptNatives (0x00A76637) does.
-static void sb_register_native(const wchar_t* name, void* fn)
+static int sb_register_native(const wchar_t* name, void* fn)
 {
     uintptr_t p_alloc = ga(SB_ALLOC), p_build = ga(SB_BUILD), p_register = ga(SB_REGISTER);
     uintptr_t p_registry = ga(SB_REGISTRY), p_cname = ga(SB_CNAME);
@@ -8862,7 +8868,7 @@ static void sb_register_native(const wchar_t* name, void* fn)
 
     if (!p_alloc || !p_build || !p_register || !p_registry || !p_cname) {
         logf_("script bindings: an engine address is missing on this build - not registered");
-        return;
+        return 0;
     }
     __asm {
         mov  eax, p_alloc
@@ -8871,7 +8877,7 @@ static void sb_register_native(const wchar_t* name, void* fn)
         pop  ecx                       // the allocator is cdecl: the caller removes the size
         mov  desc, eax
     }
-    if (!desc) { logf_("script bindings: the 0xAC descriptor allocation failed"); return; }
+    if (!desc) { logf_("script bindings: the 0xAC descriptor allocation failed"); return 0; }
 
     ((sb_cname_fn)p_cname)(&cn, name);   // __stdcall, RET 8
     __asm {
@@ -8887,7 +8893,7 @@ static void sb_register_native(const wchar_t* name, void* fn)
         call eax
         mov  registry, eax
     }
-    if (!registry) { logf_("script bindings: no registry object"); return; }
+    if (!registry) { logf_("script bindings: no registry object"); return 0; }
 
     __asm {
         push ebx
@@ -8904,6 +8910,124 @@ static void sb_register_native(const wchar_t* name, void* fn)
             logf_("script bindings: %s registered at slot %u", narrow,
                   *(unsigned*)((char*)desc + SB_DESC_SLOT));
     }
+    return 1;
+}
+
+// ---- plugin interface ------------------------------------------------------------------------
+// The API handed to every plugin (src/w2ef_plugin.h): the same functions the built-in natives
+// use, so a plugin body behaves exactly like one of ours. `log` prefixes every line with
+// "plugin: ", which is the only way the log shows where a plugin's message came from.
+static void __cdecl sb_api_log(const char* fmt, ...)
+{
+    char line[512];
+    va_list ap;
+
+    va_start(ap, fmt);
+    _vsnprintf_s(line, sizeof line, _TRUNCATE, fmt, ap);
+    va_end(ap);
+    logf_("plugin: %s", line);
+}
+
+static int __cdecl sb_api_register(const wchar_t* name, w2ef_native_fn fn)
+{
+    return sb_register_native(name, (void*)fn);
+}
+
+static const w2ef_plugin_api g_pluginApi = {
+    sizeof(w2ef_plugin_api),
+    W2EF_PLUGIN_API_VERSION,
+    sb_api_register,
+    sb_call,
+    sb_value_free,
+    sb_value_copy,
+    sb_value_free_object,
+    sb_api_log
+};
+
+// ---- plugin loader ---------------------------------------------------------------------------
+// [diagnostics] script_bindings=1: every *.dll in <dinput8.dll's folder>\witcher2_enginefix_plugins
+// is loaded before the compile and asked to register its natives through g_pluginApi, in file
+// name order. A plugin is native code inside the game process, so it is trusted: the loader can
+// report a DLL that will not load or whose init returns 0, it cannot survive a plugin that
+// crashes. The folder may be absent; nothing is loaded then.
+#define SB_MAX_PLUGINS 32
+
+static int __cdecl sb_plugin_name_cmp(const void* a, const void* b)
+{
+    return wcscmp((const wchar_t*)a, (const wchar_t*)b);
+}
+
+// <folder of this DLL>\witcher2_enginefix_plugins, with no trailing backslash.
+static int sb_plugin_dir(wchar_t* dir, size_t cap)
+{
+    wchar_t path[MAX_PATH];
+    wchar_t* slash;
+    DWORD n = GetModuleFileNameW(g_self, path, MAX_PATH);
+
+    if (!n || n >= MAX_PATH) return 0;
+    slash = wcsrchr(path, L'\\');
+    if (!slash) return 0;
+    *slash = 0;
+    return swprintf_s(dir, cap, L"%s\\witcher2_enginefix_plugins", path) >= 0;
+}
+
+static void sb_load_plugins(void)
+{
+    wchar_t dir[MAX_PATH], pattern[MAX_PATH];
+    wchar_t names[SB_MAX_PLUGINS][MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    int count = 0, found = 0, loaded = 0, i;
+
+    if (!sb_plugin_dir(dir, MAX_PATH)) {
+        logf_("plugins: the plugin folder path is unavailable - none loaded");
+        return;
+    }
+    if (swprintf_s(pattern, MAX_PATH, L"%s\\*.dll", dir) < 0) return;
+    h = FindFirstFileW(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) {
+        logf_("plugins: no plugin folder at %ls - none loaded", dir);
+        return;
+    }
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            found++;
+            if (count < SB_MAX_PLUGINS) wcscpy_s(names[count++], MAX_PATH, fd.cFileName);
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    if (found == 0) {
+        logf_("plugins: %ls holds no DLLs", dir);
+        return;
+    }
+    if (found > count)
+        logf_("plugins: %d DLLs found, only the first %d are loaded", found, count);
+
+    qsort(names, (size_t)count, sizeof names[0], sb_plugin_name_cmp);
+    for (i = 0; i < count; i++) {
+        wchar_t full[MAX_PATH];
+        w2ef_plugin_init_fn init;
+        HMODULE mod;
+
+        if (swprintf_s(full, MAX_PATH, L"%s\\%s", dir, names[i]) < 0) continue;
+        mod = LoadLibraryExW(full, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+        if (!mod) {
+            logf_("plugins: %ls: LoadLibrary failed (%lu)", names[i], GetLastError());
+            continue;
+        }
+        init = (w2ef_plugin_init_fn)(uintptr_t)GetProcAddress(mod, W2EF_PLUGIN_INIT);
+        if (!init) {
+            logf_("plugins: %ls: no %s export", names[i], W2EF_PLUGIN_INIT);
+            continue;
+        }
+        if (init(&g_pluginApi)) {
+            loaded++;
+            logf_("plugins: %ls loaded", names[i]);
+        } else {
+            logf_("plugins: %ls: %s returned 0", names[i], W2EF_PLUGIN_INIT);
+        }
+    }
+    logf_("plugins: %d of %d loaded", loaded, count);
 }
 
 // Runs before the compiler: register once, then continue into the engine's own body.
@@ -8916,6 +9040,7 @@ static char __stdcall sb_compile_hook(char from_release)
         sb_register_native(L"W2EF_MeshDistance", (void*)sb_mesh);
         sb_register_native(L"W2EF_Name", (void*)sb_name);
         sb_register_native(L"W2EF_Object", (void*)sb_object);
+        sb_load_plugins();
     }
     return ((sb_compile_fn)sb_real_compile)(from_release);
 }

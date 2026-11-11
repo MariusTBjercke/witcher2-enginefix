@@ -306,8 +306,10 @@ The probe itself was temporary, as always: the `.ws` fragments must not carry an
    reference count.
 3. ~~**`name` and object-reference slots**~~ - done: measured and implemented as
    `SB_ARG_NAME` and `SB_ARG_OBJECT` (runs 11-13).
-4. **A plugin loader**, so a mod ships as a DLL that registers its natives instead of
-   patching this one.
+4. ~~**A plugin loader**~~ - done: `[diagnostics] script_bindings=1` loads every DLL in
+   `<dinput8.dll's folder>\witcher2_enginefix_plugins`, calls `W2EF_PluginInit`, and hands it
+   the registration function and the VM helpers (`src/w2ef_plugin.h`, `docs/plugin-api.md`).
+   A plugin registers its natives before the compile, exactly like this DLL does.
 5. **GOG rows** for the ten engine addresses the hook uses (nine `SB_*` and the empty-script
    default), the `ga()` discipline the rest of the project already follows.
 6. ~~**A build story**~~ - done: the `CompileScriptsFromSources` hook registers before the
@@ -317,6 +319,15 @@ The probe itself was temporary, as always: the `.ws` fragments must not carry an
 
 The cost is now visible and it is engineering, not research: the mechanism is proved,
 the failure modes are known, and the value layout is measured.
+
+## Plugins
+
+The registration path is what the plugin interface exposes: with
+`[diagnostics] script_bindings=1` the DLL loads every `*.dll` in
+`<game>\bin\witcher2_enginefix_plugins\` before the compile and calls its
+`W2EF_PluginInit` export with a struct of function pointers (`src/w2ef_plugin.h`) -
+register a native, run the wrapper, release or copy a slot, log. `docs/plugin-api.md` has
+the contract, the timing and the trust model; run 14 is the in-game proof.
 
 ## One trap worth remembering
 

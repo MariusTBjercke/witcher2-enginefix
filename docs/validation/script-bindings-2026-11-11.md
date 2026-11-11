@@ -1,10 +1,10 @@
 # Script bindings: the in-game runs (2026-11-11)
 
-Steam 3.5.0.26. Evidence for `docs/engine-script-bindings.md`. Fourteen starts in all;
+Steam 3.5.0.26. Evidence for `docs/engine-script-bindings.md`. Fifteen starts in all;
 every one used `[diagnostics] script_bindings=1` except where noted, and the probe was
 called from the main menu build (`continue_button.ws` inserts the call into
 `InsertMenuButton`'s position in `guimainmenu.ws`). One start (18:51) hung before the menu
-when two patch barriers ran at once; it is the last section below.
+when two patch barriers ran at once; it is the second-to-last section below.
 
 ## Run 1 - two parameters, no operand consumption: crash
 
@@ -207,6 +207,26 @@ all seven game threads sat in `Wait/Suspended` when inspected. Two patch install
 frozen the process at the same moment and suspended each other, so no hook was installed.
 That is the concurrency bug in the shared peer-stop barrier, now fixed with `g_pbLock`
 (`docs/research.md`, "Peer-stop barrier at startup"); runs 12 and 13 installed normally.
+
+## Run 14 - a plugin DLL registers its own native: menu
+
+A start with `plugin-hello.dll` in `<game>\bin\witcher2_enginefix_plugins\`;
+`tools\plugin-example\plugin.c` registers `W2EF_PluginHello( value : float ) : float`, and
+the probe called `W2EF_Num( W2EF_PluginHello( 41.0 ) )`:
+
+```
+21:24:26.822  script bindings: W2EF_PluginHello registered at slot 1697
+21:24:26.822  plugin: hello: registered W2EF_PluginHello
+21:24:26.822  plugins: plugin-hello.dll loaded
+21:24:26.822  plugins: 1 of 1 loaded
+21:24:42.276  plugin: hello: called with 41
+21:24:42.276  script bindings: enter W2EF_Num
+21:24:42.276  script bindings: float 42
+```
+
+The host loaded the DLL after its own six registrations, the plugin registered through
+`api->register_native` (slot 1697), and its body returned 42 into the next native, which
+logged it. The plugin was removed again after the test.
 
 ## State after the runs
 
