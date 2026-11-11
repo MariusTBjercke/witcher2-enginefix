@@ -1,6 +1,6 @@
 # Script bindings: the in-game runs (2026-11-11)
 
-Steam 3.5.0.26. Evidence for `docs/engine-script-bindings.md`. Five starts, all with
+Steam 3.5.0.26. Evidence for `docs/engine-script-bindings.md`. Ten starts, all with
 `[diagnostics] script_bindings=1` except where noted, and the probe called from the main
 menu build (`continue_button.ws` inserts the call into `InsertMenuButton`'s position in
 `guimainmenu.ws`).
@@ -115,6 +115,29 @@ Each function is called nested (`W2EF_Num( W2EF_Num( 1.5 ) )`), so the inner res
 the outer call's argument: the outer line proves the result crossed back. `string` also
 proves the deep copy into the result slot and the release of the argument slot. Main
 menu reached, no crash.
+
+## Run 10 - a native reads engine state: menu
+
+`W2EF_MeshDistance` (`src/enginefix.c`) returns `MeshDistanceScale` from the rendering
+settings object. The probe called it from `FillMainMenu` and fed the result into
+`W2EF_Num`:
+
+```
+18:15:44.267  hooked CompileScriptsFromSources at 00AA69A0
+18:15:45.203  W2EF_MeshDistance registered at slot 1694
+18:15:45.674  settings object 0x02580E78 found: mesh=1.200 foliage=2.000
+18:15:45.674  lod enforced: mesh=2.000 foliage=2.000
+18:16:00.639  enter W2EF_Num
+18:16:00.639  enter W2EF_MeshDistance
+18:16:00.639  MeshDistanceScale 2.000 (foliage 2.000)
+18:16:00.639  float 2
+```
+
+The outer `W2EF_Num` enters first and evaluates its argument, which is the inner
+`W2EF_MeshDistance` call; `float 2` is that argument arriving in the outer body. The read
+value is the one the LOD code had just enforced (2.000), not the 1.200 the object carried
+before, so the native reached the same object the DLL writes. Main menu reached, exit at
+18:16:03 clean, no crash dump.
 
 ## State after the runs
 

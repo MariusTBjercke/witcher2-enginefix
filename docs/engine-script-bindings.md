@@ -4,8 +4,8 @@ Status: research plus in-game tests, Steam 3.5.0.26. Proved end to end in the ru
 game: the DLL registers functions before the compile, `.ws` declares them with
 `import function`, the compiler resolves the names, and the game calls them with
 arguments and results - `int`, `float`, `bool` and `string` (the string including the
-deep copy out and the release afterwards). Four attempts crashed; every cause is in
-this file.
+deep copy out and the release afterwards). A called native can also read live engine
+state (`W2EF_MeshDistance`, run 10). Four attempts crashed; every cause is in this file.
 
 This answers one question: **can the engine be given new script functions from
 outside, without touching `witcher2.exe` on disk?** The answer is yes, with the
@@ -237,7 +237,35 @@ the registration, which is also how every native in the engine is declared.
 * **Game state at registration time.** `CGame` is created at `00AA7075`, after the
   compile, so registration cannot *decide* what to register from game data. The
   function itself runs later and can read `[0x01404950]` (`VA_GAME`) at call time, so
-  the body does have access to the game once it is called.
+  the body does have access to the game once it is called (proved: run 10 below).
+
+## A native that reads engine state
+
+`W2EF_MeshDistance` (`src/enginefix.c`, registered with the other natives) returns
+`MeshDistanceScale` from the rendering settings object and logs it. Run 10, in order:
+
+```
+18:15:45.674  settings object 0x02580E78 found: mesh=1.200 foliage=2.000   (before the preset)
+18:15:45.674  lod enforced: mesh=2.000 foliage=2.000
+18:16:00.639  MeshDistanceScale 2.000 (foliage 2.000)                      (the native)
+18:16:00.639  float 2                                                      (W2EF_Num with it)
+```
+
+Two things this settles:
+
+* **The singleton at `0x02580E28` is a pointer, not the object.** The object lives at
+  `0x02580E78` and its getter (`FUN_00402254`) creates it lazily; `docs/research.md` §6
+  has the field map. Dereferencing the slot's own address (`*(float*)(0x02580E28 + 0x6C)`)
+  reads the dwords next to the pointer. The body therefore goes through the DLL's
+  `grab_settings()`, which reads the pointer, checks the readable span and returns nothing
+  until both scales are sane.
+* **A value the DLL wrote can be read back from a script.** The native read 2.000, the
+  value the LOD code had just enforced, not the 1.200 the object carried before. The
+  probe fed the result into `W2EF_Num`, which logged it as its float argument, so the
+  value also crossed back through the VM.
+
+The probe itself was temporary, as always: the `.ws` fragments must not carry an
+`import function` for a native that a release does not register.
 
 ## Unproven
 
@@ -257,14 +285,16 @@ the registration, which is also how every native in the engine is declared.
    memory. All four value types are proved through it.
 2. ~~**The value type table**~~ - done: `int`/`float`/`bool` at `+0`, `string` as the
    16-byte wide-string container.
-3. **A plugin loader**, so a mod ships as a DLL that registers its natives instead of
+3. **`name` and object-reference slots**, the two value types not measured yet. One start
+   test each, the same method as the other four.
+4. **A plugin loader**, so a mod ships as a DLL that registers its natives instead of
    patching this one.
-4. **GOG rows** for the six addresses, the `ga()` discipline the rest of the project
-   already follows.
-5. **A build story**: registration must happen before `CompileScriptsFromSources`, which
-   is one known call site - the hook this file describes is that mechanism.
-6. **A first real consumer**: a native that reads engine state through an address already
-   proved in `docs/addresses.md`, so the layer has a user rather than a demonstration.
+5. **GOG rows** for the ten engine addresses the hook uses (nine `SB_*` and the empty-script
+   default), the `ga()` discipline the rest of the project already follows.
+6. ~~**A build story**~~ - done: the `CompileScriptsFromSources` hook registers before the
+   compile in the running game (`[diagnostics] script_bindings`).
+7. ~~**A first real consumer**~~ - done: `W2EF_MeshDistance` reads live engine state
+   through the settings singleton (run 10, "A native that reads engine state").
 
 The cost is now visible and it is engineering, not research: the mechanism is proved,
 the failure modes are known, and the value layout is measured.

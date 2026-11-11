@@ -8512,18 +8512,19 @@ static int host_is_game(void)
 // ---------------------------------------------------------------------------------------------
 // Script bindings, [diagnostics] script_bindings=1. Research, Steam only, off by default.
 //
-// Registers one native of our own before the engine compiles base_scripts.dzip. The registration
-// works: the compiler resolves the name, an `import function` declaration supplies the signature,
-// and the function is called. The registration is not enough on its own, though - see
-// docs/engine-script-bindings.md:
+// Registers natives of its own before the engine compiles base_scripts.dzip. The registration
+// alone is not enough - see docs/engine-script-bindings.md:
 //
 //   The VM has no ordinary C calling convention. A native receives the interpreter frame in its
 //   second argument, consumes its own inline operand bytes from the frame's code pointer
 //   ([frame+0x18]) and writes its result through the VM's value stack. Engine natives do this by
-//   hand (ScriptAreaEnvironmentActivate, 0x00A75295, is the smallest example). sb_test_param below
-//   does none of it, so a script that calls it desynchronises the interpreter and the game then
-//   executes a data byte as an opcode. The probe was removed for that reason; do not point a
-//   script at this function until the contract is implemented.
+//   hand (ScriptAreaEnvironmentActivate, 0x00A75295, is the smallest example). sb_call() below is
+//   that sequence once, so a native is a plain C body; a body that skips it desynchronises the
+//   interpreter and the game then executes a data byte as an opcode.
+//
+// W2EF_Echo/Num/Flag return what they are given (string, float, bool; the int case was proved by
+// the first probe, since removed), and W2EF_MeshDistance reads live engine state when a script
+// calls it.
 //
 // The call shapes used here are the engine's own (docs/engine-script-bindings.md):
 //   alloc    00ABE94A  cdecl (0xAC) -> zeroed block
@@ -8734,6 +8735,39 @@ static void __cdecl sb_flag(void* ctx, char* frame, void* result)
     sb_call(ctx, frame, result, kinds, 1, sb_flag_body);
 }
 
+// The first native with a body of its own instead of an argument echoed back: it reads live
+// engine state when the script calls it. MeshDistanceScale sits at +0x6C of the lazily created
+// settings object; the look is through grab_settings, the same path the LOD code writes, so this
+// also proves that a value the DLL set can be read back from a script. CGame exists by the time a
+// script runs (it is created at 00AA7075, after the compile), which is what makes this possible -
+// registration itself still cannot read any game state.
+static void __cdecl sb_mesh_body(void* ctx, char* frame, sb_value* args, void* result)
+{
+    settings_view sv;
+    float value;
+
+    (void)ctx;
+    (void)frame;
+    (void)args;
+    if (!grab_settings(&sv)) {
+        if (InterlockedIncrement(&sb_calls) <= 6)
+            logf_("script bindings: MeshDistanceScale not readable at call time");
+        return;
+    }
+    value = sv.mesh;
+    if (InterlockedIncrement(&sb_calls) <= 6)
+        logf_("script bindings: MeshDistanceScale %.3f (foliage %.3f)", (double)value,
+              (double)sv.foliage);
+    if (result) *(float*)result = value;
+}
+
+static void __cdecl sb_mesh(void* ctx, char* frame, void* result)
+{
+    if (InterlockedIncrement(&sb_enters) <= 12)
+        logf_("script bindings: enter W2EF_MeshDistance");
+    sb_call(ctx, frame, result, NULL, 0, sb_mesh_body);
+}
+
 // Register one global script function the way RegisterEnvironmentScriptNatives (0x00A76637) does.
 static void sb_register_native(const wchar_t* name, void* fn)
 {
@@ -8796,6 +8830,7 @@ static char __stdcall sb_compile_hook(char from_release)
         sb_register_native(L"W2EF_Echo", (void*)sb_echo);
         sb_register_native(L"W2EF_Num", (void*)sb_num);
         sb_register_native(L"W2EF_Flag", (void*)sb_flag);
+        sb_register_native(L"W2EF_MeshDistance", (void*)sb_mesh);
     }
     return ((sb_compile_fn)sb_real_compile)(from_release);
 }
