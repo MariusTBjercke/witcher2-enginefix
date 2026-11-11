@@ -8527,8 +8527,8 @@ static int host_is_game(void)
 //   interpreter and the game then executes a data byte as an opcode.
 //
 // W2EF_Echo/Num/Flag return what they are given (string, float, bool; the int case was proved by
-// the first probe, since removed), and W2EF_MeshDistance reads live engine state when a script
-// calls it.
+// the first probe, since removed), W2EF_Name and W2EF_Object do the same for the name and object
+// reference slots, and W2EF_MeshDistance reads live engine state when a script calls it.
 //
 // The call shapes used here are the engine's own (docs/engine-script-bindings.md):
 //   alloc    00ABE94A  cdecl (0xAC) -> zeroed block
@@ -8536,6 +8536,7 @@ static int host_is_game(void)
 //   register 00B102A4  EAX = descriptor, stack (registry), RET 4
 //   registry 0040387C  -> [0x02589018]
 //   CName    00B28D76  __stdcall (DWORD* out, const wchar_t*), RET 8
+//   release  00ABC99F  ESI = slot: release [slot] as a reference, clear it, RET
 #define SB_COMPILE_SITE 0x00AA69A0u   // CompileScriptsFromSources, __stdcall (bool), RET 4
 #define SB_COMPILE_ORIG "55 8b ec a1 34 24 0d 01"   // push ebp; mov ebp,esp; mov eax,[0x010d2434]
 #define SB_ALLOC        0x00ABE94Au
@@ -8543,6 +8544,7 @@ static int host_is_game(void)
 #define SB_REGISTER     0x00B102A4u
 #define SB_REGISTRY     0x0040387Cu
 #define SB_CNAME        0x00B28D76u
+#define SB_FREE_OBJECT  0x00ABC99Fu
 #define SB_DESC_SIZE    0xAC
 #define SB_DESC_SLOT    0xA0          // the descriptor's own index, written by the builder
 
@@ -8571,7 +8573,7 @@ static LONG  sb_registered;
 
 typedef struct { unsigned char b[SB_VALUE_SIZE]; } sb_value;
 
-static uintptr_t sb_init_ptr, sb_eval_ptr, sb_free_ptr;
+static uintptr_t sb_init_ptr, sb_eval_ptr, sb_free_ptr, sb_free_object_ptr;
 static LONG sb_calls, sb_enters;
 
 // The shims read their arguments out of [ebp+..] in assembly, so C sees them as unused.
@@ -8624,6 +8626,24 @@ __declspec(naked) static void sb_value_free(sb_value* slot)
     }
 }
 
+// FUN_00ABC99F releases [slot] as an object reference - a refcount decrement, and the object is
+// destroyed when it reaches zero - then clears the slot. It takes the slot in ESI, which is
+// callee-saved, so the shim restores it for the C caller. ThrowEntity (0x00A72721), a kind-3
+// global registered exactly like ours, releases its CEntity argument with it.
+__declspec(naked) static void sb_value_free_object(sb_value* slot)
+{
+    __asm {
+        push ebp
+        mov  ebp, esp
+        push esi
+        mov  esi, dword ptr [ebp+0x8]
+        call dword ptr [sb_free_object_ptr]
+        pop  esi
+        pop  ebp
+        ret
+    }
+}
+
 // A value slot is a 16-byte wide-string container: +0 the buffer, +4 the length in code units
 // including the NUL, +8 the capacity, +12 sizeof(wchar_t). All four fields are written by
 // FUN_00401faf, which is why an int slot that was initialised carries 2 at +12 as well - it is
@@ -8657,8 +8677,12 @@ static void sb_log_text(const wchar_t* text)
 }
 
 // One script call: evaluate nargs arguments, consume the terminator, run the body, release the
-// types that own memory. `kinds` is one entry per argument; only a string owns its buffer.
-enum { SB_ARG_PLAIN = 0, SB_ARG_STRING = 1 };
+// types that own memory. `kinds` is one entry per argument: a string owns its buffer and is
+// released with FUN_004021ee, an object reference owns a reference (measured: the evaluator
+// hands one out per argument, refs 4 -> 5 for two arguments of the same object) and is released
+// with FUN_00ABC99F. A name and an int/float/bool own nothing, and a name starts at 0 instead of
+// being built as a string container - it is a CName dword, not a 16-byte string.
+enum { SB_ARG_PLAIN = 0, SB_ARG_STRING = 1, SB_ARG_NAME = 2, SB_ARG_OBJECT = 3 };
 
 typedef void (__cdecl *sb_body_fn)(void* ctx, char* frame, sb_value* args, void* result);
 
@@ -8671,15 +8695,19 @@ static void __cdecl sb_call(void* ctx, char* frame, void* result, const unsigned
     if (nargs > SB_MAX_ARGS) nargs = SB_MAX_ARGS;
     for (i = 0; i < nargs; i++) {
         // Zero before FUN_00401faf: it releases whatever [slot+0] holds, so an uninitialised
-        // slot frees a stack value (measured: heap corruption at STATUS_HEAP_CORRUPTION).
+        // slot frees a stack value (measured: heap corruption at STATUS_HEAP_CORRUPTION). A name
+        // or an object reference is a single dword and must not be built as a string container:
+        // the engine's own natives zero one and then evaluate into it.
         memset(&args[i], 0, sizeof args[i]);
-        sb_value_init(&args[i]);
+        if (kinds[i] != SB_ARG_NAME && kinds[i] != SB_ARG_OBJECT) sb_value_init(&args[i]);
         sb_value_eval(frame, &args[i]);
     }
     ++*(int*)(frame + SB_FRAME_CODE);
     body(ctx, frame, args, result);
-    for (i = 0; i < nargs; i++)
+    for (i = 0; i < nargs; i++) {
         if (kinds[i] == SB_ARG_STRING) sb_value_free(&args[i]);
+        else if (kinds[i] == SB_ARG_OBJECT) sb_value_free_object(&args[i]);
+    }
 }
 
 // One string in, the same string out: proves the string layout, the deep copy and the release.
@@ -8772,6 +8800,57 @@ static void __cdecl sb_mesh(void* ctx, char* frame, void* result)
     sb_call(ctx, frame, result, NULL, 0, sb_mesh_body);
 }
 
+// A name in, the same name out: the slot is one CName dword at +0 and owns nothing
+// (StringToName, 0x008E4C85, writes one dword into its result; NameToString, 0x008E5987,
+// evaluates into a 4-byte local). Measured in game: slot 00004DD8 00000000 00000000 00000000.
+static void __cdecl sb_name_body(void* ctx, char* frame, sb_value* args, void* result)
+{
+    DWORD value = *(const DWORD*)args[0].b;
+
+    (void)ctx;
+    (void)frame;
+    if (InterlockedIncrement(&sb_calls) <= 6)
+        logf_("script bindings: name %08X (slot %08X %08X %08X %08X)", value,
+              *(const DWORD*)(args[0].b), *(const DWORD*)(args[0].b + 4),
+              *(const DWORD*)(args[0].b + 8), *(const DWORD*)(args[0].b + 12));
+    if (result) *(DWORD*)result = value;
+}
+
+static void __cdecl sb_name(void* ctx, char* frame, void* result)
+{
+    static const unsigned char kinds[1] = { SB_ARG_NAME };
+
+    if (InterlockedIncrement(&sb_enters) <= 12) logf_("script bindings: enter W2EF_Name");
+    sb_call(ctx, frame, result, kinds, 1, sb_name_body);
+}
+
+// An object reference in, the same reference out. The slot is one pointer at +0 whose object
+// carries its refcount in the first dword; the evaluator hands out an owned reference per
+// argument (measured: two arguments of the same object gave refs 4 -> 5, 3 after both releases),
+// and sb_call releases it. A result is produced by moving that reference into the result slot, so
+// the script owns it - a move, never a second reference.
+static void __cdecl sb_object_body(void* ctx, char* frame, sb_value* args, void* result)
+{
+    DWORD obj = *(const DWORD*)args[0].b;
+
+    (void)ctx;
+    (void)frame;
+    if (InterlockedIncrement(&sb_calls) <= 6)
+        logf_("script bindings: object %08X refs %u", obj, obj ? *(volatile const DWORD*)obj : 0);
+    if (result && obj) {
+        *(DWORD*)result = obj;          // the reference moves; sb_call's release then sees 0
+        *(DWORD*)args[0].b = 0;
+    }
+}
+
+static void __cdecl sb_object(void* ctx, char* frame, void* result)
+{
+    static const unsigned char kinds[1] = { SB_ARG_OBJECT };
+
+    if (InterlockedIncrement(&sb_enters) <= 12) logf_("script bindings: enter W2EF_Object");
+    sb_call(ctx, frame, result, kinds, 1, sb_object_body);
+}
+
 // Register one global script function the way RegisterEnvironmentScriptNatives (0x00A76637) does.
 static void sb_register_native(const wchar_t* name, void* fn)
 {
@@ -8835,6 +8914,8 @@ static char __stdcall sb_compile_hook(char from_release)
         sb_register_native(L"W2EF_Num", (void*)sb_num);
         sb_register_native(L"W2EF_Flag", (void*)sb_flag);
         sb_register_native(L"W2EF_MeshDistance", (void*)sb_mesh);
+        sb_register_native(L"W2EF_Name", (void*)sb_name);
+        sb_register_native(L"W2EF_Object", (void*)sb_object);
     }
     return ((sb_compile_fn)sb_real_compile)(from_release);
 }
@@ -8893,7 +8974,8 @@ static DWORD WINAPI scriptbind_thread(LPVOID param)
     sb_init_ptr = ga(SB_INIT_VALUE);
     sb_eval_ptr = ga(SB_EVAL);
     sb_free_ptr = ga(SB_FREE_VALUE);
-    if (!sb_init_ptr || !sb_eval_ptr || !sb_free_ptr) {
+    sb_free_object_ptr = ga(SB_FREE_OBJECT);
+    if (!sb_init_ptr || !sb_eval_ptr || !sb_free_ptr || !sb_free_object_ptr) {
         logf_("script bindings: a value helper address is unknown on this build - off");
         return 0;
     }

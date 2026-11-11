@@ -3,9 +3,10 @@
 Status: research plus in-game tests, Steam 3.5.0.26. Proved end to end in the running
 game: the DLL registers functions before the compile, `.ws` declares them with
 `import function`, the compiler resolves the names, and the game calls them with
-arguments and results - `int`, `float`, `bool` and `string` (the string including the
-deep copy out and the release afterwards). A called native can also read live engine
-state (`W2EF_MeshDistance`, run 10). Four attempts crashed; every cause is in this file.
+arguments and results - `int`, `float`, `bool`, `string` (including the deep copy out and
+the release afterwards), `name` and object references (including the reference count held
+by the slot and released afterwards). A called native can also read live engine state
+(`W2EF_MeshDistance`, run 10). Four attempts crashed; every cause is in this file.
 
 This answers one question: **can the engine be given new script functions from
 outside, without touching `witcher2.exe` on disk?** The answer is yes, with the
@@ -130,21 +131,24 @@ uses the call as a statement, and points at a 16-byte value slot otherwise.
 
 The body has a fixed shape:
 
-1. **One evaluation per declared parameter**, in order. Zero a 16-byte value slot first -
+1. **One evaluation per declared parameter**, in order. Zero the 16-byte value slot first -
    `FUN_00401faf` *releases* whatever `[slot+0]` holds before it writes, so an
-   uninitialised slot frees a stack value (measured: `STATUS_HEAP_CORRUPTION`). Then
-   initialise it with the empty-script default (`FUN_00401faf`, `EAX` = slot,
-   `[0x0160FBA0]` pushed) and call `FUN_00abc328` with `EAX = frame`, the slot as
-   destination: it executes exactly one bytecode instruction, which produces that
-   argument.
+   uninitialised slot frees a stack value (measured: `STATUS_HEAP_CORRUPTION`). For a
+   `string`, initialise it with the empty-script default (`FUN_00401faf`, `EAX` = slot,
+   `[0x0160FBA0]` pushed); a `name` and an object reference are single dwords and are only
+   zeroed - the engine's own natives zero one and evaluate into it. Then call
+   `FUN_00abc328` with `EAX = frame`, the slot as destination: it executes exactly one
+   bytecode instruction, which produces that argument.
 2. **Consume one byte**: `[frame+0x18]++`. This is the call's terminator in the byte
    stream.
 3. Compute.
 4. If `result` is not null, store the value there (see the slot layout below).
-5. Release the argument slots **only for types that own memory** - a `string` does, an
-   `int`, `float` or `bool` does not. `FUN_004021ee` releases `[slot+0]` as a heap
-   block, so destroying an `int` calls the allocator with 42 - which is how the first
-   parameter test died (`free(42)` read `[0x24]`).
+5. Release the argument slots **only for types that own resources**: a `string` owns its
+   buffer and is released with `FUN_004021ee` (which treats `[slot+0]` as a heap block, so
+   destroying an `int` called the allocator with 42 - the first parameter test died in
+   `free(42)` reading `[0x24]`), and an **object reference** owns one reference and is
+   released with `FUN_00ABC99F` (slot in ESI). An `int`, `float`, `bool` and `name` own
+   nothing.
 
 ### The value slot
 
@@ -157,15 +161,29 @@ All types share one 16-byte slot, and there is **no type id in it**. The engine 
 | `float` | 32-bit IEEE at `+0` | no |
 | `bool` | one byte at `+0` | no |
 | `string` | `+0` `wchar_t*` buffer, `+4` length in code units incl. the NUL, `+8` capacity, `+12` element size = 2 | **yes**, `FUN_004021ee` |
+| `name` | CName dword at `+0`; the other 12 bytes stay 0 (measured: `00004DD8 0 0 0`) | no |
+| object reference | pointer at `+0`; the object's own first dword is its reference count | **yes**, `FUN_00ABC99F` |
+
+The two new rows come from the engine's own kind-3 natives and from runs 11-13
+(`docs/validation/script-bindings-2026-11-11.md`). `StringToName` (`0x008E4C85`) writes
+one dword into its result and never releases it; `NameToString` (`0x008E5987`) evaluates
+into a 4-byte local. `ThrowEntity` (`0x00A72721`, registered exactly like our natives)
+evaluates a `CEntity` into a zeroed 4-byte slot, reads the pointer and releases the slot
+with `0x00ABC99F`; `PlaySound` (`0x00B0093C`) writes one pointer dword into its result. In
+game, two arguments of the same object read reference counts 4 and 5, and both releases
+took it back to 3 - the evaluator hands out one owned reference per argument, and the
+native must return it.
 
 A string slot owns its buffer. Two consequences: a string result is produced by a deep
 copy (`FUN_00401faf`, `EAX` = destination, source pushed) and never by a 16-byte
 `memcpy`, which would leave two slots owning one block; and the slot must be released
-exactly once.
+exactly once. The object slot follows the same rule with a different helper: a result is
+produced by **moving** the reference a body already holds into the result slot (write the
+pointer, clear the argument slot) - a move, never a second reference for one pointer.
 
-All four types were proved round trip in the running game - the argument evaluated in,
+All six types were proved round trip in the running game - the argument evaluated in,
 the result passed back into a nested call
-(`docs/validation/script-bindings-2026-11-11.md`, runs 7-9).
+(`docs/validation/script-bindings-2026-11-11.md`, runs 7-13).
 
 The count of `FUN_00abc328` calls is the parameter count, measured on three natives:
 
@@ -269,24 +287,25 @@ The probe itself was temporary, as always: the `.ws` fragments must not carry an
 
 ## Unproven
 
-* The remaining value types: `name` and object references. `int`, `float`, `bool` and
-  `string` are proved; a `name` is likely a wide-string container of its own and an
-  object reference a pointer, but neither has been measured - one start test each, the
-  same method.
 * Thread safety: only the registry's creation takes a critical section; insert and
   lookup are unsynchronised. Boot-time single-threaded execution is an assumption.
-* The GOG build: every address here is Steam's, and none of the `ga()` rows exist yet.
+* The GOG build: every address here is Steam's, and none of the `ga()` rows exist yet
+  (including the object release helper `0x00ABC99F`).
 * That no later compile phase rejects an added name for another reason.
+* Mixing a `.ws` declaration's parameter type with the wrong slot: nothing checks it, so a
+  mod that declares an `int` where the native expects a string gets the crash the type
+  rules would have prevented.
 
 ## What an SDK on top of this still needs
 
 1. ~~**A wrapper**~~ - done, `sb_call` in `src/enginefix.c`: evaluate N slots, consume the
    terminator, run a plain C body, write the result, release only the types that own
-   memory. All four value types are proved through it.
-2. ~~**The value type table**~~ - done: `int`/`float`/`bool` at `+0`, `string` as the
-   16-byte wide-string container.
-3. **`name` and object-reference slots**, the two value types not measured yet. One start
-   test each, the same method as the other four.
+   resources. All six value types are proved through it.
+2. ~~**The value type table**~~ - done: `int`/`float`/`bool`/`name` at `+0`, `string` as
+   the 16-byte wide-string container, an object reference as one pointer plus its
+   reference count.
+3. ~~**`name` and object-reference slots**~~ - done: measured and implemented as
+   `SB_ARG_NAME` and `SB_ARG_OBJECT` (runs 11-13).
 4. **A plugin loader**, so a mod ships as a DLL that registers its natives instead of
    patching this one.
 5. **GOG rows** for the ten engine addresses the hook uses (nine `SB_*` and the empty-script

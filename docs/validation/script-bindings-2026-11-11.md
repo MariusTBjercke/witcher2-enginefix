@@ -1,9 +1,10 @@
 # Script bindings: the in-game runs (2026-11-11)
 
-Steam 3.5.0.26. Evidence for `docs/engine-script-bindings.md`. Ten starts, all with
-`[diagnostics] script_bindings=1` except where noted, and the probe called from the main
-menu build (`continue_button.ws` inserts the call into `InsertMenuButton`'s position in
-`guimainmenu.ws`).
+Steam 3.5.0.26. Evidence for `docs/engine-script-bindings.md`. Fourteen starts in all;
+every one used `[diagnostics] script_bindings=1` except where noted, and the probe was
+called from the main menu build (`continue_button.ws` inserts the call into
+`InsertMenuButton`'s position in `guimainmenu.ws`). One start (18:51) hung before the menu
+when two patch barriers ran at once; it is the last section below.
 
 ## Run 1 - two parameters, no operand consumption: crash
 
@@ -138,6 +139,74 @@ The outer `W2EF_Num` enters first and evaluates its argument, which is the inner
 value is the one the LOD code had just enforced (2.000), not the 1.200 the object carried
 before, so the native reached the same object the DLL writes. Main menu reached, exit at
 18:16:03 clean, no crash dump.
+
+## Run 11 - a name is one dword; `thePlayer` is null at the menu
+
+Probes for the two unmeasured types. The name went out and back through `NameToString`:
+
+```
+18:55:43.040  W2EF_ProbeName registered at slot 1695
+18:55:43.040  W2EF_ProbeObject registered at slot 1696
+18:55:56.605  enter W2EF_Echo
+18:55:56.605  name slot 00004DD8 00000000 00000000 00000000
+18:55:56.605  string "SortTypeBook"
+18:55:56.605  object slot 1 00000000 00000000 00000000 00000000 ptr 00000000 refs 0
+18:55:56.605  object slot 2 00000000 00000000 00000000 00000000 ptr 00000000 refs 0
+```
+
+The name slot is a single CName dword with the other 12 bytes zero, and the round trip
+produced the original text. The object probe got null twice because `thePlayer` does not
+exist at the main menu; a null reference is a valid value (zero pointer) but says nothing
+about a live object.
+
+## Run 12 - an object reference holds one reference per argument
+
+`theGame` (a `CGame`, alive from engine init) instead of `thePlayer`:
+
+```
+18:59:59.860  object slot 1 0B1E2970 00000000 00000000 00000000 ptr 0B1E2970 refs 4
+18:59:59.860  object slot 2 0B1E2970 00000000 00000000 00000000 ptr 0B1E2970 refs 5
+18:59:59.860  object refs after release 3
+```
+
+So the slot is one pointer dword, the object's own first dword is its reference count,
+**each evaluation hands out one owned reference** (4 then 5), and the two releases through
+`FUN_00ABC99F` took it back to the baseline of 3. That is the contract `ThrowEntity`
+(`0x00A72721`, a kind-3 native) implements in the engine.
+
+## Run 13 - the wrapper natives: name and object through `sb_call`
+
+The probes became the permanent `W2EF_Name` / `W2EF_Object` natives (`SB_ARG_NAME`,
+`SB_ARG_OBJECT`), with a statement call and a nested one:
+
+```
+19:01:48.651  W2EF_Name registered at slot 1695
+19:01:48.651  W2EF_Object registered at slot 1696
+19:01:59.378  enter W2EF_Echo
+19:01:59.378  enter W2EF_Name
+19:01:59.378  name 00004DD9 (slot 00004DD9 00000000 00000000 00000000)
+19:01:59.378  string "SortTypeBook"
+19:01:59.378  enter W2EF_Object
+19:01:59.378  object 0B012970 refs 4
+19:01:59.378  enter W2EF_Object
+19:01:59.378  enter W2EF_Object
+19:01:59.378  object 0B012970 refs 4
+19:01:59.378  object 0B012970 refs 4
+```
+
+Three object calls: the statement call releases its argument, the nested one moves the
+inner reference into the result and the outer releases its argument. Every body saw refs 4
+- the baseline of 3 plus its own argument. A leaked reference would have read 5 and then
+6, and a result that copied instead of moving would have shown an extra reference.
+
+## A start that hung before the menu (18:51)
+
+A start with the same build never reached the menu. The log stopped at
+`startup: fast_start: FMOD waits ... after 89593 ms` and had no `script bindings` lines;
+all seven game threads sat in `Wait/Suspended` when inspected. Two patch installs had
+frozen the process at the same moment and suspended each other, so no hook was installed.
+That is the concurrency bug in the shared peer-stop barrier, now fixed with `g_pbLock`
+(`docs/research.md`, "Peer-stop barrier at startup"); runs 12 and 13 installed normally.
 
 ## State after the runs
 
