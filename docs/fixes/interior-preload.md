@@ -700,6 +700,28 @@ Flotsam save from the main menu, the same 9 buildings and 10 groups, `63 of 63 p
 loaded` (0.11.0 on GOG: `62 of 62`), the fake rooms left out, and the craftsmen's bar in and out
 twice without a fade (jobs of 13-18 ms). Vergen was not visited on GOG.
 
+## Known cost: the kept outdoors deep inside a large interior (2026-11-11)
+
+`keep_outdoors=1` (implied by `interiors=1` and `2`) suppresses the game's unloading of the
+outdoor layers at a door, so they stay in the world while you are inside. In a large area
+that is not free: the visibility pass walks their meshes every frame even when the interior
+hides them. Measured in the cave near Vergen, 4K borderless, `VSync=0`, DXVK 72 fps cap,
+`[distance]` at the vanilla preset:
+
+| `interiors` | state at the same spot | fps | GPU busy | range-hook calls / 5 s |
+|---|---|---|---|---|
+| 2 (kept outdoors) | walked there | 49.4 | 11.0 ms | ~5.1 M |
+| 2 | after save + load (area rebuilt: 59 preloaded interiors, no kept outdoors) | 74.6 | 6.6 ms | ~0.65 M |
+| 0 | walked there | 75.0 | 6.8 ms | ~0.52 M |
+
+The preloaded interiors are not the cost - the save + load had the same 59 and was fast; the
+kept outdoor layers are. The log at the switch before the walk showed `partition:
+keep_outdoors kept 112 of 114 layers, unloaded 2; loaded 16`. Workaround: `interiors=0`
+(the game's own unloading, at the price of a reload at every house door). A future fix
+could drop the kept layers once the player is far from the door that kept them, or when the
+kept layers' mesh count is high; the door/area bookkeeping the memory path already uses is
+where that would go.
+
 ### Still to check in game
 
 Not seen: Vergen's other 20 houses (Iorveth's path opens the whole town; they are covered by
