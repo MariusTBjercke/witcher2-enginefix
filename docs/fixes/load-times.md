@@ -13,9 +13,11 @@ Can loading a save, area transitions and entering/leaving interiors be made fast
 ## How the game loads (static analysis, unpacked 3.5.0.26)
 
 * **Loading screen.** The render thread object `DAT_0160D0A4` (its loop is `FUN_009d1e96`) holds
-  the loading-screen movie at `+0x268` and the screen object at `+0x26C` (`+0x10` byte = shown).
-  The render command `009DC3FC -> FUN_009d1b9f` sets `+0x268` when a loading screen starts and
-  clears it at the end. The screen classes' vtables are `00EC6A20` / `00EC6A44` / `00EC6A5C`
+  the loading screen's viewport at `+0x268` (set while one is up) and the screen object at
+  `+0x26C` (`+0x10` byte = shown). The render command `00E7C054` (`009DC408 -> 009D1C46`) sets
+  `+0x268` when a loading screen starts and clears it at the end; `009DC3FC -> FUN_009d1b9f` is
+  the same for a video (`.usm`) loading screen. How the object is built and freed is in
+  `quit-crash.md`, "How a loading screen ends". The screen classes' vtables are `00EC6A20` / `00EC6A44` / `00EC6A5C`
   (Render, Advance, Init `009C32B2`, Hide, FadeOut `009C2F6C`, LoadingComplete `009C2F54`,
   SetProgress `009C3038`).
 * **The loading screen is capped at 30 fps and spins.** While `+0x268` is set and no render

@@ -744,7 +744,8 @@ load, in exchange for the interior's frame rate while deep inside.
   `FUN_00a5aa35` per layer, `FUN_00a7015c(world)`, `FUN_00b05b13` on the root group (it
   destroys the unloaded layer objects; the world tick `FUN_00a91724` runs it every frame too),
   the GC (not skipped for a release), entity attach and the partition settings of the partition
-  Geralt is already in. No new engine address, so GOG takes the same path (not tested there).
+  Geralt is already in. No new engine address, so GOG takes the same path (the hide and the
+  show were seen there on 2026-11-12; the unload was not).
 * **Safety.** The switch lists for unloading the layers that are loaded but not in the target
   partition (the release job in the run below listed exactly the 112 kept layers), so only
   recorded layers that are also in the release job's own unload list go: a layer of the
@@ -831,6 +832,108 @@ while at least `area_memory_mb` (1 536 MB) of address space is free:
   old world's pointers.
 * **Memory.** Less than `area_memory_mb` free while hidden: the next check unloads them as
   `release_kept` does. `hide_kept=0`: always unload.
+* **Light layers stay (2026-11-12).** With everything hidden, every crack in the cave's roof
+  showed blue sky and clouds where the kept state showed rock (owner, both days). The game's own
+  unloading takes the same layers away, so that is most likely the game's own picture there (not
+  compared with `interiors=0`); the owner prefers the rock. What is hidden around the quarry,
+  read from `levels\03_camp` in `pack0.dzip` (52 layers that only the quarry's partition lists):
+  ~870 rocks in eight `rocks` layers, ~500 cooked meshes in layers with no entity, three foliage
+  layers (1 to 3 `CFoliageEntity` each, with 8 to 30 foliage containers), four terrain tiles (one
+  entity with a `CTerrainTileComponent` each), and a few layers of a handful of plain mesh
+  entities: two cliff meshes in `common_dwarf_quarry\rocks` (between Vergen and the quarry, where
+  the secret passage runs), two in `common_battle_dwarf_quarry\rocks`. The cave itself spans
+  463 x 618 m under most of the quarry, so "what lies over the cave" picks nearly every layer and
+  was dropped as a rule.
+  * First rule, run in game the same day (`docs/validation/hide-light-v1-2026-11-12.log`): a kept
+    layer of 1 to 8 entities stays. 26 of the 53 layers stayed (`... rocks rocks ... tile 000x001
+    ... grass grass ... grass ...`), the owner saw the rock through the cracks again, and the
+    frame rate was 55-60 at the cliff: 5.2-5.4 M range calls per 5 s, as with nothing hidden
+    (5.1 M), against 0.4 M with everything hidden. So the entity count says nothing about the
+    cost: almost all of it is in layers of one to three entities, the foliage or the terrain
+    tiles (not told apart by that run).
+  * Second rule, run the same day (`docs/validation/hide-light-v2-2026-11-12.log`): 1 to 8
+    entities, every one a plain `CEntity` (its own vtable, Steam `00E807C4`, GOG `00F236FC`, both
+    read from the exe's RTTI by `tools/dump-engine-classes.py`), and not under `hires terrain\`.
+    9 layers stayed (`comet rocks rocks one_way_obstacle watter water l03_quarry l03_ravine
+    work`), 44 were hidden; 0.36 M range calls at the cliff, and the sky was back in the cracks.
+    So the cliff meshes are not what the cracks show: it is the terrain, seen from below.
+  * The rule now (`kr_is_light`), run the same day (`docs/validation/hide-light-v3-2026-11-12.log`):
+    the same without the terrain exception. A layer stays when it has 1 to 8 entities and every
+    one is a plain `CEntity`: a mesh holder or a terrain tile. Any subclass (foliage, a harpy
+    nest, an animal manager, a container, an item) makes the layer heavy or alive, and it is
+    hidden. 13 layers stayed (the 9 above and the four terrain tiles), 40 were hidden; 0.35-0.5 M
+    range calls at the cliff; owner: the rock is in the cracks and the frame rate is good. So the
+    cost of the kept outdoors there was the three foliage layers, not the rocks and not the
+    terrain. `hide_kept=2` hides everything. Log: `interiors: N light layers (at most 8 plain
+    entities each: terrain, single meshes) stay in the world: <names>`.
+
+### What a door between two areas swaps: stand-ins and environments (2026-11-12; seen working in game once, Steam)
+
+Owner, same run, on the way out of the cave: a black wall stood between Geralt and the quarry
+until he walked through it, as around the door of a house in the unmodded game; the ground
+outside the cave mouth was much darker than before he went in; the sky there was a natural blue
+with clouds, where it had been a hazy cyan without clouds before. Log, three seconds after the
+door out: `doors: lighting blends ... 'AreaEnvironment_dwarf_mine' 105 at 1.00`.
+
+The cave's partition lists three things of its own that the game unloads at that door and the
+mod kept (`keep_outdoors` keeps what a door leaves, and none of them had a class):
+
+| Layer | What it is |
+|---|---|
+| `secret_passage\black_plane.w2l` (215 bytes, one mesh) | the black plane in the cave mouth: what the cave shows in place of the unloaded quarry |
+| `secret_passage\shadow_box.w2l` (one entity) | a box around the cave that keeps the sun out of it; a plain entity, so `kr_is_light` even left it in the world when the rest was hidden |
+| `environments\environment_dwarf_mine\environment_dwarf_mine.w2l` | the cave's area environment (priority 105): its light, fog and sky. It covers the cave mouth, so it stayed active outside |
+
+The same kinds of layer in the five worlds (`pack0.dzip`): `black_plane*`, `dark_plane*`,
+`shadow_plane*`, `dark_fog`, `assas_cave_black`, the three `old_tower\dark_planes\...\planes`
+layers, six `shadow_box` layers; and 45 / 10 / 3 / 38 layers under `environments\` in Act 2, Act
+3, the Arena and Act 1 (the prologue spells it `environmets\` and is left as it was).
+
+Now (`ko_class`, `ko_stand_in`, `hook_PartRun`):
+
+* The stand-ins are `LC_SWAP`: unloaded at the door that leaves their area and loaded at the
+  door that enters it, as the game does; never preloaded, never counted by the door check.
+* An environment that is no interior's is the new class `LC_ENV`. A door between two whole
+  areas (`ko_house_door` says neither side is a house or a small place) swaps it; a house door
+  keeps its street's, as before; it is not preloaded with a neighbour area, so it loads at
+  that area's door (one layer).
+* Not changed: inside the cave the black plane stands in the mouth, as in the game and as
+  before this change (the mod has always loaded it there).
+
+The sky: the hazy cyan before the cave is the quarry without any change by the mod (the cave's
+layers were loaded but hidden then, its environment not active). The blue sky with clouds after
+it was the cave's environment still active outside. With the swap the sky after the cave
+should be the one from before it.
+
+Seen in game (owner, 2026-11-12, Steam, DXVK, `docs/validation/area-door-swap-2026-11-12.log`): in
+to the cliff and out, then in and out again. Owner: no black wall, the light and the sky outside
+as before going in.
+
+| Step | Log |
+|---|---|
+| Door in | `13 preloaded layer(s) of 'common\secret_passage' joined the world` (16 before: the plane, the box and the environment now come with the door), `keep_outdoors kept 129 of 132 layers, unloaded 3; loaded 3` |
+| 31 m in | `hid 39 kept outdoor layers`, `13 light layers ... stay in the world` |
+| Door out | `no fade (0 to load, spinner hidden)`, `kept 90 of 93 layers, unloaded 3; loaded 1`, and 2.6 s later `lighting blends ... - no area environment active` (the run before: `'AreaEnvironment_dwarf_mine' 105 at 1.00`) |
+| Quit | `no loading screen up`, `ExitProcess(0)` |
+
+#### GOG, everything of this section (owner, 2026-11-12)
+
+GOG 3.5.0.26g, the same build and day (`docs/validation/gog-area-preload-2026-11-12.log`, DXVK, the Steam save copied over): the same round, loaded twice. Owner: all of it worked.
+
+| Step | Log |
+|---|---|
+| First load | `the doors of 'common\quarry' lead to 3 partition(s): 2 whole area(s) in its folder (2 new ...)` |
+| Second load | `2 to load now, 'common\harpy_lair' (22) 'common\secret_passage' (27)`, `32 of 32 layers of 2 area(s) behind the doors loaded, hidden until their door`; job 2.6 s |
+| Cave door | `no fade (0 to load)`, `13 preloaded layer(s) ... joined the world (18 stay hidden)`, `unloaded 3; loaded 3` |
+| 31 m in | `hid 39 kept outdoor layers`, the same `13 light layers` as on Steam; shown again at 15 m (8 ms) |
+| Door out | `no fade`, `unloaded 3; loaded 1`, 2.6 s later `no area environment active` |
+| Quit | `no loading screen up`, `CorExitProcess(0)` |
+
+Not run on either build: the other areas with such layers (Act 1's `spa_cave` and `madhouse`,
+Act 3's `area_center`), a house door of a street that has an environment of its own, the
+memory paths (`preload: only N MB ... unloading the preloaded area layers`, a kept area unloaded
+instead of hidden), and other large interiors, where the kept outdoors may cost something other
+than foliage.
 * **GOG.** Same functions, bytes and convention (EAX = layer info); found from
   `HideLayerGroup() called when no world is loaded.` (`00ECE518`, native `00AE70B8`, group setter
   `00B3F3F7`), and the GOG predicate reads the game object at `01475740`, GOG's `VA_GAME`. Not run
@@ -889,7 +992,92 @@ Two ways to use it:
 Either way: only neighbours in the same folder that are not houses, at most a few dozen layers
 each, under the `preload_memory_mb` guard; their black planes (`black_plane*`, `dark_plane*`,
 which belong to the area changes, see "The survey behind the new rules") could then be left out
-like the fake rooms. GOG: the door offsets are still to be found (`CStreamingDoorClassBuilder`).
+like the fake rooms. GOG: same offsets (`+0x200`/`+0x214`, registration `005AFCC5`), class size
+`0x250`, vtable `00D7A394`.
+
+### `[loading] preload_areas` (default 0; third version, seen working in game once, Steam)
+
+The small areas behind an area's doors load with the area, in its own job, and stay out of the
+world until their door is used.
+
+**Two versions that loaded them right after the area (2026-11-11, both dropped).** The doors can
+only be read once the area's layers are loaded, so the first version called the switch a second
+time (mode 4, same partition) after the area load's switch had returned, and the second ran the
+area's job once more from stage 3 with one bucket of the DLL's. Both loaded the two areas
+(`'common\harpy_lair' (20) 'common\secret_passage' (17)`, 167-285 ms) and the cave door went
+without a fade. Both sessions also ended with a loading-screen object left on the render thread
+(`+0x26C` set, `+0x268` 0): `release_kept` then waited for "a loading screen is up" for the rest
+of the session (5.1 M range calls at the cliff, ~55 fps), and the first session's Quit crashed
+(`docs/validation/preload-areas-v1-2026-11-11.log`, `preload-areas-v2-2026-11-11.log`). The extra
+load was blamed for that object and was not the cause: the run of 2026-11-12 below left the same
+object after a plain load with nothing added. What the object is and how it is dealt with is in
+`quit-crash.md`, "A loading-screen movie still alive at the GUI shutdown". The frame rate was
+lost to the check alone: `release_kept` took the object for a loading screen. Now only `+0x268`
+(a viewport while a loading screen is up) blocks a release.
+
+**Now** (`pa_*` in `src/enginefix.c`):
+
+* **Learn, do not load.** After an area job (`hook_PartRun`, mode 1 or a door into another
+  folder, job stage 5) `pa_learn` walks the loaded layers' entities (layer `+0x50`/`+0x54`) for
+  the `CStreamingDoor` vtable and notes both partitions of each door. The other partitions of
+  the same folder that are not houses (`kx_small`) are remembered as pairs (area, neighbour), in
+  memory and in `<game>\bin\witcher2_enginefix_cache\area-doors.txt` (one `area<TAB>neighbour`
+  per line, UTF-8). Nothing is loaded at that point.
+* **Load with the area, from its next load on.** `pa_plan` runs before the area's job: for every
+  known neighbour of the target, the layers of its own groups that are not loaded (`ks_walk`: no
+  sound, occluders, interior environment or fake rooms), 1 to 64 per area, go to the end of the
+  job's last bucket, after the interiors and the street and before the fake rooms. One run, the
+  game's own; no second switch. Layers the job lists itself, interiors and layers added by the
+  other rules are left out of the plan.
+* **Loaded, not attached.** The planned layers go into `g_paSet` before the run, and
+  `kh_pred_stub` (the visibility predicate's one call, as for `hide_kept`) answers "not visible"
+  for them, so the job's attach stage leaves them out of the world, as it does for a layer group
+  a quest has hidden. They cost address space, and nothing in the visibility pass.
+* **At the door.** `hook_DoorStart` finds nothing to load (`ks_missing`): no fade. The door's job
+  lists for unloading the loaded layers its partition does not hold; a hidden layer that is not
+  in that list belongs to the partition being entered and leaves the set before the run
+  (`pa_keep_listed`), so the same job attaches it. Other neighbours stay hidden. From then on the
+  area is an ordinary kept area (`keep_outdoors`, `release_kept`, `hide_kept`).
+* **Memory.** The plan needs `area_memory_mb` free (or `preload_memory_mb`, if that is higher),
+  and so does every single layer (`kp_layer_ok`): what does not fit loads on its first visit.
+  Once less than `area_memory_mb` is free during play, `pa_frame` (once a second, game thread)
+  queues a switch to the current partition and `hook_PartRun` lets the hidden layers in its
+  unload list go, with the GC, as `release_kept` does. A door left to the game for memory
+  unloads them with everything else. After every job the set drops what is no longer loaded
+  (`pa_prune`); a stream switch, an area load or another world empties it (`pa_clear`).
+* Needs `interiors=2` (`keep_outdoors` and `preload_interiors`) and the visibility hook; without
+  them it is off. GOG takes the same path (no new address beyond `hide_kept`'s).
+* Log: `preload: the doors of '<area>' lead to N partition(s): K whole area(s) in its folder (M
+  new - they load with this area from its next load on), ...`, `preload: K area(s) known behind
+  the doors of '<area>': N to load now, '<name>' (layers) ...`, `preload: X of Y layers of K
+  area(s) behind the doors loaded, hidden until their door`, `preload: N preloaded layer(s) of
+  '<area>' joined the world at this switch (M stay hidden)`, `preload: only F MB of address space
+  free (under 1536) - unloading the N preloaded area layers`.
+
+So the tiers by free address space are: under `door_memory_mb` (1 024) the game's own doors; from
+there house doors keep their street; from `preload_memory_mb` (1 280) interiors preload; from
+`area_memory_mb` (1 536) area doors keep both areas, kept layers are hidden instead of unloaded,
+and neighbour areas preload hidden.
+
+#### Seen in game (owner, 2026-11-12, Steam, DXVK, 4K, `release_kept=30`, `hide_kept=1`, `preload_areas=1`)
+
+`docs/validation/preload-areas-v3-2026-11-12.log`: the save in front of the cave loaded twice,
+then in to the cliff, out, in and out, in for ~50 m and out, Quit. Owner: no frame drops at the
+cliff.
+
+| Step | Log |
+|---|---|
+| First load | `the doors of 'common\quarry' lead to 3 partition(s): 2 whole area(s) in its folder (2 new ...)`; `area-doors.txt` holds the two pairs |
+| Second load | `2 area(s) known ...: 2 to load now, 'common\harpy_lair' (24) 'common\secret_passage' (30)`, `37 of 37 layers of 2 area(s) behind the doors loaded, hidden until their door` (17 of the 54 planned are the quarry's own too and load as that); job 2.9 s, as without them |
+| Cave door, first time | `is loaded - no fade (0 to load)`, `16 preloaded layer(s) of 'common\secret_passage' joined the world at this switch (20 stay hidden)` |
+| 31 m in | `hid 53 kept outdoor layers ... (job 40 ms, 2044 MB free)`; shown again at 14 m (11 ms); twice |
+| Four more doors | all `no fade (0 to load, spinner hidden)`, jobs under 60 ms |
+| Quit | `no loading screen up`, `ExitProcess(0)`, no dump |
+
+Not explained: one of the 17 cave layers was no longer loaded after the first door's job (`16
+joined`, `20 stay hidden` of 37); the door check of the hide test of 2026-11-11 also counted `1 to
+load` there on every later door. Not covered by a test yet: the memory drop (`area_memory_mb`
+above the free address space while the areas are loaded), and GOG.
 
 ### Still to check in game
 

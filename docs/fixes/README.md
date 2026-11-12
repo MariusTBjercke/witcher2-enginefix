@@ -14,7 +14,7 @@ current version; the entry itself has the proof.
 
 | Entry | What it covers | State | Off switch |
 |---|---|---|---|
-| [interior-preload.md](interior-preload.md) | Seamless interiors, partitions, occluders | Shipped | `[loading] interiors` |
+| [interior-preload.md](interior-preload.md) | Seamless interiors, partitions, occluders; the kept outdoors hidden far from the door, small areas behind an area's doors preloaded hidden, what an area door swaps | Shipped; the last three after 0.12.1, seen on Steam and GOG in one Act 2 cave | `[loading] interiors`, `release_kept`, `hide_kept`, `preload_areas` |
 | [load-times.md](load-times.md) | Measured load times, faster door fades | Shipped | `[loading] fast_doors`, `door_fade` |
 | [interior-maps.md](interior-maps.md) | Black map in interiors (data files) | Shipped | Delete the map files |
 | [startup-time.md](startup-time.md) | Launch to main menu: FMOD idling on a coarse timer, save preview textures, what is left | In 0.11.0, measured on Steam, one run on GOG | `[startup] fast_start`, `[saves] light_previews` |
@@ -50,7 +50,7 @@ current version; the entry itself has the proof.
 |---|---|---|---|
 | [crash-capture.md](crash-capture.md) | Crash log and dump, silent exit | Shipped | `[diagnostics] crash_dump` |
 | [crash-raycast-stale-body.md](crash-raycast-stale-body.md) | Crash leaving the Flotsam inn | Shipped | `[stability] raycast_guard` |
-| [quit-crash.md](quit-crash.md) | Crash while quitting with an area loaded (`FactsAdd`; a cutscene actor in the prologue) | Guard in 0.9.0; Quit ends the session first: in 0.12.0, seen on Steam and GOG | `[stability] quit_guard`, `clean_quit` |
+| [quit-crash.md](quit-crash.md) | Crash while quitting with an area loaded (`FactsAdd`; a cutscene actor in the prologue) | Guard in 0.9.0; Quit ends the session first: in 0.12.0, seen on Steam and GOG | `[stability] quit_guard`, `clean_quit`, `loading_screen_cleanup` |
 | [layer-storage-leak.md](layer-storage-leak.md) | Every save load leaks the world's stored NPC states (~370 MB after one evening) | In 0.12.0, seen on Steam and GOG | `[stability] layer_storage_leak` |
 | [door-transitions.md](door-transitions.md), "Freeze at a door" | Freeze in pathfinding: a zero-length line loops PathEngine's edge walk, every job waits | In 0.12.0, installed on Steam and GOG, no catch seen yet | `[stability] path_guard` |
 | [text-file-terminator.md](text-file-terminator.md) | Crash reading a UTF-16 text file (a CSV after a save load): one 0 byte where a wide string needs two | Built 2026-11-07, not yet seen in game | `[stability] text_guard` |

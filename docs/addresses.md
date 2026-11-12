@@ -30,11 +30,13 @@ running exe's import directory.
 | `VA_DOOR_TELEPORT_VT` | `00EF0410` | `00D7A318` | type 1 task: +0x14 state (1 = switch queued) |
 | `VA_DOOR_TIMER` | `0095DB00` | `005AF658` |  |
 | `VA_DOOR_TIMER_SLOT` | `00EF01BC` | `00D7A4CC` | streaming door OnTimer |
+| `VA_DOOR_VTABLE` | `00EF0084` | `00D7A394` | CStreamingDoor (slot 78 = VA_DOOR_TIMER_SLOT, 153 = VA_DOOR_START_SLOT) |
 | `VA_DZIP_READER` | `00A4E42E` | `00AA1DFC` | CDZipFileReader ctor, (String* path), RET 4; this in EDI (ESI on GOG) |
 | `VA_DZIP_READER_CALL` | `00A980BC` | `00AEBF37` | its call in the save open 00A9805B (GOG 00AEBEDA, after push eax) |
 | `VA_DZIP_READER_VT` | `00E8BA80` | `00F2E990` | its vtable: slots 1-4 forward to the memory stream at +0x30 |
 | `VA_EMPTY_STRING` | `0160FBA0` | `01680110` | the game's empty String, its usual loading-screen argument |
 | `VA_ENGINE` | `0160C6DC` | `0167D4CC` | the engine object; +0x20 its exit flag |
+| `VA_ENTITY_VTABLE` | `00E807C4` | `00F236FC` | CEntity's own vtable (RTTI, tools/dump-engine-classes.py) |
 | `VA_ENV_ADD` | `00A75014` | `00AC9EED` |  |
 | `VA_ENV_ADD_CALL` | `00A367CB` | `00A89F59` | call FUN_00a75014 in FUN_00a36748, its only caller |
 | `VA_ENV_STAB` | `00A74FBF` | `00AC8CDF` |  |
@@ -60,6 +62,8 @@ running exe's import directory.
 | `VA_LAYER_SYNC` | `00A5A90E` | `00AAE727` | EAX = layer info: attach or detach to match the predicate |
 | `VA_LAYER_VISIBLE` | `00A5A568` | `00AAE25A` | EAX = layer info -> AL: should be attached |
 | `VA_LAYER_VISIBLE_CALL` | `00A5A92A` | `00AAE743` | its only call, in FUN_00a5a90e |
+| `VA_LSCR_EXEC` | `009DC408` | `00A2DA11` | ECX = command: +0x08 viewport, +0x0C the screen's name |
+| `VA_LSCR_EXEC_SLOT` | `00E7C060` | `00F1F098` | loading-screen command vtable 00E7C054, slot 3 |
 | `VA_LS_CLEAR_CALL` | `004461C8` | `0044F348` | E8 in the array clear 004461B1 (after mov eax,edi) |
 | `VA_LS_RECORD_FREE` | `00AFE0A2` | `00B37334` | record destructor, EAX = record, plain RET |
 | `VA_LS_REMOVE_CALL` | `00AFE1C3` | `00B3746F` | E8 in the single removal 00AFE12C (after mov eax,edi) |
@@ -83,6 +87,8 @@ running exe's import directory.
 | `VA_QUIT_FLAG` | `00AA5F3A` | `00AFA032` | [engine]+0x20 = 1 (GOG 00AFA032: ECX = engine) |
 | `VA_RAY_HIT` | `0084C750` | `0091F110` |  |
 | `VA_RAY_SLOT` | `00D41A38` | `00E08740` |  |
+| `VA_RCMD_ALLOC` | `00AA2685` | `00AF662F` | cdecl (size) -> render command memory; its ctor must follow at once |
+| `VA_RCMD_LOADMOVIE` | `00AA1D2F` | `00AF5D05` | video loading-screen command ctor (vtable 00E7C068): memory in EAX (GOG: ECX), stdcall (viewport, movie), RET 8 |
 | `VA_RENDERER` | `0160C6EC` | `0167D4DC` | the renderer: +0x20 cascade size, +0x24/+0x28 the atlas |
 | `VA_RENDER_THREAD` | `0160D0A4` | `0167DE94` | render thread object while its loop runs |
 | `VA_SAVELIST` | `009A49B9` | `005072D1` | stdcall void BuildSaveList(panel) |

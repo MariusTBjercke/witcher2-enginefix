@@ -284,3 +284,17 @@ Not seen with 0.10.0 yet. The GOG exe has the LAA flag, so preloading interiors 
   - The partition request is `__thiscall`. A call with the game in EAX leaves ECX undefined.
 
 The player's log and crash dump would tell which.
+
+## Run of 2026-11-12: the kept outdoors hidden, areas preloaded, loading screen cleanup
+
+`docs/validation/gog-area-preload-2026-11-12.log` (DXVK, an Act 2 save copied from Steam into
+`Documents\Witcher 2\gamesaves`; saves of the two builds are interchangeable). First run on GOG of
+`release_kept` / `hide_kept` (the visibility predicate hook `00AAE743`), `preload_areas` (the
+`CStreamingDoor` vtable `00D7A394`), the plain `CEntity` vtable `00F236FC` and
+`loading_screen_cleanup` (`00AF662F`, `00AF5D05`, slot `00F1F098`). All of them behaved as on
+Steam; details in `interior-preload.md` and `quit-crash.md`.
+
+`tools/dump-engine-classes.py --exe <the GOG exe>` reads GOG's RTTI as it stands (the GOG exe is
+not packed): its `build()` gave `CEntity` `00F236FC` and `CStreamingDoor` `00D7A394`, the latter
+equal to the row found by hand. The script's anchor check and its output files are Steam's, so
+call `build()` from a scratch script rather than running it with `--exe` alone.

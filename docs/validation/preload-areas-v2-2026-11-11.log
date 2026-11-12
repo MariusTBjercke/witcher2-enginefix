@@ -1,0 +1,173 @@
+﻿23:35:14.389 witcher2_enginefix 0.12.1 loaded (image base 0x00400000)
+23:35:14.389 build: Steam 3.5.0.26 (TimeDateStamp 518B881C, .text 008A94AD), delta 0x00000000 from 0x00400000; import slots 27/27 found by name
+23:35:14.389 diagnostics: crash_dump=1 exit_trace=1 (previous log kept as witcher2_enginefix.prev.log)
+23:35:14.389 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+23:35:14.389 distance config: experimental=1 visibility=3.00x shadow=3.00x
+23:35:14.389 saves: fix_thumbnails=1 save_trace=0
+23:35:14.389 startup: skip_intro=0 fast_start=1
+23:35:14.389 diagnostics: file_trace=0 load_trace=0 mem_trace=0 script_bindings=0
+23:35:14.389 loading: fast_doors=1 door_fade=0.05 area_fade=0.25 interiors=2 (keep_outdoors=1 keep_interiors=1 preload_interiors=1 skip_door_gc=1 release_kept=30 hide_kept=1 preload_areas=1 instant_doors=1 indoor_outdoors=1) door_light_blend=1.00 preload_street=1 door_spinner=0 preload_memory_mb=1280 door_memory_mb=1024 area_memory_mb=1536
+23:35:14.389 scriptpatches: book_marker=1 continue=1 pause_quit=1 window_mode=1 medallion=1
+23:35:14.389 window: enabled=1 borderless=0 dpi_aware=1
+23:35:14.389 presets: default=extreme, cycle modifiers=1 VK=79 (Options > Graphics remembers the level)
+23:35:14.389 exit: hooked kernel32.dll!ExitProcess
+23:35:14.389 exit: hooked kernel32.dll!TerminateProcess
+23:35:14.389 exit: hooked kernel32.dll!GetProcAddress
+23:35:14.389 exit (steam_api.dll): hooked kernel32.dll!ExitProcess
+23:35:14.389 exit (steam_api.dll): hooked kernel32.dll!TerminateProcess
+23:35:14.389 cpu32: hooked kernel32.dll!GetProcessAffinityMask
+23:35:14.391 script-patcher: hooked kernel32.dll!CreateFileW
+23:35:14.391 script-patcher: hooked kernel32.dll!FindFirstFileW
+23:35:14.391 script-patcher: hooked kernel32.dll!FindNextFileW
+23:35:14.391 script patches: hooks installed after 0 ms (3/3 slots)
+23:35:14.394 shadows: startup=vanilla (options menu)
+23:35:14.394 presets: startup=vanilla (options menu)
+23:35:14.394 window: dpi awareness = system aware (fallback)
+23:35:14.394 window: borderless=1 (options menu), dpi_aware=1, menu=1
+23:35:14.403 startup: fast_start: timeBeginPeriod(1) = 0, Sleep(1) took 10.4 ms before, 1.4 ms after
+23:35:14.403 startup: hooked kernel32.dll!Sleep
+23:35:14.403 startup: hooked kernel32.dll!Sleep
+23:35:14.541 shadows: level vanilla; atlas at start 1024, filter on, live atlas on
+23:35:14.541 window: startup borderless style patched
+23:35:14.545 window: menu channel hooked (Options > Graphics applies borderless at once)
+23:35:14.545 window: viewport tick hooked (Full screen switches at once)
+23:35:14.667 script overlay: cache <game>\bin\witcher2_enginefix_cache
+23:35:14.676 script overlay: user content: no Config\UserContent.ini, none mounted
+23:35:14.739 script overlay: read icons: 152 books, 152 icons
+23:35:14.739 script overlay: book_marker=on
+23:35:14.739 script overlay: continue=on
+23:35:14.740 script overlay: pause_quit=on
+23:35:14.740 script overlay: window_mode=on
+23:35:14.740 script overlay: medallion=on
+23:35:14.754 script overlay: ui_trade.swf: patched (loose)
+23:35:14.764 script overlay: ui_storage.swf: patched (loose)
+23:35:14.768 script overlay: base_scripts.dzip: 8 entries replaced or added
+23:35:14.773 script overlay: dlc_finishers.dzip: 152 entries replaced or added
+23:35:14.779 script overlay: cache: built in 110 ms (4 redirects)
+23:35:14.780 script patches: book_marker=on continue=on pause_quit=on window_mode=on medallion=on cache=built 110 ms
+23:35:15.157 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+23:35:15.161 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+23:35:15.521 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+23:35:15.892 saves: hooked d3dx9_39.dll!D3DXCreateTextureFromFileInMemory
+23:35:15.892 saves: light previews on (640x360 BMP at its own size, one level)
+23:35:15.892 crash: removed old dump witcher2_enginefix_crash_2026-11-11_16-44-18.dmp
+23:35:15.892 crash: filter armed, chaining to 0x62D22571 (CSERHelper.dll+0x12571)
+23:35:15.898 osd: window ready (font 34 px)
+23:35:15.898 stability: ray cast guard installed (collector slot 00D41A38)
+23:35:15.898 stability: quit guard installed (FactsAdd time default at 0099871E)
+23:35:15.898 quit: QuitApplication hooked - with an area loaded it ends the game session first (clean_quit)
+23:35:15.898 stability: path guard installed (PathEngine edge walk at 006550C0)
+23:35:15.898 stability: layer storage leak fix: array clear hooked, single removal hooked
+23:35:15.898 stability: text guard installed (text files end in three 0 bytes, allocation at 00AC6ACA)
+23:35:15.899 settings object 0x02580E78 found: mesh=1.200 foliage=2.000
+23:35:15.899 preset: vanilla at startup
+23:35:15.899 lod enforced: mesh=1.000 foliage=1.000
+23:35:15.899 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=1.00x shadow=1.00x
+23:35:15.899 billboards: hook installed, factor 1.00x
+23:35:15.899 shadows: zones patched at 009C016A, 009C019A and 009C01AA
+23:35:15.899 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+23:35:15.899 thumbnail: menu image registry hooked (QuickSave preview refresh)
+23:35:15.899 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=1 trace=0
+23:35:15.899 saves: ISteamRemoteStorage 13620BE8 FileWrite hooked; thumbnail fix=1
+23:35:15.899 preload: per-layer load hooked - preloaded layers stop below 1280 MB of free address space
+23:35:15.899 doors: indoor partitions keep drawing terrain and grass (indoor_outdoors=1)
+23:35:15.899 interiors: layer visibility hooked - kept outdoor layers are hidden far from the door while area_memory_mb is free
+23:35:15.899 partition: switch calls hooked/hooked, sync run hooked (load_trace=0 keep_outdoors=1)
+23:35:15.899 doors: environment activation hooked, door Stabilize hooked - door_light_blend on (1.00 s)
+23:35:15.899 doors: loading spinner command hooked - no spinner on instant doors
+23:35:15.899 doors: streaming door timer hooked
+23:35:15.899 doors: door start hooked (door_fade 0.05 s, area_fade 0.25 s)
+23:35:15.899 doors: fade commands hooked/hooked - instant_doors on
+23:35:15.899 doors: fade-out patched, fade-in patched, 0.05 s, area changes 0.25 s (game 0.5 s); fast_doors=1
+23:35:17.833 shadows: atlas 1024 per cascade, wanted 1024
+23:35:19.978 startup: fast_start: FMOD waits of 10 ms cut to 1 ms until the game window, after 5578 ms: fmodex 1483, fmod_event 730
+23:35:20.005 window: game window 3840x2160, User.ini viewport 3840x2160
+23:35:20.631 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook installed on vtable 63E26264
+23:35:20.632 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+23:35:20.632 input: keyboard state filter installed
+23:35:20.632 input: keyboard cooperative level hook installed
+23:35:20.632 input: window procedure hooked (key messages ignored while DirectInput reads the keyboard)
+23:35:20.632 input: keyboard cooperative level 0x05 -> 0x06 (Windows keys and Print Screen work in game)
+23:35:30.023 saves: first preview made at its own size
+23:35:50.064 interiors: before the switch - 1542 layers in the world, 0 loaded; 0 building interiors, 0 loaded
+23:35:50.076 savelist: before the switch private=1090 MB commit=1443 reserve=293 free=2358 largest_free=2044 MB, previews held=327
+23:35:50.077 preload: 'common\quarry' found (type 0); siblings by location type: default 26, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+23:35:50.077 preload: 24 building(s) with interior lighting of their own in the partition tree, 57 layer groups only they list
+23:35:50.089 preload: 0 interior layers from the indoor partitions, 59 from the buildings with their own lighting, 0 more by folder name (59 known in this world)
+23:35:52.929 preload: the doors of 'common\quarry' lead to 3 partition(s): 2 small area(s) to load, 'common\harpy_lair' (20) 'common\secret_passage' (17) 0 too big, 0 already loaded, 0 houses, 0 in other folders
+23:35:53.097 preload: 37 layers of 2 area(s) behind the doors loaded in 167 ms (a second run of the job)
+23:35:53.097 preload: 59 of 59 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2145 MB, floor 1280 MB)
+23:35:53.097 partition: sync job ran 3033 ms (GC  31 ms)
+23:35:53.097 partition: preload kept 0 of 0 layers, unloaded 0; loaded 698 (59 interiors added), skipped 0 (fake rooms, low-poly)
+23:35:53.098 interiors: after the switch - 1542 layers in the world, 734 loaded; 0 building interiors, 0 loaded
+23:35:53.112 savelist: after the switch private=1360 MB commit=1702 reserve=265 free=2127 largest_free=2044 MB, previews held=327
+23:35:56.432 distance stats: mesh=661743 shadow=549596 baseline_reject=242138 admitted=0 (1.00x/1.00x)
+23:35:56.432 billboards: 27 new proxies, 0 moved; last 15.0 m -> 15.0 m (1.00x)
+23:36:01.498 distance stats: mesh=1566074 shadow=945348 baseline_reject=390912 admitted=0 (1.00x/1.00x)
+23:36:06.564 distance stats: mesh=1773615 shadow=893200 baseline_reject=384526 admitted=0 (1.00x/1.00x)
+23:36:08.597 doors: 'common\quarry' -> 'common\secret_passage' is loaded - no fade (0 to load)
+23:36:08.615 partition: sync job ran 0 ms (GC skipped, 0 ms) - keep_outdoors: outdoor layers left loaded
+23:36:08.615 partition: keep_outdoors kept 132 of 134 layers, unloaded 2; loaded 0 (0 interiors added), skipped 0 (fake rooms, low-poly)
+23:36:08.615 interiors: 73 kept outdoor layers recorded (73 in all) - released once Geralt is 30 m from (-282.7, -172.4, -0.9)
+23:36:08.643 doors: interior ready after 47 ms - picture back now (state 2)
+23:36:08.650 doors: lighting blends over 1.00 s instead of switching at once - 'AreaEnvironment_dwarf_mine' 105 at 1.00 (+1.00/s)
+23:36:11.629 distance stats: mesh=1514168 shadow=1192675 baseline_reject=528461 admitted=0 (1.00x/1.00x)
+23:36:11.749 doors: lighting blends over 1.00 s instead of switching at once - 'AreaEnvironment_dwarf_mine' 105 at 1.00 (+1.00/s)
+23:36:16.695 distance stats: mesh=2795506 shadow=1005705 baseline_reject=373780 admitted=0 (1.00x/1.00x)
+23:36:21.144 interiors: releasing the kept outdoor layers waits - a loading screen is up
+23:36:21.760 distance stats: mesh=1533070 shadow=852396 baseline_reject=290057 admitted=0 (1.00x/1.00x)
+23:36:26.821 distance stats: mesh=1252748 shadow=1110959 baseline_reject=555581 admitted=0 (1.00x/1.00x)
+23:36:31.889 distance stats: mesh=2438699 shadow=1620108 baseline_reject=1109952 admitted=0 (1.00x/1.00x)
+23:36:36.955 distance stats: mesh=2641583 shadow=1031266 baseline_reject=548771 admitted=0 (1.00x/1.00x)
+23:36:42.020 distance stats: mesh=2658106 shadow=1792189 baseline_reject=1458352 admitted=0 (1.00x/1.00x)
+23:36:47.085 distance stats: mesh=2252329 shadow=1915042 baseline_reject=1476725 admitted=0 (1.00x/1.00x)
+23:36:52.152 distance stats: mesh=2098574 shadow=1828132 baseline_reject=1262036 admitted=0 (1.00x/1.00x)
+23:36:57.221 distance stats: mesh=1083357 shadow=1005798 baseline_reject=354976 admitted=0 (1.00x/1.00x)
+23:37:02.285 distance stats: mesh=1371147 shadow=870829 baseline_reject=318001 admitted=0 (1.00x/1.00x)
+23:37:07.352 distance stats: mesh=1195728 shadow=750727 baseline_reject=217263 admitted=0 (1.00x/1.00x)
+23:37:12.419 distance stats: mesh=679173 shadow=666726 baseline_reject=156025 admitted=0 (1.00x/1.00x)
+23:37:17.486 distance stats: mesh=1161054 shadow=727630 baseline_reject=246499 admitted=0 (1.00x/1.00x)
+23:37:22.551 distance stats: mesh=3494207 shadow=885027 baseline_reject=393577 admitted=0 (1.00x/1.00x)
+23:37:22.551 billboards: 1 new proxies, 0 moved; last 15.0 m -> 15.0 m (1.00x)
+23:37:27.620 distance stats: mesh=5146890 shadow=876653 baseline_reject=405254 admitted=0 (1.00x/1.00x)
+23:37:32.682 distance stats: mesh=5221238 shadow=840874 baseline_reject=374339 admitted=0 (1.00x/1.00x)
+23:37:37.751 distance stats: mesh=5072329 shadow=828363 baseline_reject=367466 admitted=0 (1.00x/1.00x)
+23:37:42.818 distance stats: mesh=5272638 shadow=854211 baseline_reject=375956 admitted=0 (1.00x/1.00x)
+23:37:47.882 distance stats: mesh=5077782 shadow=818864 baseline_reject=358045 admitted=0 (1.00x/1.00x)
+23:37:52.948 distance stats: mesh=5263382 shadow=844955 baseline_reject=366656 admitted=0 (1.00x/1.00x)
+23:37:58.013 distance stats: mesh=5165673 shadow=827001 baseline_reject=357223 admitted=0 (1.00x/1.00x)
+23:38:03.079 distance stats: mesh=5238072 shadow=835592 baseline_reject=359012 admitted=0 (1.00x/1.00x)
+23:38:08.147 distance stats: mesh=5177833 shadow=823210 baseline_reject=353027 admitted=0 (1.00x/1.00x)
+23:38:13.218 distance stats: mesh=5192381 shadow=822035 baseline_reject=350654 admitted=0 (1.00x/1.00x)
+23:38:18.286 distance stats: mesh=5166090 shadow=813816 baseline_reject=346056 admitted=0 (1.00x/1.00x)
+23:38:23.353 distance stats: mesh=5076708 shadow=800716 baseline_reject=340181 admitted=0 (1.00x/1.00x)
+23:38:28.415 distance stats: mesh=5171228 shadow=816191 baseline_reject=345203 admitted=0 (1.00x/1.00x)
+23:38:33.482 distance stats: mesh=5069043 shadow=794160 baseline_reject=334644 admitted=0 (1.00x/1.00x)
+23:38:38.545 distance stats: mesh=5139668 shadow=801550 baseline_reject=335660 admitted=0 (1.00x/1.00x)
+23:38:43.615 distance stats: mesh=4967197 shadow=772346 baseline_reject=321975 admitted=0 (1.00x/1.00x)
+23:38:48.683 distance stats: mesh=5092623 shadow=786238 baseline_reject=326131 admitted=0 (1.00x/1.00x)
+23:38:53.752 distance stats: mesh=4944054 shadow=765293 baseline_reject=314584 admitted=0 (1.00x/1.00x)
+23:38:58.818 distance stats: mesh=5118055 shadow=784293 baseline_reject=321580 admitted=0 (1.00x/1.00x)
+23:39:03.884 distance stats: mesh=4978327 shadow=763430 baseline_reject=311032 admitted=0 (1.00x/1.00x)
+23:39:08.951 distance stats: mesh=5026717 shadow=768348 baseline_reject=311726 admitted=0 (1.00x/1.00x)
+23:39:14.020 distance stats: mesh=5092757 shadow=771690 baseline_reject=312170 admitted=0 (1.00x/1.00x)
+23:39:19.089 distance stats: mesh=5111027 shadow=772816 baseline_reject=308825 admitted=0 (1.00x/1.00x)
+23:39:24.159 distance stats: mesh=5082561 shadow=761195 baseline_reject=301957 admitted=0 (1.00x/1.00x)
+23:39:29.225 distance stats: mesh=5074171 shadow=755196 baseline_reject=298715 admitted=0 (1.00x/1.00x)
+23:39:34.294 distance stats: mesh=5118329 shadow=762709 baseline_reject=300158 admitted=0 (1.00x/1.00x)
+23:39:39.358 distance stats: mesh=4978282 shadow=736912 baseline_reject=288618 admitted=0 (1.00x/1.00x)
+23:39:44.423 distance stats: mesh=5039749 shadow=740096 baseline_reject=289046 admitted=0 (1.00x/1.00x)
+23:39:49.489 distance stats: mesh=4973013 shadow=727534 baseline_reject=283920 admitted=0 (1.00x/1.00x)
+23:39:54.554 distance stats: mesh=5043960 shadow=737418 baseline_reject=286726 admitted=0 (1.00x/1.00x)
+23:39:59.623 distance stats: mesh=4942479 shadow=717054 baseline_reject=278559 admitted=0 (1.00x/1.00x)
+23:40:04.689 distance stats: mesh=4650298 shadow=659555 baseline_reject=257053 admitted=0 (1.00x/1.00x)
+23:40:05.051 quit: an area is loaded - ending the game session first
+23:40:05.172 stability: layer storage: 1 saved entity state(s) freed so far (0 MB) that the game would have kept
+23:40:05.603 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 63E26264
+23:40:05.603 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+23:40:05.603 input: keyboard state filter installed
+23:40:06.138 quit: the game session ended 1078 ms after Quit
+23:40:07.706 quit: quitting from the main menu, 2656 ms after Quit, LOADING SCREEN UP (movie 00000000, screen 0C140768)
+23:40:08.974 exit: ExitProcess(0) from witcher2.EXE+0x272388 on thread 9684 (the main thread)
+23:40:09.034 stability: layer storage: 6174 saved entity state(s) freed this session (16 MB)
+23:40:09.034 unloaded

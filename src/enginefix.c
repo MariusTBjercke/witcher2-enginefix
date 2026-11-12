@@ -189,6 +189,7 @@ static int cfg_keep_outdoors = 1; // [loading] keep_outdoors: house doors leave 
 static int cfg_skip_door_gc = 1; // [loading] skip_door_gc: no full object GC on a keep_outdoors house door
 static int cfg_release_kept;    // [loading] release_kept: metres from the door after which kept outdoor layers unload (0 = never)
 static int cfg_hide_kept = 1;   // [loading] hide_kept: with release_kept, hide them instead while area_memory_mb is free
+static int cfg_preload_areas;   // [loading] preload_areas: load the small areas behind an area's doors with it
 static int cfg_instant_doors = 1; // [loading] instant_doors: no fade on a house door known to load nothing
 static int cfg_indoor_outdoors = 1; // [loading] indoor_outdoors: keep drawing terrain/grass behind kept doors
 static int cfg_preload_interiors = 1; // [loading] preload_interiors: load every building interior with the area
@@ -216,6 +217,7 @@ static int cfg_storage_leak = 1; // [stability] layer_storage_leak: free the sav
 static int cfg_clean_quit = 1;  // [stability] clean_quit: Quit with an area loaded ends the game session first
 static int cfg_path_guard = 1;  // [stability] path_guard: a zero-length pathfinding line does not hang a job
 static int cfg_text_guard = 1;  // [stability] text_guard: a UTF-16 text file read whole always ends in 0x0000
+static int cfg_lscr_cleanup = 1; // [stability] loading_screen_cleanup: free a loading-screen object the game left behind
 static int g_proxyOnly;         // loaded by another program in bin (Configurator.exe): forward only
 static int g_scriptHooks;       // sp_hooks_start succeeded: script patches are active
 static volatile LONG g_scriptRedirects;
@@ -551,6 +553,8 @@ static void load_config(void)
     cfg_release_kept = ini_int("loading", "release_kept", 0);
     if (cfg_release_kept < 0 || cfg_release_kept > 1000) cfg_release_kept = 0;
     cfg_hide_kept = ini_int("loading", "hide_kept", 1);
+    cfg_preload_areas = ini_int("loading", "preload_areas", 0);
+    if (!cfg_keep_outdoors || !cfg_preload_interiors) cfg_preload_areas = 0;   // they ride on the interiors' preload, and a door must keep them
     cfg_instant_doors = ini_int("loading", "instant_doors", 1);
     cfg_door_light_blend = ini_float("loading", "door_light_blend", 1.0f);
     if (cfg_door_light_blend < 0.0f || cfg_door_light_blend > 5.0f) cfg_door_light_blend = 1.0f;
@@ -580,6 +584,7 @@ static void load_config(void)
     cfg_clean_quit = ini_int("stability", "clean_quit", 1);
     cfg_path_guard = ini_int("stability", "path_guard", 1);
     cfg_text_guard = ini_int("stability", "text_guard", 1);
+    cfg_lscr_cleanup = ini_int("stability", "loading_screen_cleanup", 1);
 
     cfg_mesh_step_n    = parse_steps("mesh_steps", cfg_mesh_steps);
     cfg_foliage_step_n = parse_steps("foliage_steps", cfg_foliage_steps);
@@ -3590,7 +3595,18 @@ static void pt_job(const char* why, const void* job)
 //             (`city_building_lowpoly\ships_lowpoly`); the real objects stay when kept
 //   INTERIOR  a building's own rooms (`\buildings\<name>\interior\`; the prologue village's
 //             `island\village_b_ints\interior<N>\`)
-enum { LC_OTHER, LC_FAKE, LC_SWAP, LC_LOWPOLY, LC_INTERIOR };
+//   ENV       an area's own environment that is no interior's (`environments\environment_dwarf_mine`,
+//             `environments\camp_henselt`): lighting, fog and sky inside an area on the map. A
+//             door between two whole areas swaps it as the game does (hook_PartRun); a house door
+//             keeps its street's. The cave's stayed loaded after the way out and kept the quarry
+//             around the cave mouth dark, with the cave's sky (owner, 2026-11-12:
+//             `'AreaEnvironment_dwarf_mine' 105 at 1.00` three seconds after the door out).
+// SWAP also takes the stand-ins an area puts around itself for what the game unloads: the
+// black plane in a cave mouth (`black_plane*`, `dark_plane*`, `shadow_plane*`, `dark_fog`,
+// `assas_cave_black`, the `dark_planes\` folder) and the box that keeps the sun out of a cave
+// (`shadow_box`). Kept after the way out, the cave's plane stood between Geralt and the quarry
+// until he walked through it, and its box shaded the ground outside (same run).
+enum { LC_OTHER, LC_FAKE, LC_SWAP, LC_LOWPOLY, LC_INTERIOR, LC_ENV };
 
 // Does a layer path or a layer group path name an interior's environment: `interior` somewhere
 // after an `environments` folder.
@@ -3602,6 +3618,13 @@ static int ko_env_interior(const wchar_t* s)
     return 0;
 }
 
+static int ko_stand_in(const wchar_t* name, const wchar_t* path)
+{
+    return wcsistr(name, L"black_plane") || wcsistr(name, L"dark_plane") || wcsistr(name, L"shadow_plane") ||
+           wcsistr(name, L"shadow_box") || wcsistr(name, L"dark_fog") || wcsistr(name, L"cave_black") ||
+           wcsistr(path, L"\\dark_planes\\");
+}
+
 static int ko_class(const void* layer)
 {
     wchar_t name[64], path[260];
@@ -3610,8 +3633,9 @@ static int ko_class(const void* layer)
     pt_text((const char*)layer + 0x68, path, 260);
     if (!_wcsicmp(name, L"fake") || !_wcsicmp(name, L"windows_outside")) return LC_FAKE;
     if (wcsistr(path, L"\\sounds\\") || wcsistr(name, L"occ") || wcsistr(path, L"\\occluders\\") ||
-        ko_env_interior(path) || wcsistr(path, L"\\windows_outside\\"))
+        ko_env_interior(path) || wcsistr(path, L"\\windows_outside\\") || ko_stand_in(name, path))
         return LC_SWAP;
+    if (wcsistr(path, L"\\environments\\")) return LC_ENV;
     if (wcsistr(path, L"_lowpoly\\")) return LC_LOWPOLY;
     if ((wcsistr(path, L"\\buildings\\") && wcsistr(path, L"\\interior\\")) || wcsistr(path, L"_ints\\"))
         return LC_INTERIOR;
@@ -3686,6 +3710,7 @@ static int ko_allowed(const void* job)
 #define KR_MAX          1024
 #define KR_SETTLE_MS    3000   // no release this soon after the kept door
 #define KR_PENDING_MS   5000   // the queued switch must run within this
+#define KR_LIGHT_ENTS   8      // hide_kept=1 leaves a kept layer of 1 to this many entities in the world
 static void* g_krList[KR_MAX];   // kept layers that no partition since has loaded (game thread)
 static int   g_krCount, g_krFull;   // g_krFull: more than KR_MAX kept - nothing is released then
 static void* g_krWorld;          // the world they belong to
@@ -3704,11 +3729,40 @@ static void* g_khSet[KR_MAX];    // hidden layer infos, sorted (game thread; rea
 static volatile LONG g_khCount;
 static void* g_khTmp[KR_MAX];
 
+// preload_areas: layers of the small areas behind the current area's doors. They load with the
+// area and stay out of the world (never attached, so the renderer does not walk them) until a
+// job switches to their partition. Sorted; game thread; read by kh_pred_stub.
+#define PA_SET 512
+static void* g_paSet[PA_SET];
+static volatile LONG g_paSetCount;
+static void* g_paWorld;          // the world they belong to
+static int   g_paDropPending;    // the switch that unloads them for memory is queued (pa_frame)
+static DWORD g_paDropTick;
+static DWORD g_paLoadLoaded, g_paLoadSkipped;   // the memory guard's count for the load in progress
+
 static int kp_cmp(const void* a, const void* b);
+
+static int pa_in_set(void* info)
+{
+    return g_paSetCount && bsearch(&info, g_paSet, (size_t)g_paSetCount, sizeof(void*), kp_cmp) != NULL;
+}
 
 static int __cdecl kh_is_hidden(void* info)
 {
-    return g_khCount && bsearch(&info, g_khSet, (size_t)g_khCount, sizeof(void*), kp_cmp) != NULL;
+    if (g_khCount && bsearch(&info, g_khSet, (size_t)g_khCount, sizeof(void*), kp_cmp) != NULL) return 1;
+    return pa_in_set(info);
+}
+
+// Before a switch that is not a door of this world (hook_PartSwitch, game thread): a stream
+// switch, an area load or another world. The set is only emptied: whichever job comes next
+// attaches the layers its partition holds and unloads the rest, and no pointer of a world a save
+// load replaced is touched.
+static void pa_clear(const char* why)
+{
+    if (g_paSetCount) logf_("preload: %ld preloaded area layers leave the hidden set (%s)", (LONG)g_paSetCount, why);
+    g_paSetCount = 0;
+    g_paDropPending = 0;
+    g_paWorld = NULL;
 }
 
 // Replaces `call FUN_00a5a568` (EAX = layer info, result in AL; the original keeps EBX, ESI, EDI
@@ -3782,6 +3836,35 @@ static void kr_clear(const char* why)
     g_krWorld = NULL;
 }
 
+// hide_kept=1: is this kept layer cheap enough to stay in the world while the rest is hidden?
+// With everything hidden the cracks in the cave's roof showed the sky where the kept state
+// showed rock (owner, 2026-11-11 and -12). Around the Act 2 quarry the kept outdoors is ~870
+// rocks in eight layers, ~500 cooked meshes in layers with no entity, three foliage layers (one
+// to three CFoliageEntity each, holding thousands of plants), four terrain tiles (one entity
+// with a CTerrainTileComponent each, under `hires terrain\`) and a few layers of a handful of
+// plain mesh entities. Three runs on 2026-11-12 (docs/fixes/interior-preload.md):
+//   everything hidden                        0.4 M range calls per 5 s at the cliff, sky
+//   layers of 1-8 entities stay (26 layers)  5.3 M, as with nothing hidden; rock in the cracks
+//   plain mesh layers stay, no terrain (9)   0.36 M, sky
+// So what the cracks show is the terrain from below, and the cost is the foliage or the terrain.
+// The rule now: a layer stays when it has 1 to KR_LIGHT_ENTS entities and every one is a plain
+// CEntity - a mesh holder or a terrain tile. Any subclass (foliage, a nest, an animal manager, a
+// container, an item) makes the layer heavy or alive, and it is hidden.
+#define VA_ENTITY_VTABLE 0x00E807C4u   // CEntity's own vtable (RTTI, tools/dump-engine-classes.py)
+static int kr_is_light(const void* info)
+{
+    void* layer = info ? read_ptr((const char*)info + 0x38) : NULL;
+    void** ents = layer ? (void**)read_ptr((char*)layer + 0x50) : NULL;
+    DWORD n = layer ? (DWORD)(uintptr_t)read_ptr((char*)layer + 0x54) : 0, i;
+    void* plain = (void*)ga(VA_ENTITY_VTABLE);
+    if (cfg_hide_kept >= 2 || !plain || !ents || n < 1 || n > KR_LIGHT_ENTS) return 0;
+    for (i = 0; i < n; i++) {
+        void* e = read_ptr(ents + i);
+        if (!e || read_ptr(e) != plain) return 0;
+    }
+    return 1;
+}
+
 static int kr_find(void* const* set, int n, const void* layer)
 {
     int i;
@@ -3823,6 +3906,8 @@ static unsigned char __fastcall hook_PartSwitch(void* world, void* edx, void* na
         kh_show_now(world, mode);
     // A stream job is never seen by hook_PartRun, and an area load rebuilds the area.
     if (mode != 4 && g_krCount) kr_clear(mode == 0 ? "a stream switch" : "an area load");
+    if (g_paSetCount && (mode != 4 || world != g_paWorld))
+        pa_clear(world != g_paWorld ? "another world" : mode == 0 ? "a stream switch" : "an area load");
     ok = ((PartSwitch_t)g_partSwitch)(world, edx, name, mode, screen);
     g_ptMode = -1;
     if (cfg_load_trace) {
@@ -4139,7 +4224,7 @@ static void kp_walk(const void* group, int depth, kp_collect_t* t)
         pt_text((char*)info + 0x68, path, 260);
         if (!(t->exact ? grp_holds(g_kxGroup, g_kxGroups, path) : kp_in_groups(path))) continue;
         c = ko_class(info);
-        if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
+        if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE || c == LC_ENV) continue;
         pt_text((char*)info + 0x78, name, 64);
         if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\communit")) continue;
         t->known++;
@@ -4207,7 +4292,7 @@ static void ks_walk(const void* group, int depth, ks_walk_t* t)
         pt_text((char*)info + 0x68, path, 260);
         if (!ks_in_groups(path)) continue;
         c = ko_class(info);
-        if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
+        if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE || c == LC_ENV) continue;
         t->missing++;
         if (t->out && t->added < t->max) t->out[t->added++] = info;
     }
@@ -4254,6 +4339,7 @@ static DWORD ks_missing(void* world, const wchar_t* target)
     if (g_ksGroups) ks_walk(world ? read_ptr((char*)world + 0x50) : NULL, 0, &t);
     return t.missing;
 }
+
 
 // ---- memory guard for kept and preloaded layers ----------------------------------
 // docs/fixes/door-transitions.md, "Memory". The game is a 32-bit process (4 GB with LAA).
@@ -4321,6 +4407,16 @@ static int __stdcall kp_layer_ok(void* info)
     if (!bsearch(&info, g_kmSet, g_kmCount, sizeof(void*), kp_cmp)) return 1;
     freeMb = ko_free_mb();
     if (freeMb < g_kmFreeMin) g_kmFreeMin = freeMb;
+    // A neighbour area's layer (preload_areas) comes after the interiors and needs more room:
+    // area_memory_mb, the room a door between two areas wants before it keeps both.
+    if (pa_in_set(info)) {
+        if (freeMb < (DWORD)(cfg_area_memory_mb > cfg_preload_memory_mb ? cfg_area_memory_mb : cfg_preload_memory_mb)) {
+            g_paLoadSkipped++;
+            return 0;
+        }
+        g_paLoadLoaded++;
+        return 1;
+    }
     if (freeMb < (DWORD)cfg_preload_memory_mb) {
         g_kmSkipped++;
         return 0;
@@ -4427,6 +4523,7 @@ static void km_watch(void* const* own[], const LONG ownN[], int buckets, void* c
 
 static volatile DWORD g_koFrameTick;   // last viewport tick (game thread)
 static void cq_poll(int gameThread);   // clean_quit, from ko_frame
+static void lscr_frame(void);          // loading_screen_cleanup, from ko_frame
 static volatile DWORD g_koOccTick;     // GetTickCount() | 1 when the occluders were requested
 static int   g_koDeferOcc;
 static DWORD g_koDeferSince;
@@ -4488,7 +4585,7 @@ static void kr_record(void* const* unloadData, LONG unloadN, void* world)
     if (g_krWorld != world) { g_krCount = g_krFull = g_krGoneCount = 0; g_khCount = 0; g_krWorld = world; }
     for (i = 0; i < unloadN; i++) {
         void* l = unloadData[i];
-        if (!l || ko_class(l) != LC_OTHER || kp_in_set(l) || kr_find(g_krList, g_krCount, l) >= 0) continue;
+        if (!l || ko_class(l) != LC_OTHER || kp_in_set(l) || pa_in_set(l) || kr_find(g_krList, g_krCount, l) >= 0) continue;
         if (g_krCount >= KR_MAX) { g_krFull = 1; continue; }
         g_krList[g_krCount++] = l;
         added++;
@@ -4546,7 +4643,11 @@ static void kr_frame(void)
     if (g_ptMode != -1 || read_ptr((char*)game + 0xE8)) block = "a switch is queued";
     else if (read_ptr((char*)world + 0x30C)) block = "a stream job is running";
     else if (g_koDeferOcc) block = "the occluders still wait";
-    else if (rt && (read_ptr(rt + OFF_RT_LOAD_MOVIE) || read_ptr(rt + OFF_RT_LOAD_SCREEN))) block = "a loading screen is up";
+    // The viewport at +0x268 says a loading screen is up. The screen object at +0x26C alone does
+    // not: the game can leave one behind after its loading screen ended (lscr_frame), and that
+    // blocked every release for the rest of a session (2026-11-11, 55 fps at the cliff).
+    else if (rt && read_ptr(rt + OFF_RT_LOAD_MOVIE)) block = "a loading screen is up";
+    else if (g_paDropPending) block = "the preloaded areas are being unloaded";
     if (block) {
         if (!g_krBlockLogged) logf_("interiors: releasing the kept outdoor layers waits - %s", block);
         g_krBlockLogged = 1;
@@ -4561,6 +4662,303 @@ static void kr_frame(void)
     ko_part_request(game, (char*)world + 0x310, 4, (void*)ga(VA_EMPTY_STRING));
 }
 
+// ---- preload_areas: the small areas behind an area's own doors -----------------
+// preload_interiors loads building interiors with an area; a small whole area behind a door of
+// the same folder (the quarry's cave `common\secret_passage`, 16 layers) still loaded on its
+// first visit behind the area fade, and was only kept from then on. The doors name it: a
+// CStreamingDoor (VA_DOOR_VTABLE, class size 0x250 on both builds) holds its `inside` and
+// `outside` SDoorPartition at +0x200 / +0x214, the partition name String first (property
+// registration Steam 0050282A, GOG 005AFCC5); a loaded layer (info +0x38) holds its entities
+// at +0x50, count +0x54.
+//
+// The doors are entities of the area's own layers, so they can only be read once the area is
+// loaded. Two earlier versions loaded the neighbours right then, in a second switch or a second
+// run of the area's job; both sessions ended with a loading-screen object left on the render
+// thread (docs/fixes/interior-preload.md). So the neighbours are learned, not loaded, at that
+// point (pa_learn: the pairs go into g_paKnown and into <cache>\area-doors.txt), and the next
+// load of that area, in this session or a later one, puts their layers into its own job: the
+// last bucket, after the interiors, in the one run the game makes anyway (pa_plan).
+//
+// They load hidden. A layer that is loaded and attached is walked by the renderer's visibility
+// pass every frame, seen or not (the cost hide_kept removes for the kept outdoors). The planned
+// layers go into g_paSet before the run, so the job's attach stage leaves them out of the world
+// (kh_pred_stub), as it does for a layer group a quest has hidden. They cost memory only.
+//  - A door into such an area finds nothing to load (hook_DoorStart, ks_missing): no fade. Its
+//    job lists for unloading the loaded layers its partition does not hold; a hidden layer that
+//    is not in that list belongs to the partition being entered and leaves the set before the
+//    run (pa_keep_listed), so the same job attaches it. The other neighbours stay hidden.
+//  - Memory: they load only while area_memory_mb is free (kp_layer_ok, per layer), and once
+//    less than that is free during play pa_frame queues a switch to the current partition whose
+//    job unloads them (hook_PartRun), as release_kept does for the kept outdoors. A door left
+//    to the game for memory unloads them with everything else. After each job the set drops
+//    what is no longer loaded (pa_prune).
+//  - A stream switch, an area load or another world empties the set (pa_clear).
+#define VA_DOOR_VTABLE    0x00EF0084u   // CStreamingDoor (slot 78 = VA_DOOR_TIMER_SLOT, 153 = VA_DOOR_START_SLOT)
+#define OFF_DOOR_INSIDE   0x200
+#define OFF_DOOR_OUTSIDE  0x214
+#define PA_MAX_LAYERS     64            // a bigger area is left to its first visit
+#define PA_AREAS          16            // partitions behind one area's doors
+#define PA_KNOWN          256           // learned (area, neighbour) pairs
+#define PA_NAME           128
+
+typedef struct { wchar_t from[PA_NAME], to[PA_NAME]; } pa_pair_t;
+static pa_pair_t g_paKnown[PA_KNOWN];
+static int g_paKnownCount, g_paKnownRead;
+
+typedef struct { wchar_t name[PA_AREAS][160]; int n; void* vt; } pa_doors_t;
+
+static void pa_file(char* path, size_t cap, int makeDir)
+{
+    if (makeDir) {
+        sprintf_s(path, cap, "%s\\witcher2_enginefix_cache", g_binDir);
+        CreateDirectoryA(path, NULL);
+    }
+    sprintf_s(path, cap, "%s\\witcher2_enginefix_cache\\area-doors.txt", g_binDir);
+}
+
+static int pa_known_find(const wchar_t* from, const wchar_t* to)
+{
+    int i;
+    for (i = 0; i < g_paKnownCount; i++)
+        if (!_wcsicmp(g_paKnown[i].from, from) && !_wcsicmp(g_paKnown[i].to, to)) return i;
+    return -1;
+}
+
+// 1 = new. Names that do not fit are left out: cut short they would name nothing.
+static int pa_known_put(const wchar_t* from, const wchar_t* to)
+{
+    if (!from[0] || !to[0] || wcslen(from) >= PA_NAME || wcslen(to) >= PA_NAME) return 0;
+    if (g_paKnownCount >= PA_KNOWN || pa_known_find(from, to) >= 0) return 0;
+    wcscpy_s(g_paKnown[g_paKnownCount].from, PA_NAME, from);
+    wcscpy_s(g_paKnown[g_paKnownCount].to, PA_NAME, to);
+    g_paKnownCount++;
+    return 1;
+}
+
+// What earlier sessions learned: one "area<TAB>neighbour" pair per line, UTF-8.
+static void pa_known_read(void)
+{
+    char path[MAX_PATH], line[2 * 3 * PA_NAME + 8];
+    FILE* f;
+    if (g_paKnownRead) return;
+    g_paKnownRead = 1;
+    pa_file(path, sizeof path, 0);
+    f = _fsopen(path, "rb", _SH_DENYNO);
+    if (!f) return;
+    while (fgets(line, sizeof line, f)) {
+        wchar_t from[PA_NAME], to[PA_NAME];
+        char* tab = strchr(line, '\t');
+        size_t n = strlen(line);
+        while (n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+        if (!tab) continue;
+        *tab = 0;
+        if (!MultiByteToWideChar(CP_UTF8, 0, line, -1, from, PA_NAME) ||
+            !MultiByteToWideChar(CP_UTF8, 0, tab + 1, -1, to, PA_NAME))
+            continue;
+        pa_known_put(from, to);
+    }
+    fclose(f);
+    logf_("preload: %d door(s) between areas known from earlier sessions", g_paKnownCount);
+}
+
+static void pa_known_add(const wchar_t* from, const wchar_t* to)
+{
+    char path[MAX_PATH], a[3 * PA_NAME], b[3 * PA_NAME];
+    FILE* f;
+    if (!pa_known_put(from, to)) return;
+    if (!WideCharToMultiByte(CP_UTF8, 0, from, -1, a, sizeof a, NULL, NULL) ||
+        !WideCharToMultiByte(CP_UTF8, 0, to, -1, b, sizeof b, NULL, NULL))
+        return;
+    pa_file(path, sizeof path, 1);
+    f = _fsopen(path, "ab", _SH_DENYWR);
+    if (!f) return;   // known for this session only
+    fprintf(f, "%s\t%s\r\n", a, b);
+    fclose(f);
+}
+
+static void pa_note(pa_doors_t* d, const void* str)
+{
+    wchar_t t[160];
+    int i;
+    pt_text(str, t, 160);
+    if (!t[0] || d->n >= PA_AREAS) return;
+    for (i = 0; i < d->n; i++) if (!_wcsicmp(d->name[i], t)) return;
+    memcpy(d->name[d->n++], t, sizeof t);
+}
+
+// The doors in the area's own loaded layers; a hidden neighbour's doors lead on from there.
+static void pa_doors(const void* group, int depth, pa_doors_t* d)
+{
+    void** infos;
+    DWORD n, i, k;
+    if (!group || depth > 40) return;
+    infos = (void**)read_ptr((const char*)group + 0x90);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x94);
+    for (i = 0; infos && n < 100000 && i < n; i++) {
+        void* info = read_ptr(infos + i);
+        void* layer = info ? read_ptr((char*)info + 0x38) : NULL;
+        void** ents = layer ? (void**)read_ptr((char*)layer + 0x50) : NULL;
+        DWORD m = layer ? (DWORD)(uintptr_t)read_ptr((char*)layer + 0x54) : 0;
+        if (!layer || pa_in_set(info)) continue;
+        for (k = 0; ents && m < 100000 && k < m; k++) {
+            void* e = read_ptr(ents + k);
+            if (e && read_ptr(e) == d->vt) {
+                pa_note(d, (char*)e + OFF_DOOR_INSIDE);
+                pa_note(d, (char*)e + OFF_DOOR_OUTSIDE);
+            }
+        }
+    }
+    infos = (void**)read_ptr((const char*)group + 0x80);
+    n = (DWORD)(uintptr_t)read_ptr((const char*)group + 0x84);
+    for (i = 0; infos && n < 100000 && i < n; i++) pa_doors(read_ptr(infos + i), depth + 1, d);
+}
+
+// Right after the area job into `cur` ran (hook_PartRun, game thread): which whole areas of the
+// same folder are behind its doors. Houses and small places are the interiors' business.
+static void pa_learn(void* world, const wchar_t* cur)
+{
+    static pa_doors_t d;
+    int i, areas = 0, fresh = 0, houses = 0, other = 0;
+    void* root = world ? read_ptr((char*)world + 0x50) : NULL;
+    memset(&d, 0, sizeof d);
+    d.vt = (void*)ga(VA_DOOR_VTABLE);
+    if (!d.vt || !root || !cur[0]) return;
+    pa_known_read();
+    pa_doors(root, 0, &d);
+    for (i = 0; i < d.n; i++) {
+        void* node;
+        int before = g_paKnownCount;
+        if (!_wcsicmp(d.name[i], cur)) continue;
+        if (!ko_same_folder(cur, d.name[i])) { other++; continue; }
+        node = kp_find(world, d.name[i]);
+        if (!node || kx_small(node)) { houses++; continue; }
+        areas++;
+        pa_known_add(cur, d.name[i]);
+        fresh += g_paKnownCount - before;
+    }
+    if (d.n)
+        logf_("preload: the doors of '%ls' lead to %d partition(s): %d whole area(s) in its folder (%d new - they load "
+              "with this area from its next load on), %d houses or small places, %d in other folders",
+              cur, d.n, areas, fresh, houses, other);
+}
+
+// Before the area job into `cur` runs: the layers still to load of the small areas known to be
+// behind its doors, into out[0..max). The number of layers; *areas the number of areas.
+static DWORD pa_plan(void* world, const wchar_t* cur, void** out, DWORD cap, int* areas)
+{
+    char names[400];
+    size_t used = 0;
+    int i, big = 0, loaded = 0, gone = 0, known = 0;
+    DWORD total = 0, freeMb = ko_free_mb();
+    DWORD need = (DWORD)(cfg_area_memory_mb > cfg_preload_memory_mb ? cfg_area_memory_mb : cfg_preload_memory_mb);
+    void* root = world ? read_ptr((char*)world + 0x50) : NULL;
+    *areas = 0;
+    names[0] = 0;
+    if (!root || !cur[0]) return 0;
+    pa_known_read();
+    for (i = 0; i < g_paKnownCount; i++) known += !_wcsicmp(g_paKnown[i].from, cur);
+    if (!known) return 0;
+    if (freeMb < need) {
+        logf_("preload: only %lu MB of address space free (under %lu) - the %d area(s) behind the doors of '%ls' load "
+              "on their first visit", freeMb, need, known, cur);
+        return 0;
+    }
+    if (cap > PA_SET - (DWORD)g_paSetCount) cap = PA_SET - (DWORD)g_paSetCount;
+    for (i = 0; i < g_paKnownCount; i++) {
+        void* node;
+        ks_walk_t t;
+        if (_wcsicmp(g_paKnown[i].from, cur)) continue;
+        node = kp_find(world, g_paKnown[i].to);
+        if (!node || kx_small(node)) { gone++; continue; }   // another world's name, or a house after all
+        memset(&t, 0, sizeof t);
+        ks_take_groups(node);
+        if (g_ksGroups) ks_walk(root, 0, &t);   // count first
+        if (!t.missing) { loaded++; continue; }
+        if (t.missing > PA_MAX_LAYERS || total + t.missing > cap) { big++; continue; }
+        memset(&t, 0, sizeof t);
+        t.out = out + total;
+        t.max = cap - total;
+        ks_walk(root, 0, &t);
+        total += t.added;
+        (*areas)++;
+        if (used < sizeof names - 1)
+            used += (size_t)_snprintf_s(names + used, sizeof names - used, _TRUNCATE, " '%ls' (%lu)", g_paKnown[i].to, t.added);
+    }
+    logf_("preload: %d area(s) known behind the doors of '%ls': %d to load now,%s %d too big, %d already loaded, %d not "
+          "in this world (%lu MB free, floor %lu)", known, cur, *areas, used ? names : "", big, loaded, gone, freeMb, need);
+    return total;
+}
+
+// The planned layers into the hidden set, before the run. Layers the job lists itself are the
+// area's own and stay out of it.
+static void pa_set_add(void* const* layers, DWORD n, void* world)
+{
+    DWORD i;
+    if (g_paWorld != world) { g_paSetCount = 0; g_paWorld = world; }
+    for (i = 0; i < n && g_paSetCount < PA_SET; i++)
+        if (layers[i] && !pa_in_set(layers[i])) {
+            g_paSet[g_paSetCount] = layers[i];
+            g_paSetCount = g_paSetCount + 1;
+            qsort(g_paSet, (size_t)g_paSetCount, sizeof(void*), kp_cmp);
+        }
+}
+
+// Before a job runs: keep hidden only what this job lists for unloading (loaded, and not in the
+// partition it switches to). The rest belongs to that partition now and the job's attach stage
+// puts it into the world. The number that left the set.
+static int pa_keep_listed(void* const* unloadData, LONG unloadN)
+{
+    int i, n = 0, before = (int)g_paSetCount;
+    for (i = 0; i < before; i++)
+        if (kr_find(unloadData, unloadN, g_paSet[i]) >= 0) g_paSet[n++] = g_paSet[i];   // order kept: still sorted
+    g_paSetCount = n;
+    return before - n;
+}
+
+// After a job ran: what it unloaded (or what never loaded) is hidden no longer. The number left.
+static int pa_prune(void)
+{
+    int i, n = 0, before = (int)g_paSetCount;
+    for (i = 0; i < before; i++)
+        if (read_ptr((char*)g_paSet[i] + 0x38) || read_ptr((char*)g_paSet[i] + 0x5C)) g_paSet[n++] = g_paSet[i];
+    g_paSetCount = n;
+    if (!n) g_paDropPending = 0;
+    return n;
+}
+
+// Once a second (ko_frame): with less than area_memory_mb free the preloaded areas give their
+// memory back. The switch to the current partition lists them for unloading; hook_PartRun lets
+// those go.
+static void pa_frame(void)
+{
+    static DWORD last;
+    DWORD now = GetTickCount(), freeMb;
+    void *game, *world;
+    char* rt;
+    if (!g_paSetCount || !g_partRequest || !cfg_area_memory_mb) return;
+    if (g_paDropPending) {
+        if (now - g_paDropTick < KR_PENDING_MS) return;
+        g_paDropPending = 0;
+    }
+    if (now - last < 1000) return;
+    last = now;
+    freeMb = ko_free_mb();
+    if (freeMb >= (DWORD)cfg_area_memory_mb) return;
+    game = read_ptr((void*)ga(VA_GAME));
+    world = game ? read_ptr((char*)game + 0x40) : NULL;
+    if (!world || world != g_paWorld) return;
+    rt = (char*)read_ptr((void*)ga(VA_RENDER_THREAD));
+    if (g_ptMode != -1 || read_ptr((char*)game + 0xE8) || read_ptr((char*)world + 0x30C) || g_koDeferOcc ||
+        g_krPending || (rt && read_ptr(rt + OFF_RT_LOAD_MOVIE)))
+        return;
+    g_paDropPending = 1;
+    g_paDropTick = now;
+    g_koOccTick = now | 1;   // the switch's spinner is hidden as for the occluders (hook_SpinnerExec)
+    logf_("preload: only %lu MB of address space free (under %d) - unloading the %ld preloaded area layers; those "
+          "areas load on their first visit again", freeMb, cfg_area_memory_mb, (LONG)g_paSetCount);
+    ko_part_request(game, (char*)world + 0x310, 4, (void*)ga(VA_EMPTY_STRING));
+}
+
 // Viewport tick, once per frame on the game thread.
 static void ko_frame(void)
 {
@@ -4570,7 +4968,9 @@ static void ko_frame(void)
     int i, away = 0;
     g_koFrameTick = GetTickCount();
     cq_poll(1);
+    lscr_frame();
     kr_frame();
+    pa_frame();
     if (!g_koDeferOcc) return;
     waited = GetTickCount() - g_koDeferSince;
     if (waited < KO_OCC_MIN_MS) return;
@@ -4630,11 +5030,16 @@ static void __stdcall hook_PartRun(void* job)
     LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
     int on = 0, area = 0, mem = 0, filter, coarseSkip = 0, rel = 0, relN = 0, relSkip = 0, relAct = KR_UNLOAD;
     int dropFake, fakeN = 0, fakeLast = 0, fakeKeep = -1, noInteriors = 0, memTier = g_koMemLow;
+    int relLight = 0;
+    char relNames[400];
+    size_t relUsed = 0;
     LONGLONG tRun;
     void* world = read_ptr((char*)job);
     void** kmBase = NULL;
     void* fakeHold[KM_FAKE];
-    DWORD kmN = 0;
+    DWORD kmN = 0, paN = 0;
+    void** paBase = NULL;
+    int paRel = 0, paDropN = 0, paShown = 0, paAreas = 0;
     if (cfg_load_trace) pt_job("sync", job);
     g_ptGcSkipped = 0;
     g_ptGcUs = 0;
@@ -4661,6 +5066,13 @@ static void __stdcall hook_PartRun(void* job)
             g_krPending = 0;
             relAct = g_krAction;
         }
+        // preload_areas: a hidden layer this job does not list for unloading belongs to the
+        // partition it switches to and joins the world in its attach stage. The queued switch
+        // to the current partition (pa_frame) is the one that gives their memory back.
+        if (g_paSetCount && world != g_paWorld) pa_clear("another world");
+        paRel = g_paDropPending && g_ptMode == 4 && !_wcsicmp(g_ptFrom, g_ptTo);
+        if (paRel) g_paDropPending = 0;
+        if (g_paSetCount) paShown = pa_keep_listed((void* const*)unloadData, unloadN);
     }
     filter = nb >= 0 && (on || mem || rel || (cfg_preload_interiors && g_koMemLow != 1));
     if (area && !g_layerHooked && cfg_preload_memory_mb &&
@@ -4677,11 +5089,14 @@ static void __stdcall hook_PartRun(void* job)
     dropFake = g_koMemLow != 1 && (cfg_preload_interiors ? g_koPreloaded && !g_kpFakeKeep : on && cfg_keep_interiors);
     if (filter) {
         // Unload: a kept door unloads only what each partition swaps; preload keeps interiors.
+        // A door between two whole areas also swaps their environments (LC_ENV).
+        int areaDoor = on && _wcsicmp(g_ptFrom, g_ptTo) && !ko_house_door(world, g_ptFrom, g_ptTo);
         for (i = 0; i < unloadN; i++) {
             void* l = unloadData[i];
             int c = ko_class(l);
-            int go = on ? (c == LC_FAKE || c == LC_SWAP || c == LC_LOWPOLY)
+            int go = on ? (c == LC_FAKE || c == LC_SWAP || c == LC_LOWPOLY || (c == LC_ENV && areaDoor))
                         : g_koMemLow == 1 || !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
+            if (paRel && pa_in_set(l)) { go = 1; paDropN++; }
             if (c == LC_FAKE) g_kpFakeSeen = 1;
             if (go) g_koUnloadOut[unloaded++] = l; else kept++;
         }
@@ -4694,11 +5109,23 @@ static void __stdcall hook_PartRun(void* job)
                 if (kr_find(g_koUnloadOut, unloaded, g_krList[i]) < 0) g_koUnloadOut[unloaded++] = g_krList[i];
             relN = g_krCount;
         } else if (rel && relAct == KR_HIDE && g_krCount && !g_krFull) {
-            // The job's attach stage (FUN_00b05a52) detaches them through kh_pred_stub.
-            memcpy(g_khSet, g_krList, (size_t)g_krCount * sizeof(void*));
-            qsort(g_khSet, (size_t)g_krCount, sizeof(void*), kp_cmp);
-            g_khCount = g_krCount;
-            relN = g_krCount;
+            // The job's attach stage (FUN_00b05a52) detaches them through kh_pred_stub. Light
+            // layers (kr_is_light: terrain tiles, a few large meshes) stay in the world.
+            int h = 0;
+            relNames[0] = 0;
+            for (i = 0; i < g_krCount; i++) {
+                if (!kr_is_light(g_krList[i])) { g_khSet[h++] = g_krList[i]; continue; }
+                relLight++;
+                if (relUsed < sizeof relNames - 1) {
+                    wchar_t nm[64];
+                    relUsed += (size_t)_snprintf_s(relNames + relUsed, sizeof relNames - relUsed, _TRUNCATE, " %ls",
+                                                   pt_text((char*)g_krList[i] + 0x78, nm, 64));
+                }
+            }
+            qsort(g_khSet, (size_t)h, sizeof(void*), kp_cmp);
+            g_khCount = h;
+            relN = h;
+            if (!h) g_krCount = 0;   // nothing heavy was kept: nothing to show again
         } else if (rel && relAct == KR_SHOW) {
             // ... and attaches them again once they are out of the set.
             relN = (int)g_khCount;
@@ -4784,6 +5211,27 @@ static void __stdcall hook_PartRun(void* job)
                               g_ptTo, pt_text((char*)street + 0x04, nm, 96), s.added, g_ksGroups);
                     }
                 }
+                // preload_areas: the small areas known to be behind this area's doors come after
+                // the interiors and the street, and stay hidden until their door (pa_plan).
+                if (cfg_preload_areas && g_khPred) {
+                    DWORD k, w = 0;
+                    LONG bb, j;
+                    paBase = t.out + t.added;
+                    paN = pa_plan(world, g_ptTo, paBase, t.max - t.added, &paAreas);
+                    // A layer the job lists itself, an interior or a street layer added above is
+                    // not a neighbour's alone: it loads as before, shown.
+                    for (k = 0; k < paN; k++) {
+                        int own = kp_in_set(paBase[k]) || ko_class(paBase[k]) == LC_INTERIOR;
+                        for (j = 0; j < (LONG)t.added && !own; j++) own = t.out[j] == paBase[k];
+                        for (bb = 0; bb <= b && !own; bb++)
+                            for (j = 0; j < savedN[bb] && !own; j++) own = ((void**)savedData[bb])[j] == paBase[k];
+                        if (!own) paBase[w++] = paBase[k];
+                    }
+                    paN = w;
+                    pa_set_add(paBase, paN, world);
+                    g_paLoadLoaded = g_paLoadSkipped = 0;
+                    t.added += paN;
+                }
                 added = (LONG)t.added;
                 kmBase = t.out;
                 kmN = t.added;
@@ -4802,7 +5250,7 @@ static void __stdcall hook_PartRun(void* job)
         }
     }
     // A release frees what it unloaded at once: the GC runs.
-    g_koSkipGc = on && cfg_skip_door_gc && !(relN && relAct == KR_UNLOAD);
+    g_koSkipGc = on && cfg_skip_door_gc && !(relN && relAct == KR_UNLOAD) && !paDropN;
     // Preloaded layers come last in the job and load only while the address space allows.
     if (kmN && g_layerHooked && cfg_preload_memory_mb) {
         km_watch((void* const**)savedData, savedN, nb, kmBase, kmN);
@@ -4814,13 +5262,33 @@ static void __stdcall hook_PartRun(void* job)
     if (g_build == BUILD_GOG) part_run_orig_gog(job);
     else ((PartRun_t)g_partRun)(job);
     tRun = qpc_us() - tRun;
+    // preload_areas: what this job unloaded is hidden no longer; an area job's doors are read
+    // for the next load of this area.
+    if (paN) {
+        DWORD k, got = 0;
+        for (k = 0; k < paN; k++) got += read_ptr((char*)paBase[k] + 0x38) != NULL;
+        logf_("preload: %lu of %lu layers of %d area(s) behind the doors loaded, hidden until their door "
+              "(%lu held back: less than %d MB free)", got, paN, paAreas, paN - got,
+              cfg_area_memory_mb > cfg_preload_memory_mb ? cfg_area_memory_mb : cfg_preload_memory_mb);
+    }
+    if (g_paSetCount || paDropN) {
+        int left = pa_prune();
+        if (paShown)
+            logf_("preload: %d preloaded layer(s) of '%ls' joined the world at this switch (%d stay hidden)",
+                  paShown, g_ptTo, left);
+        if (paRel)
+            logf_("preload: %d preloaded area layers unloaded (job %lu ms, GC %lu ms, %lu MB free now)", paDropN,
+                  (DWORD)(tRun / 1000), (DWORD)(g_ptGcUs / 1000), ko_free_mb());
+    }
+    if (cfg_preload_areas && area && nb >= 0 && (LONG)(uintptr_t)read_ptr((char*)job + 0x04) == 5)
+        pa_learn(world, g_ptTo);
     g_koSkipGc = 0;
     if (g_kmActive) {
         g_kmActive = 0;
         if (g_kmFakeCount && !g_kmSkipped) { loaded -= fakeN; skipped += fakeN; }
         g_kmFakeCount = 0;
         logf_("preload: %lu of %d preloaded layers loaded, %lu left for their first visit (free address space "
-              "at the lowest %lu MB, floor %d MB)", g_kmLoaded, g_kmCount, g_kmSkipped,
+              "at the lowest %lu MB, floor %d MB)", g_kmLoaded, g_kmCount - (int)paN, g_kmSkipped,
               g_kmFreeMin == 0xFFFFFFFFu ? ko_free_mb() : g_kmFreeMin, cfg_preload_memory_mb);
         if (g_kmSkipped) fakeKeep = 1;
     }
@@ -4861,6 +5329,9 @@ static void __stdcall hook_PartRun(void* job)
         logf_("interiors: hid %d kept outdoor layers %.0f m from the door (job %lu ms, %lu MB free%s); shown again "
               "within %d m of it or at the next switch", relN, g_krDist, (DWORD)(tRun / 1000), ko_free_mb(),
               relSkip ? ", some recorded layers belong to this partition and stay" : "", cfg_release_kept / 2);
+        if (relLight)
+            logf_("interiors: %d light layers (at most %d plain entities each: terrain, single meshes) stay in the "
+                  "world:%s", relLight, KR_LIGHT_ENTS, relNames);
     } else if (rel && relAct == KR_SHOW) {
         logf_("interiors: showed %d hidden layers again, Geralt %.0f m from the door (job %lu ms)", relN, g_krDist,
               (DWORD)(tRun / 1000));
@@ -4903,7 +5374,7 @@ static void __stdcall hook_PartRun(void* job)
                 void* l = ((void**)savedData[b])[i];
                 int c = ko_class(l);
                 wchar_t name[64], path[260];
-                if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE) continue;
+                if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE || c == LC_ENV) continue;
                 if (kr_find(g_krGone, g_krGoneCount, l) >= 0) continue;   // released, loads back here
                 pt_text((char*)l + 0x78, name, 64);
                 pt_text((char*)l + 0x68, path, 260);
@@ -4917,7 +5388,7 @@ static void __stdcall hook_PartRun(void* job)
             logf_("doors: '%ls' -> '%ls' loaded %d layer(s) not preloaded (%lu ms):%s", g_ptFrom, g_ptTo, missed,
                   (DWORD)(tRun / 1000), used ? line : "");
     }
-    if (rel) return;   // not a door: its time says nothing about one
+    if (rel || paRel) return;   // not a door: its time says nothing about one
     if (on && tRun / 1000 >= KO_SLOW_MS) {
         ko_pair_put(g_koSlow, &g_koSlowCount, g_ptFrom, g_ptTo);
         logf_("doors: '%ls' -> '%ls' took %lu ms - it keeps its fade", g_ptFrom, g_ptTo, (DWORD)(tRun / 1000));
@@ -4982,7 +5453,7 @@ static int pt_install(void)
     if (!code_matches(g_gc, pt_gc_bytes()) || !patch_call(ga(VA_PART_GC_CALL), g_gc, (void*)hook_PartGc))
         logf_("partition: GC call not recognised - skip_door_gc off");
     // hide_kept: the layer visibility predicate's one call (both builds; GOG not run in game).
-    if (cfg_release_kept && cfg_hide_kept && g_partRequest) {
+    if (((cfg_release_kept && cfg_hide_kept) || cfg_preload_areas) && g_partRequest) {
         uintptr_t pred = ga(VA_LAYER_VISIBLE), sync = ga(VA_LAYER_SYNC), call = ga(VA_LAYER_VISIBLE_CALL);
         if (pred && sync && call && code_matches(pred, "80 78 58 00 75 03 32 c0 c3") &&
             code_matches(sync, "53 56 33 db 57 8b f8 38 1d")) {
@@ -4991,8 +5462,9 @@ static int pt_install(void)
             if (!patch_call(call, pred, (void*)kh_pred_stub)) g_khPred = g_khSync = 0;
         }
         logf_("interiors: %s", g_khPred
-              ? "layer visibility hooked - kept outdoor layers are hidden far from the door while area_memory_mb is free"
-              : "layer visibility not recognised on this build - kept outdoor layers unload instead (hide_kept off)");
+              ? "layer visibility hooked - loaded layers can be kept out of the world (hide_kept, preload_areas)"
+              : "layer visibility not recognised on this build - kept outdoor layers unload instead (hide_kept off), "
+                "no areas are preloaded (preload_areas off)");
     }
     logf_("partition: switch calls %s/%s, sync run %s (load_trace=%d keep_outdoors=%d)", a ? "hooked" : "NOT hooked",
           b ? "hooked" : "NOT hooked", c ? "hooked" : "NOT hooked", cfg_load_trace, cfg_keep_outdoors);
@@ -6228,6 +6700,206 @@ __declspec(naked) static void __stdcall cq_call_exit(void* game)
     }
 }
 
+// ---- a loading-screen object the game left behind ------------------------------
+// [stability] loading_screen_cleanup=1. docs/fixes/quit-crash.md, "A loading-screen movie
+// still alive at the GUI shutdown". Static analysis, Steam 3.5.0.26 (GOG in k_gog):
+//  - The game asks for a loading screen through its vtable +0x108 (00AA8B61) and ends it through
+//    +0x10C (009B49CF -> 00AA8984). Both count at game+0x68; every "show" posts the render command
+//    00E7C054 (viewport, name), and only the "end" that takes the count to 0 posts it with
+//    viewport 0.
+//  - Its execute slot (00E7C060 -> 009DC408 -> 009D1C46) sets render thread +0x268 = viewport.
+//    With a viewport it destroys the screen object at +0x26C and builds a new one from the
+//    screen's name (FUN_009c3271: a Scaleform movie, class vtable 00EC6A20); with viewport 0 it
+//    only asks that movie to `FadeOut`. The object is freed later, by the frame's overlay pass
+//    (FUN_009d1a0e) or the loading loop (FUN_009d1d61), once its "shown" byte (+0x10) is 0, and
+//    only the movie itself clears that byte: its fscommand handler (00EC6A8C) calls slot 4.
+//  - So a movie that never answers `FadeOut` stays for good: +0x268 is 0, +0x26C still holds
+//    the object, and the render thread keeps advancing it. Seen in two sessions on 2026-11-11
+//    (`quit: ... LOADING SCREEN UP (movie 00000000, screen 0C210768)`), minutes after the load.
+//    What kept those movies from answering is not known. At Quit the GUI shutdown then destroys
+//    the movie's heap while its memory context is alive, and can crash (the dump of 23:31).
+// The remedy is the game's own: the video loading screen's command (vtable 00E7C068, built by
+// FUN_00aa1d2f, executed by FUN_009d1b9f) with no viewport and no movie sets +0x268 = 0, destroys
+// the object at +0x26C and clears the pointer - what every new loading screen does to the one
+// before it. It is posted from the game thread like any render command (FUN_00aa2685 gets the
+// queue memory, the constructor must follow at once, vtable +4 commits), and only when the game
+// itself has no loading screen up: count 0, +0x268 0, the same object for LSCR_STALE_MS.
+// The execute slot is also wrapped to log every show and end with the object before and after.
+#define VA_RCMD_ALLOC       0x00AA2685u   // cdecl (size) -> render command memory; its ctor must follow at once
+#define VA_RCMD_LOADMOVIE   0x00AA1D2Fu   // video loading-screen command ctor (vtable 00E7C068): memory in EAX (GOG: ECX), stdcall (viewport, movie), RET 8
+#define VA_LSCR_EXEC_SLOT   0x00E7C060u   // loading-screen command vtable 00E7C054, slot 3
+#define VA_LSCR_EXEC        0x009DC408u   // ECX = command: +0x08 viewport, +0x0C the screen's name
+#define OFF_GAME_LSCR_COUNT 0x68          // loading screens asked for and not ended yet (both builds)
+#define LSCR_STALE_MS       8000
+#define LSCR_QUIT_MS        3000
+
+typedef void (__fastcall *LscrExec_t)(void* cmd, void* edx);
+static uintptr_t g_lscrAlloc, g_lscrCtor, g_lscrExec;
+static int g_lscrReady;
+
+// Game thread. 1 = posted. Steam's constructor takes the memory in EAX, GOG's in ECX; neither
+// reads the other register first.
+__declspec(naked) static int __stdcall lscr_post_clear(void)
+{
+    __asm {
+        push 0x10
+        call dword ptr [g_lscrAlloc]
+        pop ecx
+        test eax, eax
+        jz none
+        push 0                          ; no movie
+        push 0                          ; no viewport
+        mov ecx, eax
+        call dword ptr [g_lscrCtor]     ; RET 8, EAX = the command
+        mov edx, [eax]
+        mov ecx, eax
+        call dword ptr [edx + 4]        ; commit
+        mov eax, 1
+        ret
+    none:
+        xor eax, eax
+        ret
+    }
+}
+
+static int lscr_clear(void)
+{
+    int ok = 0;
+    __try { ok = lscr_post_clear(); } __except (EXCEPTION_EXECUTE_HANDLER) { ok = 0; }
+    return ok;
+}
+
+static int lscr_state(void** movie, void** screen, int* shown)
+{
+    char* rt = (char*)read_ptr((void*)ga(VA_RENDER_THREAD));
+    *movie = rt ? read_ptr(rt + OFF_RT_LOAD_MOVIE) : NULL;
+    *screen = rt ? read_ptr(rt + OFF_RT_LOAD_SCREEN) : NULL;
+    *shown = -1;
+    __try { if (*screen) *shown = *((const unsigned char*)*screen + 0x10); } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    return rt != NULL;
+}
+
+// Render thread: every loading-screen command, with the screen object before and after it.
+static void __fastcall hook_LscrExec(void* cmd, void* edx)
+{
+    void *vp = NULL, *movie, *before, *after;
+    wchar_t name[80];
+    int i = 0, shown;
+    __try {
+        const wchar_t* s = (const wchar_t*)((const char*)cmd + 0x0C);
+        vp = *(void**)((char*)cmd + 0x08);
+        for (; i < 79 && s[i]; i++) name[i] = s[i];
+    } __except (EXCEPTION_EXECUTE_HANDLER) { i = 0; }
+    name[i] = 0;
+    lscr_state(&movie, &before, &shown);
+    ((LscrExec_t)g_lscrExec)(cmd, edx);
+    lscr_state(&movie, &after, &shown);
+    logf_("loading: screen %s on the render thread ('%ls'), screen object %p -> %p", vp ? "shown" : "ended", name,
+          before, after);
+}
+
+// Once per frame on the game thread (ko_frame).
+static void lscr_frame(void)
+{
+    static DWORD last, since, posted;
+    static void* seen;
+    DWORD now = GetTickCount();
+    char* game;
+    void *movie, *screen;
+    int shown, ok;
+    LONG count = 0;
+    if (!cfg_lscr_cleanup || !g_lscrReady || now - last < 500) return;
+    last = now;
+    game = (char*)read_ptr((void*)ga(VA_GAME));
+    if (!game || !lscr_state(&movie, &screen, &shown)) return;
+    if (!screen) {
+        if (posted) logf_("loading: the left-over loading-screen object is gone (%lu ms after asking)", now - posted);
+        posted = 0;
+        seen = NULL;
+        return;
+    }
+    __try { count = *(volatile LONG*)(game + OFF_GAME_LSCR_COUNT); } __except (EXCEPTION_EXECUTE_HANDLER) { count = 1; }
+    // A loading screen that is up or asked for, a switch in progress, or Quit (lscr_quit_wait).
+    if (movie || count > 0 || screen != seen || g_ptMode != -1 || g_cqWorld) {
+        // A new loading screen can get the freed object's address (seen 2026-11-12): it is a
+        // new object all the same, and may be asked about again.
+        if (movie || count > 0 || screen != seen) posted = 0;
+        seen = screen;
+        since = now;
+        return;
+    }
+    if (posted || now - since < LSCR_STALE_MS) return;
+    posted = now | 1;
+    ok = lscr_clear();
+    logf_("loading: a loading-screen object is still alive %lu s after its loading screen ended (object %p, shown %d) - %s",
+          (now - since) / 1000, screen, shown,
+          ok ? "asked the render thread to free it" : "could not ask the render thread to free it");
+}
+
+// At Quit, when the exit flag is due (cq_poll, game thread): 1 = wait a little longer. A loading
+// screen that is still up gets LSCR_QUIT_MS to end; one that ended and left its object behind is
+// freed first, so the GUI shutdown finds no loading-screen movie.
+static int lscr_quit_wait(DWORD now)
+{
+    static DWORD since;
+    static int posted;
+    void *movie, *screen;
+    int shown;
+    if (!cfg_lscr_cleanup || !g_lscrReady || !lscr_state(&movie, &screen, &shown)) return 0;
+    if (!movie && !screen) {
+        if (since) logf_("quit: the loading screen is gone %lu ms later", now - since);
+        since = 0;
+        return 0;
+    }
+    if (!since) {
+        since = now | 1;
+        posted = 0;
+        logf_("quit: a loading screen is still %s (viewport %p, object %p, shown %d) - waiting for it before the game closes",
+              movie ? "up" : "alive", movie, screen, shown);
+        return 1;
+    }
+    if (now - since >= LSCR_QUIT_MS) {
+        logf_("quit: it is still there after %d ms - closing anyway", LSCR_QUIT_MS);
+        since = 0;
+        return 0;
+    }
+    if (!movie && !posted && now - since >= 500) {
+        posted = 1;
+        logf_("quit: its loading screen ended but the object stays - %s",
+              lscr_clear() ? "asked the render thread to free it" : "could not ask the render thread to free it");
+    }
+    return 1;
+}
+
+// .text is decrypted by the SteamStub: retried from the worker until the fingerprints hold.
+static void lscr_tick(void)
+{
+    static int done, tries;
+    uintptr_t alloc = ga(VA_RCMD_ALLOC), ctor = ga(VA_RCMD_LOADMOVIE), exec = ga(VA_LSCR_EXEC);
+    int hooked;
+    if (done || !cfg_lscr_cleanup) return;
+    if (!alloc || !ctor || !exec ||
+        !code_matches(alloc, "55 8b ec 51 51 8b 0d") ||
+        !code_matches(ctor, by_build("55 8b ec e8 b1 fd ff ff 8b 4d 08 89 48 08 8b 4d",
+                                     "55 8b ec 8b c1 e8 7a fd ff ff 8b 4d 08 89 48 08")) ||
+        !code_matches(exec, by_build("8b c1 8d 48 0c 8b 40 08 e9 31 58 ff ff",
+                                     "8b c1 8d 48 0c 8b 40 08 e9 24 55 ff ff"))) {
+        if (++tries == 1000) {
+            done = 1;
+            logf_("stability: loading-screen commands not recognised - loading_screen_cleanup off");
+        }
+        return;
+    }
+    done = 1;
+    g_lscrAlloc = alloc;
+    g_lscrCtor = ctor;
+    g_lscrExec = exec;
+    hooked = slot_swap(ga(VA_LSCR_EXEC_SLOT), exec, (void*)hook_LscrExec);
+    g_lscrReady = 1;
+    logf_("stability: loading screen cleanup ready (a screen object left behind is freed after %d s, and before Quit); "
+          "its command is %s", LSCR_STALE_MS / 1000, hooked ? "logged" : "NOT hooked - no `loading: screen` lines");
+}
+
 // Passive, for the log line when the exit flag is set: is a loading screen up (render thread
 // +0x268 movie, +0x26C screen object)? A loading-screen movie still alive at the GUI shutdown
 // crashes in Scaleform's heap teardown (2026-11-11 dump, docs/fixes/quit-crash.md).
@@ -6309,6 +6981,7 @@ static void cq_poll(int gameThread)
             return;
         }
         if (now - g_cqGoneTick < CQ_SETTLE_MS) return;
+        if (gameThread && lscr_quit_wait(now)) return;
         if (InterlockedCompareExchangePointer((void* volatile*)&g_cqWorld, NULL, w) != w) return;
         logf_("quit: quitting from the main menu, %lu ms after Quit, %s", now - g_cqTick, cq_loading_note());
         cq_set_exit_flag();
@@ -8059,6 +8732,7 @@ static DWORD WINAPI worker(LPVOID param)
         path_guard_tick();
         storage_leak_tick();
         text_guard_tick();
+        lscr_tick();
         osd_pump();
         dd_tick();
         apply_lod();
@@ -8419,6 +9093,7 @@ static const ga_row k_gog[] = {
     { VA_LAYER_SYNC,         0x00AAE727u },   // EAX = info; called by HideLayerGroup's 00B3F3F7 ("HideLayerGroup() called when no world is loaded." 00ECE518, native 00AE70B8)
     { VA_LAYER_VISIBLE,      0x00AAE25Au },   // same bytes; reads the game at 01475740 (VA_GAME)
     { VA_LAYER_VISIBLE_CALL, 0x00AAE743u },   // its only call
+    { VA_DOOR_VTABLE,        0x00D7A394u },   // CStreamingDoor (VA_DOOR_TIMER_SLOT = slot 78); inside/outside +0x200/+0x214 as on Steam (005AFCC5)
     { VA_LS_CLEAR_CALL,      0x0044F348u },   // in the array clear 0044F334 (after mov eax,ebx), from the load 00B37C82
     { VA_LS_RECORD_FREE,     0x00B37334u },   // EAX = record; frees +0x18 only, as on Steam
     { VA_LS_REMOVE_CALL,     0x00B3746Fu },   // in the single removal 00B373CD (after mov eax,edx)
@@ -8450,6 +9125,11 @@ static const ga_row k_gog[] = {
     { VA_STARTVIDEO_VSLOT,   0x00D43FB0u },   // CVideoInstance vtable 00D43F3C + 0x74
     { VA_SPINNER_EXEC,       0x00A2D9F9u },
     { VA_SPINNER_EXEC_SLOT,  0x00F1F0C0u },   // CRenderCommand_ToggleLoadingIndicator vtable 00F1F0B4 + 0x0C
+    { VA_ENTITY_VTABLE,      0x00F236FCu },   // CEntity, from the GOG exe's RTTI (the same parser gives CStreamingDoor 00D7A394)
+    { VA_RCMD_ALLOC,         0x00AF662Fu },   // cdecl (size), as on Steam; called at 004E9DD6 before the ctor
+    { VA_RCMD_LOADMOVIE,     0x00AF5D05u },   // ctor of vtable 00F1F0A0: memory in ECX, stdcall (viewport, movie), RET 8; its exec 00A2DA04 -> 00A22EA7
+    { VA_LSCR_EXEC_SLOT,     0x00F1F098u },   // loading-screen command vtable 00F1F08C + 0x0C (ctor 00AF654E, from the show 00AFCB72 and the end 00AFC972)
+    { VA_LSCR_EXEC,          0x00A2DA11u },   // -> 00A22F42; the game's count is at +0x68 as on Steam
     { VA_STEAM_STREAM,       0 },
     { VA_STREAM_DTOR,        0 },
     { VA_STR_FADE_OUT,       0x00D7A328u },
@@ -8642,8 +9322,9 @@ static void build_gate(void)
         cfg_skip_intro = 0;
     }
     if (!partitions && (cfg_keep_outdoors || cfg_keep_interiors || cfg_preload_interiors)) {
-        gate_off("loading", "interiors (keep_outdoors, keep_interiors, preload_interiors, skip_door_gc, release_kept, hide_kept)");
-        cfg_keep_outdoors = cfg_keep_interiors = cfg_preload_interiors = cfg_skip_door_gc = cfg_release_kept = cfg_hide_kept = 0;
+        gate_off("loading", "interiors (keep_outdoors, keep_interiors, preload_interiors, skip_door_gc, release_kept, hide_kept, preload_areas)");
+        cfg_keep_outdoors = cfg_keep_interiors = cfg_preload_interiors = cfg_skip_door_gc = cfg_release_kept = cfg_hide_kept =
+            cfg_preload_areas = 0;
     }
     if (!indoor && cfg_indoor_outdoors) {
         if (cfg_keep_outdoors) gate_off("loading", "indoor_outdoors");
@@ -8705,6 +9386,10 @@ static void build_gate(void)
     if (!textg && cfg_text_guard) {
         gate_off("stability", "text_guard");
         cfg_text_guard = 0;
+    }
+    if (cfg_lscr_cleanup && !ga_have(VA_RCMD_ALLOC, VA_RCMD_LOADMOVIE, VA_LSCR_EXEC_SLOT, VA_LSCR_EXEC, VA_RENDER_THREAD, VA_GAME, 0)) {
+        gate_off("stability", "loading_screen_cleanup");
+        cfg_lscr_cleanup = 0;
     }
     // The pause menu's Quit ends the game with an area loaded, which crashes in FactsAdd during
     // shutdown unless quit_guard is in (docs/fixes/quit-crash.md): the row waits for the guard.
@@ -9501,7 +10186,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         logf_("saves: fix_thumbnails=%d save_trace=%d", cfg_save_thumbs, cfg_save_trace);
         logf_("startup: skip_intro=%d fast_start=%d", cfg_skip_intro, cfg_fast_start);
         logf_("diagnostics: file_trace=%d load_trace=%d mem_trace=%d script_bindings=%d", cfg_file_trace, cfg_load_trace, cfg_mem_trace, cfg_script_bindings);
-        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d release_kept=%d hide_kept=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_release_kept, cfg_hide_kept, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
+        logf_("loading: fast_doors=%d door_fade=%.2f area_fade=%.2f interiors=%d (keep_outdoors=%d keep_interiors=%d preload_interiors=%d skip_door_gc=%d release_kept=%d hide_kept=%d preload_areas=%d instant_doors=%d indoor_outdoors=%d) door_light_blend=%.2f preload_street=%d door_spinner=%d preload_memory_mb=%d door_memory_mb=%d area_memory_mb=%d", cfg_fast_doors, cfg_door_fade, cfg_area_fade, cfg_interiors, cfg_keep_outdoors, cfg_keep_interiors, cfg_preload_interiors, cfg_skip_door_gc, cfg_release_kept, cfg_hide_kept, cfg_preload_areas, cfg_instant_doors, cfg_indoor_outdoors, cfg_door_light_blend, cfg_preload_street, cfg_door_spinner, cfg_preload_memory_mb, cfg_door_memory_mb, cfg_area_memory_mb);
         logf_("scriptpatches: book_marker=%d continue=%d pause_quit=%d window_mode=%d medallion=%d",
               cfg_book_marker, cfg_continue, cfg_pause_quit, cfg_window_mode, cfg_medallion);
         logf_("window: enabled=%d borderless=%d dpi_aware=%d",

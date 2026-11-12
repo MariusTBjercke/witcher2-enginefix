@@ -253,3 +253,76 @@ game closed normally. On GOG the menu is drawn during that wait, on Steam it is 
 To reproduce: load a save, open the Load menu in game and load a save (one from the same area is
 enough), play a little, Esc, Quit. With the segment-order condition it may take a few tries; the
 crash is silent (the game closes) and leaves a dump plus a `crash:` block in the log.
+
+### How a loading screen ends, and `[stability] loading_screen_cleanup` (2026-11-12; seen working in game once, Steam)
+
+Two more sessions on 2026-11-11 ended with `quit: ... LOADING SCREEN UP (movie 00000000, screen
+0C210768)`, one of them with this crash (`docs/validation/preload-areas-v1-2026-11-11.log`; both
+had an experimental extra layer load right after the area load, `interior-preload.md`,
+"`[loading] preload_areas`"). In both the object had been there since the load, minutes before
+the Quit: `release_kept` logged `a loading screen is up` 28-36 s after it. So candidate 1 is
+real: a loading screen can end and leave its movie alive. Static analysis, Steam 3.5.0.26:
+
+| What | Where | Contract |
+|---|---|---|
+| Show a loading screen | game vtable `+0x108` = `00AA8B61` (`CWitcherGame` vtable `00EC6F74`) | thiscall (reason, String* screen); posts the render command below with the viewport `game+0x44` and the screen's name on every call; pauses the game for `LoadingScreen` when the count was 0; `InterlockedIncrement(game+0x68)` |
+| End it | `+0x10C` = `009B49CF` -> `00AA8984` (thiscall, char force) | decrements `game+0x68` (force: sets it to 0); only when it reaches 0 posts the same command with viewport 0 and an empty name |
+| The command | vtable `00E7C054`, ctor `00AA25A0` (ESI = memory, stdcall (viewport, String*)), execute slot `00E7C060` -> `009DC408` -> `009D1C46` (EAX = viewport, ECX = name) | render thread `+0x268` = viewport. With a viewport: a non-empty name is stored at `+0x46`; if the stored name is not empty the screen object at `+0x26C` is destroyed and a new one built from it (`FUN_009c3271`, class vtable `00EC6A20`, a Scaleform movie at object `+0x08`). With viewport 0: object slot 5 (`009C2F6C`) invokes the movie's `FadeOut`, `+0x274` = 3; the object stays |
+| Freeing the object | `FUN_009d1a0e` (called at `00B13883` in the frame render `FUN_00b137eb`) and `FUN_009d1d61` (the loading loop) | destroy it and clear `+0x26C` when its "shown" byte `+0x10` is 0. Only the movie clears that byte: `Init` (slot 3, `009C32B2`) installs an fscommand handler (`00EC6A8C`) that calls slot 4 (`009C2F84`: `mov byte [ecx+0x10],0`) |
+| The loop | `FUN_009d1e96` | calls `FUN_009d1d61` (advance, at most 30 times a second) while `+0x268` is set and no command waits, and before every command while the object is shown |
+| The video loading screen | command vtable `00E7C068`, ctor `00AA1D2F` (EAX = memory, stdcall (viewport, movie)), execute `009DC3FC` -> `009D1B9F` | sets `+0x268`; with no viewport or no movie it destroys the object at `+0x26C` and clears the pointer; else it builds a video screen (class `00EC6A5C`). Only `009B56B0` (game vtable `+0xA4`, `.usm`) builds this command |
+
+(An earlier note here and in `interior-preload.md` took `009B56B0` for vtable `+0x108`; it is slot
+41, `+0xA4`.)
+
+So a nested "show" rebuilds the movie, the last "end" asks the movie to fade out, and the object
+only goes when the movie answers. A movie that never answers stays: `+0x268` is 0, `+0x26C` still
+holds the object with "shown" 1, and the render thread advances it 30 times a second for the rest
+of the session. At Quit it is the movie the GUI shutdown trips over. **Not proven: why a movie
+does not answer.** One way that fits the code is a "show" shortly before the last "end" (the new
+movie is asked to fade out before it has run a frame); no such call was found in the two
+sessions' paths.
+
+The fix does not depend on the cause:
+
+* Once the game has no loading screen up (`game+0x68` is 0, `+0x268` is 0, no switch in progress)
+  and the same object has been at `+0x26C` for 8 s, the DLL posts the video loading screen's
+  command with no viewport and no movie from the game thread (`lscr_frame`, viewport tick):
+  `FUN_00aa2685(0x10)` for the queue memory, the constructor at once, vtable `+4` to commit, as the
+  game does at `009B57DC`. The render thread then destroys the object the way every new loading
+  screen destroys the one before it. Log: `loading: a loading-screen object is still alive N s
+  after its loading screen ended (object ..., shown 1) - asked the render thread to free it`, then
+  `loading: the left-over loading-screen object is gone`.
+* At Quit, when the exit flag is due (`cq_poll`): a loading screen that is still up gets up to 3 s
+  to end; one that ended and left its object is freed the same way first. Log: `quit: a loading
+  screen is still up|alive ... - waiting for it before the game closes`.
+* Passive: the command's execute slot is wrapped, so every show and end is in the log with the
+  object before and after (`loading: screen shown|ended on the render thread ('<name>'), screen
+  object A -> B`). That is the evidence for the open question above.
+* GOG 3.5.0.26g: the same code (count at `game+0x68`, show `00AFCB72`, end `00AFC972`); queue
+  memory `00AF662F`, constructor `00AF5D05` (memory in ECX), command slot `00F1F098` -> `00A2DA11`.
+  Seen in game on 2026-11-12: both loads left the object there too, it was freed 8 s after each
+  (`... is gone (499 ms after asking)`), and the Quit logged `no loading screen up`
+  (`docs/validation/gog-area-preload-2026-11-12.log`).
+* Off: `[stability] loading_screen_cleanup=0`.
+
+Seen in game (owner, 2026-11-12, Steam, DXVK, `docs/validation/preload-areas-v3-2026-11-12.log`):
+two loads of an Act 2 save from the main menu. Both left the object, the first one a plain load
+with nothing added by the mod's area preload, so the extra load of 2026-11-11 was not the cause:
+
+```text
+13:52:43.044 loading: screen shown on the render thread (''), screen object 00000000 -> 00000000
+13:52:43.564 loading: screen shown on the render thread ('ls_akt2_vergen.swf'), screen object 00000000 -> 0C210768
+13:52:49.334 loading: screen ended on the render thread (''), screen object 0C210768 -> 0C210768
+13:53:05.462 loading: a loading-screen object is still alive 16 s after its loading screen ended (object 0C210768, shown 1) - asked the render thread to free it
+...
+13:53:17.409 loading: a loading-screen object is still alive 8 s after its loading screen ended (object 0D1E1E78, shown 1) - asked the render thread to free it
+13:53:17.919 loading: the left-over loading-screen object is gone (499 ms after asking)
+```
+
+The second "show" of each load comes 0.5 s after the first and builds the movie; the "end" comes
+3.5-5.8 s later, so the movie had run for seconds when it was asked to fade out, and the late
+"show" guess above does not fit. The movie simply had not answered 8 s later. Whether it would
+have answered later is not known: on 2026-11-11 one session's object was gone three minutes after
+the load, two others' were still there after four. The Quit after it logged `no loading screen
+up` and the game closed cleanly.
