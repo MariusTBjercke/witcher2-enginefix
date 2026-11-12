@@ -187,7 +187,7 @@ static float cfg_area_fade = 0.25f; // [loading] area_fade: door fade when the d
 static int cfg_interiors = 2;   // [loading] interiors: 0 game, 1 keep the outdoors, 2 also preload interiors
 static int cfg_keep_outdoors = 1; // [loading] keep_outdoors: house doors leave the outdoor layers loaded
 static int cfg_skip_door_gc = 1; // [loading] skip_door_gc: no full object GC on a keep_outdoors house door
-static int cfg_release_kept;    // [loading] release_kept: metres from the door after which kept outdoor layers unload (0 = never)
+static int cfg_release_kept = 30; // [loading] release_kept: metres from a door between two areas after which the area left behind is hidden or unloaded (0 = never)
 static int cfg_hide_kept = 1;   // [loading] hide_kept: with release_kept, hide them instead while area_memory_mb is free
 static int cfg_preload_areas;   // [loading] preload_areas: load the small areas behind an area's doors with it
 static int cfg_instant_doors = 1; // [loading] instant_doors: no fade on a house door known to load nothing
@@ -550,8 +550,8 @@ static void load_config(void)
     cfg_preload_interiors = ini_int("loading", "preload_interiors", cfg_interiors >= 2);
     cfg_indoor_outdoors = ini_int("loading", "indoor_outdoors", 1);
     cfg_skip_door_gc = ini_int("loading", "skip_door_gc", 1);
-    cfg_release_kept = ini_int("loading", "release_kept", 0);
-    if (cfg_release_kept < 0 || cfg_release_kept > 1000) cfg_release_kept = 0;
+    cfg_release_kept = ini_int("loading", "release_kept", 30);
+    if (cfg_release_kept < 0 || cfg_release_kept > 1000) cfg_release_kept = 30;
     cfg_hide_kept = ini_int("loading", "hide_kept", 1);
     cfg_preload_areas = ini_int("loading", "preload_areas", 0);
     if (!cfg_keep_outdoors || !cfg_preload_interiors) cfg_preload_areas = 0;   // they ride on the interiors' preload, and a door must keep them
@@ -5078,7 +5078,7 @@ static void __stdcall hook_PartRun(void* job)
     LONG kept = 0, unloaded = 0, skipped = 0, loaded = 0, added = 0, deferred = 0, i, b;
     int on = 0, area = 0, mem = 0, filter, coarseSkip = 0, rel = 0, relN = 0, relSkip = 0, relAct = KR_UNLOAD;
     int dropFake, fakeN = 0, fakeLast = 0, fakeKeep = -1, noInteriors = 0, memTier = g_koMemLow;
-    int relLight = 0;
+    int relLight = 0, areaDoor = 0;
     char relNames[400];
     size_t relUsed = 0;
     LONGLONG tRun;
@@ -5138,7 +5138,7 @@ static void __stdcall hook_PartRun(void* job)
     if (filter) {
         // Unload: a kept door unloads only what each partition swaps; preload keeps interiors.
         // A door between two whole areas also swaps their environments (LC_ENV).
-        int areaDoor = on && _wcsicmp(g_ptFrom, g_ptTo) && !ko_house_door(world, g_ptFrom, g_ptTo);
+        areaDoor = on && _wcsicmp(g_ptFrom, g_ptTo) && !ko_house_door(world, g_ptFrom, g_ptTo);
         for (i = 0; i < unloadN; i++) {
             void* l = unloadData[i];
             int c = ko_class(l);
@@ -5404,7 +5404,9 @@ static void __stdcall hook_PartRun(void* job)
                   "partition and stay)", relSkip);
         }
         g_krCount = 0;
-    } else if (on && cfg_release_kept && _wcsicmp(g_ptFrom, g_ptTo)) {   // a door, not the occluders' switch
+    } else if (areaDoor && cfg_release_kept) {
+        // Only a door between two whole areas: a house keeps its street in the world, which its
+        // windows show and which is 2-50 layers; an area left behind is a cave's whole outdoors.
         kr_record((void* const*)unloadData, unloadN, world);
     }
     // A kept door that loaded nothing will not load anything next time either: no fade then.

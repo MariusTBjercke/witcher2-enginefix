@@ -720,7 +720,26 @@ keep_outdoors kept 112 of 114 layers, unloaded 2; loaded 16`. Workaround: `inter
 (the game's own unloading, at the price of a reload at every house door), or `release_kept`
 below.
 
-### `[loading] release_kept` (default 0; seen working in game once, 2026-11-11)
+### `[loading] release_kept` (default 30 after 0.12.1, doors between whole areas only; seen in game on Steam and GOG)
+
+**Default and scope (2026-11-12; seen in game on Steam).** Up to here it was
+off by default and recorded what any kept door kept. It is now 30 m by default and only a door
+between two whole areas records (`areaDoor` in `hook_PartRun`: `ko_house_door` says neither side
+is a building or a small place). A house door keeps its street in the world as before: the
+street is what the house's windows show, it is 2-50 layers, and Flotsam's inn is larger than
+30 m. What an area door leaves behind is hidden, so beyond 30 m the picture is the game's own
+(it unloads that area at the door) plus the light layers; low-poly stand-ins exist only at Act
+1's house doors, so nothing the game would show is missing.
+
+Seen in game (owner, 2026-11-12, Steam, `docs/validation/release-area-doors-2026-11-12.log`): the
+cave as before (`52 kept outdoor layers recorded`, `hid 39 ...`, `13 light layers ...`, shown
+again 14 m from the door, out without a fade), then an Act 1 save: the Flotsam inn in and out
+twice, the clerk's house, the gate to Binduga and a house there. Every house door went without
+a fade and none of them logged `kept outdoor layers recorded`; no `not preloaded`, no `keeps its
+fade`; Flotsam preloaded `109 of 110` layers (two fewer than before: the quest-named ones);
+clean quit. Owner: everything worked very well. Not seen in game: Act 3, where the areas are
+open-air quarters and the one left behind goes out of the picture 30 m past the door.
+
 
 `release_kept=<metres>` unloads the kept outdoor layers once Geralt is that far from the door
 that kept them. The way out loads them again at the door, behind its fade: one ordinary door
