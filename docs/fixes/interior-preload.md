@@ -1079,6 +1079,59 @@ joined`, `20 stay hidden` of 37); the door check of the hide test of 2026-11-11 
 load` there on every later door. Not covered by a test yet: the memory drop (`area_memory_mb`
 above the free address space while the areas are loaded), and GOG.
 
+### Quest markers inside buildings: Poker Face: Vergen (2026-11-12; the selection seen in game, the quest not)
+
+**Symptom** (a player on Nexus, 0.12.1): the last dice player of *Poker Face: Vergen* skips the
+game and declares Geralt the loser, also when met in the street; with 0.12.0 he played there.
+The game has that fault on its own when he is spoken to in his house at night; the old way round
+it was to meet him outside.
+
+**Cause.** The quest (`game\2_act2\sq204_dice.w2phase`) holds a `CQuestTagsPresenceCondition` on
+the tag `sq204_wp_inside_building`, and a `QStartMinigameEx` script block that names
+`game\minigames\dices_inside.w2ent` and the same tag: "is the indoor waypoint in the world?" is how it
+learns that Geralt is indoors. The waypoint is a layer of one entity, `sq204_wp_inside.w2l`, in
+the folders of three Vergen houses and the inn (`dwarf_city\building09_dec`, `building12_dec`,
+`building15_dec`, `building_inn_dec`). In the game it is loaded only while Geralt is in that
+house. 0.12.1 preloads Vergen's houses, every layer in their folders, so the waypoint was in the
+world all the time and the quest took its indoor branch in the street.
+
+**How many more.** Read offline from `pack0.dzip`: the 512 distinct tags of every
+`CQuestTagsPresenceCondition` in the game's `.w2phase` and `.w2quest` files, against the name
+tables of the 178 layers inside the buildings of the five worlds (Vergen's `dwarf_city\building*`,
+Act 1's `\buildings\...\interior\`, the prologue's `_ints\` and `containers\...\interior*`):
+
+| Layer | Holds | Tested by |
+|---|---|---|
+| `dwarf_city\building09_dec`, `12`, `15`, `building_inn_dec` `\sq204_wp_inside.w2l` | one waypoint, `sq204_wp_inside_building` | `sq204_dice` (dice in Vergen) |
+| `dwarf_city\building_inn_dec\armwrestling.w2l` | the inn's arm wrestling spot, `sq205_armwrestling_spot_vergen_inn` | `sq205i_handwrestling` (it also knows `..._vergen_outdoor`) |
+| `village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l` | the troll's head (in a group of its own) | `sq107_bridge_troll` |
+| `pier\buildings\06_custom_house_pier\interior\decorations.w2l` | the furniture of the customs tower, tagged per floor (`q110_tower_hay01_floor01` ...) | `q110_barge` (the burning tower; not looked into here) |
+| `dwarf_city\building14_dec\door_stream\door.w2l`, `dwarf_city\buildings.w2l` | doors and the town's shell | several; they are in the world in the game too |
+
+**Fix** (`kq_marker_name`, `kq_marker`, `kp_walk`, `ko_walk`, `hook_PartRun`): a layer inside a
+building (under an interior folder, or directly in a group only a building lists) that is named
+after a quest (`q` or `sq`, three digits, `_`) or is called `armwrestling` holds no room. It is
+not preloaded and not kept: it loads at its building's door and is unloaded by the next door
+job that does not switch to that building, as in the game. That is the four waypoints, the arm
+wrestling spot and the troll's head, and two more that the survey by folder did not have:
+Philippa's house lists two quest groups of its own, `quests\streamable\q206_figurine` and
+`quests\streamable\q215_blockade` (the latter one cooked layer of 248 bytes), which the game
+also loads only inside that house. The customs tower's furniture is ordinary room content and
+is not touched by this. Log, on an area load: `preload: 7 quest marker layer(s) inside buildings
+are left to their doors (a quest tells from them where Geralt is): <paths>`, and the preload
+count for Act 2 goes from 59 to 52 layers.
+
+Not covered: the kept outdoors and a kept area are still in the world while Geralt is indoors
+(since 0.8.0), so a presence test for something in the street is true inside a house where the
+game says false. No report of that; the full fix would be to keep kept layers out of the tag
+test itself.
+
+Seen in game (owner, 2026-11-12, Steam, `docs/validation/quest-markers-2026-11-12.log`): an Act
+2 load logs the seven layers by path and `52 of 52 preloaded layers loaded`. The owner is on
+Roche's path and cannot reach the dice players or those houses, so not seen: the dice player in
+the street playing, and house 09, 12 or 15 or the inn loading its marker at the door and the
+door out unloading it. GOG takes the same code; not run there with this change.
+
 ### Still to check in game
 
 Not seen: Vergen's other 20 houses (Iorveth's path opens the whole town; they are covered by

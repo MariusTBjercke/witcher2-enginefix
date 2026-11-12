@@ -3618,6 +3618,30 @@ static int ko_env_interior(const wchar_t* s)
     return 0;
 }
 
+// Quest markers inside buildings. A quest asks "is an entity with this tag in the world?"
+// (CQuestTagsPresenceCondition) to learn where Geralt is: the Vergen dice quest sq204 looks for
+// `sq204_wp_inside_building`, a lone waypoint in the layer `sq204_wp_inside` of three houses and
+// the inn, and then starts the indoor game at it; sq205 looks for the inn's arm wrestling spot
+// (`building_inn_dec\armwrestling`). In the game such a layer is in the world only while Geralt
+// is in that building. Preloaded with the house it was always there, so the last dice player
+// took the indoor branch in the street and Poker Face: Vergen could not be finished (a player,
+// 0.12.1). Of the 178 layers inside the buildings of the five worlds, the ones a presence test
+// can meet are these five and Act 1's `sq107_troll_head` (docs/fixes/interior-preload.md). So a
+// layer inside a building that is named after a quest (`q` or `sq`, three digits, `_`), or is
+// the arm wrestling spot, is not preloaded and not kept: it loads at its door and unloads at
+// the door out, as in the game. It holds no room.
+static int kq_marker_name(const wchar_t* name)
+{
+    const wchar_t* p = name;
+    int d = 0;
+    if (!_wcsicmp(name, L"armwrestling")) return 1;
+    if (!_wcsnicmp(p, L"sq", 2)) p += 2;
+    else if (*p == L'q' || *p == L'Q') p += 1;
+    else return 0;
+    while (p[d] >= L'0' && p[d] <= L'9') d++;
+    return d >= 3 && p[d] == L'_';
+}
+
 static int ko_stand_in(const wchar_t* name, const wchar_t* path)
 {
     return wcsistr(name, L"black_plane") || wcsistr(name, L"dark_plane") || wcsistr(name, L"shadow_plane") ||
@@ -3940,6 +3964,10 @@ static void ko_walk(const void* group, int depth, ko_tree* t)
         t->total++;
         if (loaded) t->loaded++;
         if (ko_class(info) != LC_INTERIOR) continue;
+        {
+            wchar_t nm[64];
+            if (kq_marker_name(pt_text((char*)info + 0x78, nm, 64))) continue;   // a quest marker: with its door
+        }
         t->interiors++;
         if (loaded) t->interiorsLoaded++;
         else if (t->out && t->added < t->max && !kp_in_set(info)) t->out[t->added++] = info;
@@ -4209,6 +4237,20 @@ static int ko_house_door(void* world, const wchar_t* from, const wchar_t* to)
 // g_kxGroup's folders (the buildings). `known` counts every layer that qualifies, loaded or not.
 typedef struct { void** out; DWORD added, max, known; int exact; } kp_collect_t;
 
+// Is this layer a quest marker inside a building (kq_marker_name)? A building is a layer under
+// an interior folder (LC_INTERIOR) or directly in a group only a building lists (g_kxGroup, set
+// by the last area load).
+static DWORD g_kqLeft;   // markers the area load in progress left to their doors
+static char  g_kqNames[360];
+static size_t g_kqUsed;
+static int kq_marker(const void* info)
+{
+    wchar_t name[64], path[260];
+    if (!info || !kq_marker_name(pt_text((const char*)info + 0x78, name, 64))) return 0;
+    pt_text((const char*)info + 0x68, path, 260);
+    return ko_class(info) == LC_INTERIOR || grp_holds(g_kxGroup, g_kxGroups, path);
+}
+
 static void kp_walk(const void* group, int depth, kp_collect_t* t)
 {
     void** infos;
@@ -4227,6 +4269,12 @@ static void kp_walk(const void* group, int depth, kp_collect_t* t)
         if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE || c == LC_ENV) continue;
         pt_text((char*)info + 0x78, name, 64);
         if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\communit")) continue;
+        if (kq_marker(info)) {
+            g_kqLeft++;
+            if (g_kqUsed < sizeof g_kqNames - 1)
+                g_kqUsed += (size_t)_snprintf_s(g_kqNames + g_kqUsed, sizeof g_kqNames - g_kqUsed, _TRUNCATE, " %ls", path);
+            continue;
+        }
         t->known++;
         if (g_kpSetCount < KP_SET && !kp_in_set(info)) {
             g_kpSet[g_kpSetCount++] = info;
@@ -5097,6 +5145,7 @@ static void __stdcall hook_PartRun(void* job)
             int go = on ? (c == LC_FAKE || c == LC_SWAP || c == LC_LOWPOLY || (c == LC_ENV && areaDoor))
                         : g_koMemLow == 1 || !(cfg_preload_interiors && (c == LC_INTERIOR || kp_in_set(l)));
             if (paRel && pa_in_set(l)) { go = 1; paDropN++; }
+            if (!go && kq_marker(l)) go = 1;   // a quest marker of a building that is not the target
             if (c == LC_FAKE) g_kpFakeSeen = 1;
             if (go) g_koUnloadOut[unloaded++] = l; else kept++;
         }
@@ -5171,7 +5220,13 @@ static void __stdcall hook_PartRun(void* job)
                 tree = t.added;
                 // Vergen's houses are neither LT_INDOOR nor in a folder called `interior`.
                 t.exact = 1;
+                g_kqLeft = 0;
+                g_kqUsed = 0;
+                g_kqNames[0] = 0;
                 if (kx_groups(world) && g_kxGroups) kp_walk(root, 0, &t);
+                if (g_kqLeft)
+                    logf_("preload: %lu quest marker layer(s) inside buildings are left to their doors (a quest "
+                          "tells from them where Geralt is):%s", g_kqLeft, g_kqNames);
                 houses = t.added - tree;
                 {
                     // Act 1's houses are not marked LT_INDOOR (run 15: 0 indoor siblings for
@@ -5376,6 +5431,7 @@ static void __stdcall hook_PartRun(void* job)
                 wchar_t name[64], path[260];
                 if (c == LC_SWAP || c == LC_LOWPOLY || c == LC_FAKE || c == LC_ENV) continue;
                 if (kr_find(g_krGone, g_krGoneCount, l) >= 0) continue;   // released, loads back here
+                if (kq_marker(l)) continue;                               // a quest marker: the door's
                 pt_text((char*)l + 0x78, name, 64);
                 pt_text((char*)l + 0x68, path, 260);
                 if (!_wcsnicmp(name, L"comm", 4) || wcsistr(path, L"\\communit")) continue;

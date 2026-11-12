@@ -1,0 +1,122 @@
+﻿15:25:12.149 witcher2_enginefix 0.12.1 loaded (image base 0x00400000)
+15:25:12.149 build: Steam 3.5.0.26 (TimeDateStamp 518B881C, .text 008A94AD), delta 0x00000000 from 0x00400000; import slots 27/27 found by name
+15:25:12.149 diagnostics: crash_dump=1 exit_trace=1 (previous log kept as witcher2_enginefix.prev.log)
+15:25:12.149 config: enabled=1 enforce=1 mesh=8.00 foliage=5.00 downscale=1 hotkeys=1
+15:25:12.149 distance config: experimental=1 visibility=3.00x shadow=3.00x
+15:25:12.149 saves: fix_thumbnails=1 save_trace=0
+15:25:12.149 startup: skip_intro=1 fast_start=1
+15:25:12.149 diagnostics: file_trace=0 load_trace=0 mem_trace=0 script_bindings=0
+15:25:12.149 loading: fast_doors=1 door_fade=0.05 area_fade=0.25 interiors=2 (keep_outdoors=1 keep_interiors=1 preload_interiors=1 skip_door_gc=1 release_kept=30 hide_kept=1 preload_areas=1 instant_doors=1 indoor_outdoors=1) door_light_blend=1.00 preload_street=1 door_spinner=0 preload_memory_mb=1280 door_memory_mb=1024 area_memory_mb=1536
+15:25:12.149 scriptpatches: book_marker=1 continue=1 pause_quit=1 window_mode=1 medallion=1
+15:25:12.149 window: enabled=1 borderless=0 dpi_aware=1
+15:25:12.149 presets: default=extreme, cycle modifiers=1 VK=79 (Options > Graphics remembers the level)
+15:25:12.149 exit: hooked kernel32.dll!ExitProcess
+15:25:12.149 exit: hooked kernel32.dll!TerminateProcess
+15:25:12.149 exit: hooked kernel32.dll!GetProcAddress
+15:25:12.149 exit (steam_api.dll): hooked kernel32.dll!ExitProcess
+15:25:12.149 exit (steam_api.dll): hooked kernel32.dll!TerminateProcess
+15:25:12.150 cpu32: hooked kernel32.dll!GetProcessAffinityMask
+15:25:12.152 script-patcher: hooked kernel32.dll!CreateFileW
+15:25:12.152 script-patcher: hooked kernel32.dll!FindFirstFileW
+15:25:12.152 script-patcher: hooked kernel32.dll!FindNextFileW
+15:25:12.152 script patches: hooks installed after 0 ms (3/3 slots)
+15:25:12.154 shadows: startup=vanilla (options menu)
+15:25:12.155 presets: startup=vanilla (options menu)
+15:25:12.155 window: dpi awareness = system aware (fallback)
+15:25:12.155 window: borderless=1 (options menu), dpi_aware=1, menu=1
+15:25:12.169 startup: fast_start: timeBeginPeriod(1) = 0, Sleep(1) took 15.0 ms before, 1.9 ms after
+15:25:12.169 startup: hooked kernel32.dll!Sleep
+15:25:12.169 startup: hooked kernel32.dll!Sleep
+15:25:12.277 startup: movie list and tick hooked after 125 ms
+15:25:12.277 shadows: level vanilla; atlas at start 1024, filter on, live atlas on
+15:25:12.279 window: startup borderless style patched
+15:25:12.283 window: menu channel hooked (Options > Graphics applies borderless at once)
+15:25:12.283 window: viewport tick hooked (Full screen switches at once)
+15:25:12.403 script overlay: cache <game>\bin\witcher2_enginefix_cache
+15:25:12.410 script overlay: user content: no Config\UserContent.ini, none mounted
+15:25:12.411 script overlay: cache: reused (4 redirects)
+15:25:12.411 script patches: book_marker=on continue=on pause_quit=on window_mode=on medallion=on cache=reused
+15:25:12.784 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+15:25:12.788 script patches: CreateFileW "<game>\CookedPC\dlc_finishers.dzip" -> cached copy
+15:25:13.090 script patches: CreateFileW "<game>\CookedPC\base_scripts.dzip" -> cached copy
+15:25:13.653 saves: hooked d3dx9_39.dll!D3DXCreateTextureFromFileInMemory
+15:25:13.653 saves: light previews on (640x360 BMP at its own size, one level)
+15:25:13.653 crash: removed old dump witcher2_enginefix_crash_2026-11-11_16-55-45.dmp
+15:25:13.653 crash: filter armed, chaining to 0x62C22571 (CSERHelper.dll+0x12571)
+15:25:13.659 osd: window ready (font 34 px)
+15:25:13.659 stability: ray cast guard installed (collector slot 00D41A38)
+15:25:13.660 stability: quit guard installed (FactsAdd time default at 0099871E)
+15:25:13.660 quit: QuitApplication hooked - with an area loaded it ends the game session first (clean_quit)
+15:25:13.660 stability: path guard installed (PathEngine edge walk at 006550C0)
+15:25:13.660 stability: layer storage leak fix: array clear hooked, single removal hooked
+15:25:13.660 stability: text guard installed (text files end in three 0 bytes, allocation at 00AC6ACA)
+15:25:13.660 stability: loading screen cleanup ready (a screen object left behind is freed after 4 s, and before Quit); its command is logged
+15:25:13.660 settings object 0x02580E78 found: mesh=1.200 foliage=2.000
+15:25:13.660 preset: vanilla at startup
+15:25:13.660 lod enforced: mesh=1.000 foliage=1.000
+15:25:13.661 distance: hooks installed at RVA 005BB09F / 005BB465; visibility=1.00x shadow=1.00x
+15:25:13.661 billboards: hook installed, factor 1.00x
+15:25:13.661 shadows: zones patched at 009C016A, 009C019A and 009C01AA
+15:25:13.661 save-trace: hooked d3dx9_39.dll!D3DXSaveSurfaceToFileInMemory
+15:25:13.661 thumbnail: menu image registry hooked (QuickSave preview refresh)
+15:25:13.661 savelist: startup call hooked, menu call hooked; leak fix=1 fast_list=1 trace=0
+15:25:13.661 saves: ISteamRemoteStorage 135F0BE8 FileWrite hooked; thumbnail fix=1
+15:25:13.661 preload: per-layer load hooked - preloaded layers stop below 1280 MB of free address space
+15:25:13.661 doors: indoor partitions keep drawing terrain and grass (indoor_outdoors=1)
+15:25:13.662 interiors: layer visibility hooked - loaded layers can be kept out of the world (hide_kept, preload_areas)
+15:25:13.662 partition: switch calls hooked/hooked, sync run hooked (load_trace=0 keep_outdoors=1)
+15:25:13.662 doors: environment activation hooked, door Stabilize hooked - door_light_blend on (1.00 s)
+15:25:13.662 doors: loading spinner command hooked - no spinner on instant doors
+15:25:13.662 doors: streaming door timer hooked
+15:25:13.662 doors: door start hooked (door_fade 0.05 s, area_fade 0.25 s)
+15:25:13.662 doors: fade commands hooked/hooked - instant_doors on
+15:25:13.662 doors: fade-out patched, fade-in patched, 0.05 s, area changes 0.25 s (game 0.5 s); fast_doors=1
+15:25:15.350 shadows: atlas 1024 per cascade, wanted 1024
+15:25:17.786 startup: fast_start: FMOD waits of 10 ms cut to 1 ms until the game window, after 5625 ms: fmodex 1708, fmod_event 845
+15:25:17.884 window: game window 3840x2160, User.ini viewport 3840x2160
+15:25:17.989 loading: screen shown on the render thread ('01_mgla.swf'), screen object 00000000 -> 00000000
+15:25:18.375 loading: screen ended on the render thread (''), screen object 00000000 -> 00000000
+15:25:18.398 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook installed on vtable 63E26264
+15:25:18.399 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+15:25:18.399 input: keyboard state filter installed
+15:25:18.399 input: keyboard cooperative level hook installed
+15:25:18.399 input: window procedure hooked (key messages ignored while DirectInput reads the keyboard)
+15:25:18.399 input: keyboard cooperative level 0x05 -> 0x06 (Windows keys and Print Screen work in game)
+15:25:18.400 startup: movie list built (1 entries), skip armed
+15:25:18.400 startup: 1 startup movie(s) marked as played, none started
+15:25:18.849 startup: 1 startup movie(s) skipped without starting them, main menu reached
+15:25:21.988 saves: first preview made at its own size
+15:25:29.352 loading: screen shown on the render thread (''), screen object 00000000 -> 00000000
+15:25:29.770 interiors: before the switch - 1542 layers in the world, 0 loaded; 0 building interiors, 0 loaded
+15:25:29.782 savelist: before the switch private=1057 MB commit=1426 reserve=279 free=2389 largest_free=2044 MB, previews held=327
+15:25:29.782 preload: 'common\quarry' found (type 0); siblings by location type: default 26, indoor 0, outdoor 0, cave 0, other 0; 0 layer groups from the indoor ones
+15:25:29.784 preload: 24 building(s) with interior lighting of their own in the partition tree, 57 layer groups only they list
+15:25:29.794 preload: 7 quest marker layer(s) inside buildings are left to their doors (a quest tells from them where Geralt is): levels\03_camp\dwarf_city\building09_dec\sq204_wp_inside.w2l levels\03_camp\dwarf_city\building12_dec\sq204_wp_inside.w2l levels\03_camp\dwarf_city\building15_dec\sq204_wp_inside.w2l levels\03_camp\dwarf_city\building_inn_dec\armwrestling.w2l levels\03_camp\dwarf_city\building_inn_dec\sq204_wp_inside.w2 levels\03_camp\quests\streamable\q215_blockade\q215_b
+15:25:29.796 preload: 0 interior layers from the indoor partitions, 52 from the buildings with their own lighting, 0 more by folder name (52 known in this world)
+15:25:29.796 preload: 2 door(s) between areas known from earlier sessions
+15:25:29.806 preload: 2 area(s) known behind the doors of 'common\quarry': 2 to load now, 'common\harpy_lair' (22) 'common\secret_passage' (27) 0 too big, 0 already loaded, 0 not in this world (2360 MB free, floor 1536)
+15:25:29.864 loading: screen shown on the render thread ('ls_akt2_vergen.swf'), screen object 00000000 -> 0C210768
+15:25:32.756 preload: 32 of 32 layers of 2 area(s) behind the doors loaded, hidden until their door (0 held back: less than 1536 MB free)
+15:25:32.756 preload: the doors of 'common\quarry' lead to 3 partition(s): 2 whole area(s) in its folder (0 new - they load with this area from its next load on), 0 houses or small places, 0 in other folders
+15:25:32.756 preload: 52 of 52 preloaded layers loaded, 0 left for their first visit (free address space at the lowest 2127 MB, floor 1280 MB)
+15:25:32.756 partition: sync job ran 2988 ms (GC  31 ms)
+15:25:32.756 partition: preload kept 0 of 0 layers, unloaded 0; loaded 723 (84 interiors added), skipped 0 (fake rooms, low-poly)
+15:25:32.758 interiors: after the switch - 1542 layers in the world, 722 loaded; 0 building interiors, 0 loaded
+15:25:32.772 savelist: after the switch private=1334 MB commit=1691 reserve=267 free=2137 largest_free=2044 MB, previews held=327
+15:25:33.502 loading: screen ended on the render thread (''), screen object 0C210768 -> 0C210768
+15:25:33.930 distance stats: mesh=27683 shadow=18670 baseline_reject=10851 admitted=0 (1.00x/1.00x)
+15:25:33.930 billboards: 22 new proxies, 0 moved; last 15.0 m -> 15.0 m (1.00x)
+15:25:37.439 loading: a loading-screen object is still alive 4 s after its loading screen ended (object 0C210768, shown 1) - asked the render thread to free it
+15:25:37.950 loading: the left-over loading-screen object is gone (500 ms after asking)
+15:25:38.017 quit: an area is loaded - ending the game session first
+15:25:38.150 stability: layer storage: 1 saved entity state(s) freed so far (0 MB) that the game would have kept
+15:25:38.454 input: DirectInput8Create (W) from gameoverlayrenderer.dll+0x84A4D: CreateDevice hook already there on vtable 63E26264
+15:25:38.454 input: keyboard device created by gameoverlayrenderer.dll+0x82BE1 (hr 00000000)
+15:25:38.454 input: keyboard state filter installed
+15:25:38.994 distance stats: mesh=463831 shadow=328180 baseline_reject=185702 admitted=0 (1.00x/1.00x)
+15:25:39.115 quit: the game session ended 1093 ms after Quit
+15:25:40.683 quit: quitting from the main menu, 2656 ms after Quit, no loading screen up
+15:25:41.768 crash: filter armed, chaining to 0x00676B04 (witcher2.EXE+0x276B04)
+15:25:41.805 exit: ExitProcess(0) from witcher2.EXE+0x272388 on thread 62388 (the main thread)
+15:25:41.865 stability: layer storage: 6160 saved entity state(s) freed this session (15 MB)
+15:25:41.865 unloaded
