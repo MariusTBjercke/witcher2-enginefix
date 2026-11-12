@@ -21,7 +21,9 @@ What it does:
   open doors show the real rooms, and a door takes a few hundredths of a
   second without a fade instead of ~2.2 s. The lighting blends over 1 s
   instead of jumping. Doors that change area (the gate into Flotsam) keep a
-  short fade.
+  short fade. Behind a door between two whole areas (a cave and the land
+  outside it) the area you left is taken out of the picture 30 m in, so a
+  large interior does not pay for the land outside.
 - Display mode in Options > Graphics: full screen, borderless window or
   windowed, switched at once without a restart.
 - Snipping Tool and Windows keys work in game (Win+Shift+S, Print Screen,
@@ -29,7 +31,9 @@ What it does:
 - Crash guard: a physics ray cast against an object that was just unloaded
   (seen once leaving the Flotsam inn) no longer closes the game.
 - Clean quit: Quit in the pause menu no longer crashes the game while it
-  shuts down (nobody saw it, but each quit left a crash dump).
+  shuts down (nobody saw it, but each quit left a crash dump). A loading
+  screen the game never freed after a load, which could crash a Quit soon
+  after loading, is freed 4 s after it ended and when you quit.
 - Text table crash: the game ended a UTF-16 text file (its CSV tables) with
   one 0 byte where it needs two, so reading one could close the game (seen
   once after loading a save). Such files now end in three 0 bytes.
@@ -136,6 +140,11 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
                                  0 restores the game's doors
   [loading] fast_doors=1         0 restores the game's door timing
   [loading] door_light_blend=1.0 0 switches the lighting at once at doors
+  [loading] release_kept=30      metres from a door between two areas after
+                                 which the area left behind is hidden; 0 keeps
+                                 it in the picture (hide_kept=0 unloads it)
+  [loading] preload_areas=0      experimental: 1 loads the small areas behind
+                                 an area's doors with it, hidden until used
   [loading] preload_memory_mb=1280, area_memory_mb=1536, door_memory_mb=1024
                                  memory guard for the preloaded interiors,
                                  doors between whole areas and all doors
@@ -150,6 +159,8 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [stability] clean_quit=1       0 quits at once with an area loaded (can crash)
   [stability] path_guard=1       0 lets a pathfinding job freeze the game again
   [stability] text_guard=1       0 lets a text table end with one 0 byte again
+  [stability] loading_screen_cleanup=1
+                                 0 leaves a loading screen the game never freed
   [scriptpatches] book_marker=1, continue=1, pause_quit=1, window_mode=1,
                   medallion=1
                                  0 turns that one off
