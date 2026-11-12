@@ -6730,7 +6730,7 @@ __declspec(naked) static void __stdcall cq_call_exit(void* game)
 #define VA_LSCR_EXEC_SLOT   0x00E7C060u   // loading-screen command vtable 00E7C054, slot 3
 #define VA_LSCR_EXEC        0x009DC408u   // ECX = command: +0x08 viewport, +0x0C the screen's name
 #define OFF_GAME_LSCR_COUNT 0x68          // loading screens asked for and not ended yet (both builds)
-#define LSCR_STALE_MS       8000
+#define LSCR_STALE_MS       4000
 #define LSCR_QUIT_MS        3000
 
 typedef void (__fastcall *LscrExec_t)(void* cmd, void* edx);
@@ -6836,10 +6836,29 @@ static void lscr_frame(void)
           ok ? "asked the render thread to free it" : "could not ask the render thread to free it");
 }
 
-// At Quit, when the exit flag is due (cq_poll, game thread): 1 = wait a little longer. A loading
-// screen that is still up gets LSCR_QUIT_MS to end; one that ended and left its object behind is
-// freed first, so the GUI shutdown finds no loading-screen movie.
-static int lscr_quit_wait(DWORD now)
+// At Quit, on the game thread, while the world is still there (cq_request): a loading screen
+// that ended and left its object behind is freed now. On Steam no frame is drawn between the
+// end of the session and the exit flag, so there is no later moment on the game thread: a Quit
+// 7 s after a load, before lscr_frame's time was up, went into the GUI shutdown with the object
+// alive and crashed there (2026-11-12 15:21, the 0077E986 crash of docs/fixes/quit-crash.md).
+static void lscr_at_quit(void)
+{
+    char* game = (char*)read_ptr((void*)ga(VA_GAME));
+    void *movie, *screen;
+    int shown;
+    LONG count = 0;
+    if (!cfg_lscr_cleanup || !g_lscrReady || !game || !lscr_state(&movie, &screen, &shown) || movie || !screen) return;
+    __try { count = *(volatile LONG*)(game + OFF_GAME_LSCR_COUNT); } __except (EXCEPTION_EXECUTE_HANDLER) { count = 1; }
+    if (count > 0) return;
+    logf_("quit: the last loading screen left its object behind (%p, shown %d) - %s", screen, shown,
+          lscr_clear() ? "asked the render thread to free it" : "could not ask the render thread to free it");
+}
+
+// At Quit, when the exit flag is due (cq_poll; the game thread, or the worker when no frame is
+// drawn): 1 = wait a little longer. A loading screen that is still up, or an object still there,
+// gets LSCR_QUIT_MS to go; on the game thread an object left behind is freed first. The GUI
+// shutdown should find no loading-screen movie.
+static int lscr_quit_wait(DWORD now, int gameThread)
 {
     static DWORD since;
     static int posted;
@@ -6863,7 +6882,7 @@ static int lscr_quit_wait(DWORD now)
         since = 0;
         return 0;
     }
-    if (!movie && !posted && now - since >= 500) {
+    if (gameThread && !movie && !posted && now - since >= 500) {
         posted = 1;
         logf_("quit: its loading screen ended but the object stays - %s",
               lscr_clear() ? "asked the render thread to free it" : "could not ask the render thread to free it");
@@ -6921,6 +6940,7 @@ static int __cdecl cq_request(void)
     char* game = (char*)read_ptr((void*)ga(VA_GAME));
     void* world = game ? read_ptr(game + 0x40) : NULL;
     unsigned char ending = 0;
+    lscr_at_quit();
     if (!world) logf_("quit: no area loaded - quitting at once, %s", cq_loading_note());
     if (!world || !cfg_clean_quit || !g_cqExit) return 0;
     if (g_cqWorld) return 1;   // Quit again while the session ends
@@ -6981,7 +7001,7 @@ static void cq_poll(int gameThread)
             return;
         }
         if (now - g_cqGoneTick < CQ_SETTLE_MS) return;
-        if (gameThread && lscr_quit_wait(now)) return;
+        if (lscr_quit_wait(now, gameThread)) return;
         if (InterlockedCompareExchangePointer((void* volatile*)&g_cqWorld, NULL, w) != w) return;
         logf_("quit: quitting from the main menu, %lu ms after Quit, %s", now - g_cqTick, cq_loading_note());
         cq_set_exit_flag();

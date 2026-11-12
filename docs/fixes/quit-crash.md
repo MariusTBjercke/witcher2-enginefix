@@ -286,16 +286,19 @@ sessions' paths.
 The fix does not depend on the cause:
 
 * Once the game has no loading screen up (`game+0x68` is 0, `+0x268` is 0, no switch in progress)
-  and the same object has been at `+0x26C` for 8 s, the DLL posts the video loading screen's
+  and the same object has been at `+0x26C` for 4 s (8 s in the first runs), the DLL posts the video loading screen's
   command with no viewport and no movie from the game thread (`lscr_frame`, viewport tick):
   `FUN_00aa2685(0x10)` for the queue memory, the constructor at once, vtable `+4` to commit, as the
   game does at `009B57DC`. The render thread then destroys the object the way every new loading
   screen destroys the one before it. Log: `loading: a loading-screen object is still alive N s
   after its loading screen ended (object ..., shown 1) - asked the render thread to free it`, then
   `loading: the left-over loading-screen object is gone`.
-* At Quit, when the exit flag is due (`cq_poll`): a loading screen that is still up gets up to 3 s
-  to end; one that ended and left its object is freed the same way first. Log: `quit: a loading
-  screen is still up|alive ... - waiting for it before the game closes`.
+* At Quit, in the native itself (`cq_request` -> `lscr_at_quit`, game thread, the world still
+  there): an object left behind is freed the same way at once. Log: `quit: the last loading
+  screen left its object behind (..., shown 1) - asked the render thread to free it`.
+* When the exit flag is due (`cq_poll`): a loading screen that is still up, or an object that is
+  still there, gets up to 3 s to go. Log: `quit: a loading screen is still up|alive ... - waiting
+  for it before the game closes`.
 * Passive: the command's execute slot is wrapped, so every show and end is in the log with the
   object before and after (`loading: screen shown|ended on the render thread ('<name>'), screen
   object A -> B`). That is the evidence for the open question above.
@@ -326,3 +329,27 @@ The second "show" of each load comes 0.5 s after the first and builds the movie;
 have answered later is not known: on 2026-11-11 one session's object was gone three minutes after
 the load, two others' were still there after four. The Quit after it logged `no loading screen
 up` and the game closed cleanly.
+
+**The crash reproduced, and the gap in the first version (2026-11-12 15:21, Steam,
+`docs/validation/quit-after-load-crash-2026-11-12.log`).** A save loaded and Quit pressed 6.8 s
+after its loading screen ended, before the 8 s were up:
+
+```text
+15:21:19.272 loading: screen ended on the render thread (''), screen object 0C140768 -> 0C140768
+15:21:26.028 quit: an area is loaded - ending the game session first
+15:21:27.086 quit: the game session ended 1062 ms after Quit
+15:21:28.654 quit: quitting from the main menu, 2625 ms after Quit, LOADING SCREEN UP (movie 00000000, screen 0C140768)
+15:21:29.749 crash: unhandled exception 0xC0000005 at 0x0077E986 (witcher2.EXE+0x37E986)
+```
+
+The same object from the load to the GUI shutdown, no loading screen in between, and the crash
+of this section: the left-over object is the cause, and "load a save, quit soon after" is the
+way to it. The first version freed the object at the exit flag only from the game thread, and
+on Steam the exit flag is set by the worker (no frame is drawn at the main menu during that
+wait), so nothing was freed. Hence the call in the Quit native above, and the shorter 4 s.
+
+The run after it (15:25, `docs/validation/quest-markers-2026-11-12.log`), Quit pressed as soon as
+the game allowed: the object was freed by the 4 s rule 0.6 s before the Quit (`... still alive 4 s
+after its loading screen ended ... is gone (500 ms after asking)`), and the game closed cleanly
+with `no loading screen up`. The call in the Quit native has therefore not run in game yet: a
+player cannot open the pause menu much sooner than 4 s after a load.
