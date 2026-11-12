@@ -146,6 +146,13 @@ Only needed for reverse engineering, not for building.
 * The live CDB save-preview trace is **disabled**: the game crashed on its first
   software breakpoint at VA `009B6BC5` with `STATUS_WX86_BREAKPOINT` (`4000001F`).
   Do not repeat that workflow; see `docs/fixes/save-previews.md`.
+* A loaded layer is attached or not (`FUN_00a5a90e`, predicate call `00A5A92A`); not attached it
+  costs memory only. What an attached outdoors costs per frame is its foliage layers, not its
+  rocks or terrain (`docs/research.md` section 11).
+* Loading screens are counted at `game+0x68`: game vtable (`00EC6F74`) `+0x108` = `00AA8B61`
+  shows, `+0x10C` = `009B49CF` ends. The screen object at render thread `+0x26C` can stay after
+  the screen has ended (`+0x268` = 0): only `+0x268` means "a loading screen is up"
+  (`docs/fixes/quit-crash.md`).
 
 ## Specialist passes
 

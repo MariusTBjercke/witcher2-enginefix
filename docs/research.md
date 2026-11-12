@@ -360,3 +360,48 @@ Verified for the borderless feature (`docs/fixes/borderless-window.md`).
   2/3 = capture/exclusive DirectInput); it is not tied to full screen, so cursor clipping already
   works in windowed/borderless mode.
 
+
+## 11. Layers, partitions and what the renderer pays for (2026-11-12)
+
+Found while making the kept outdoors cheap (`docs/fixes/interior-preload.md`); Steam 3.5.0.26
+unless a GOG address is given.
+
+* **Three states of a layer.** Unloaded; loaded and attached (its entities are in the world);
+  loaded and not attached (the game does this for a layer group a quest has hidden). The
+  attach stage of every partition job and the world tick sync each loaded layer through
+  `FUN_00a5a90e`, which asks the predicate `FUN_00a5a568` (one call, `00A5A92A`; GOG `00AAE743`).
+  A loaded layer that is not attached costs address space and nothing per frame.
+* **What an attached layer costs** is the number of render proxies the visibility pass tests
+  (the range hook's count, `distance stats: mesh=`). Around the Act 2 quarry, standing in the
+  cave below it: 5.1-5.4 M tests per 5 s with the quarry attached, 0.35-0.5 M without. Three
+  runs that hid different subsets showed that almost all of it is three foliage layers (one to
+  three `CFoliageEntity` each, 8-30 `CFoliageContainer`), not the ~870 rock meshes in eight
+  layers, the ~500 cooked meshes or the four terrain tiles. Entity counts say nothing about
+  cost: a foliage layer has one to three entities.
+* **Terrain is layers too**: `hires terrain\tile XXXxYYY\` in all five worlds, one plain
+  `CEntity` with a `CTerrainTileComponent` per layer, listed by the outdoor partition only. Seen
+  from below (a crack in a cave's roof) it is drawn, and looks like rock.
+* **A plain entity is told by its vtable**: `CEntity` `00E807C4` (GOG `00F236FC`); foliage,
+  nests, containers, items and managers are subclasses. A loaded layer's entities are at layer
+  `+0x50`, count `+0x54`; a cooked layer of static meshes only has none.
+* **What a partition puts around itself.** Besides its geometry a partition lists stand-ins for
+  what the game unloads while it is current: a black plane in a cave mouth (`black_plane*`,
+  `dark_plane*`, `shadow_plane*`, `dark_fog`, `assas_cave_black`, `old_tower\dark_planes\`), a
+  box that keeps the sun out (`shadow_box`), and its own area environment
+  (`environments\<area>\`: light, fog and sky inside a polygon, with a priority). The outdoor
+  environment (`environments\environment_global.w2l`) and the sky (`skybox`, `background`) come
+  from groups both sides list. An area environment that stays loaded after its area is left
+  keeps acting wherever its polygon reaches.
+* **Reading it offline.** `tools/build-interior-maps.py` has the DZIP reader; the CR2W notes are in
+  `docs/fixes/door-transitions.md`, "Reading the level data". Enough for most questions: the
+  name table and the object table (type counts per `.w2l`), and each `CEntity`'s `transform`
+  property (a flag byte, then three floats). A partition's layer groups can be read from the
+  printable strings after its name in the world's `.w2w`. The scripts used were throwaway.
+* **A loading screen is counted** at `game+0x68` (both builds) and ends by asking its movie to
+  fade out; the screen object can outlive it for good. `docs/fixes/quit-crash.md`, "How a loading
+  screen ends".
+* **Virtual calls: take the slot from the vtable.** `CWitcherGame`'s vtable is `00EC6F74`
+  (`docs/engine-classes.md`), so `call [vtable+0x108]` is the dword at `00EC707C`. A function
+  that looks right for the job is not evidence: `009B56B0` (the video loading screen, slot
+  `+0xA4`) was taken for `+0x108` for a day, and its `RET 8` against a one-argument call site
+  was the hint that was missed.

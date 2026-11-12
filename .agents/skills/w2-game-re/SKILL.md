@@ -24,6 +24,10 @@ lists them) and, for GOG, `docs/fixes/gog-build.md`. Do not repeat those here.
 4. **Read the contract.** Disassemble as well as decompile. Count stack arguments, check `RET`
    against `RET n`, and find the `this` register. Look at one or two callers. The decompiler hides
    things that matter: the 32-thread hang only made sense in the `SHL`/`TEST`/`JNZ` bytes.
+   For a virtual call, read the slot out of the class's vtable (`docs/engine-classes.md` has the
+   vtable addresses; `tools/dump-engine-classes.py`'s `build()` also reads the GOG exe) and check
+   the callee's `RET n` against the call site's pushes. A function that merely fits the story is
+   not the callee.
 5. **Prove the bytes.** Note the original bytes a patch will check. Search the file to confirm a
    pattern matches once. Map file offsets with the formula in `AGENTS.md`.
 6. **Port to GOG by evidence.** Use the same string, import or caller, then compare the logic.
