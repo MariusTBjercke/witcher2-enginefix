@@ -5828,6 +5828,7 @@ static void fade_exec_install(void)
 #define KO_SPINNER_MS         2000
 #define KO_SPINNER_LOG_MS     10000         // a "show" this long after an instant door is logged
 #define KO_MISSING_MAX        16            // more layers than this to load: no instant door
+#define KO_MISSING_AREA       4             // the same for a door between two whole areas
 
 typedef void (__fastcall *SpinnerExec_t)(void* cmd, void* edx);
 static volatile DWORD g_koInstantTick;   // GetTickCount() | 1 when the last door went without a fade
@@ -6076,8 +6077,13 @@ static int __fastcall hook_DoorStart(void* door, void* edx, void* part)
               (cfg_keep_interiors && ko_pair_known(from, to)))) {
         // The door decides before its job exists: count what the target's own groups still
         // have to load (a save inside a house left its street out; 49 layers took 391 ms).
+        // A whole area's layers are heavy: the cave near Vergen loaded 13 of them in 89-99 ms on
+        // its first visit, a freeze with nothing to hide it once three of its 17 had become the
+        // door's own (stand-ins, environment) and the count fell under 16. Such a door keeps the
+        // short fade unless next to nothing is left to load (kept, or preload_areas).
         DWORD missing = ks_missing(world, to);
-        if (missing > KO_MISSING_MAX) {
+        DWORD most = ko_house_door(world, from, to) ? KO_MISSING_MAX : KO_MISSING_AREA;
+        if (missing > most) {
             g_doorFade = cfg_area_fade;
             logf_("doors: '%ls' -> '%ls' still has %lu layers to load - %.2f s fades", from, to, missing, g_doorFade);
         } else {

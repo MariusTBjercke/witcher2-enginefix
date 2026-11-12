@@ -935,6 +935,19 @@ as before going in.
 | Door out | `no fade (0 to load, spinner hidden)`, `kept 90 of 93 layers, unloaded 3; loaded 1`, and 2.6 s later `lighting blends ... - no area environment active` (the run before: `'AreaEnvironment_dwarf_mine' 105 at 1.00`) |
 | Quit | `no loading screen up`, `ExitProcess(0)` |
 
+#### The first visit keeps its fade (2026-11-12; seen in game on Steam)
+
+A door without a fade is decided before its job exists, from the layers the target still has to
+load (`hook_DoorStart`, `ks_missing`): up to 16 it goes without a fade. The count leaves out what a
+door swaps, so with the stand-ins and the environment now the door's own the cave's 17 became
+14, and its first visit (with `preload_areas` off, the default) went without a fade: 13 layers in
+89-99 ms on Steam and GOG, a freeze with nothing to hide it
+(`docs/validation/release-0.12.2-steam-2026-11-12.log`: `no fade (14 to load)`, `took 99 ms - it keeps
+its fade`). In 0.12.1 that door had the 0.25 s area fade. 16 was set for houses, whose layers are
+small. A door between two whole areas now goes without a fade only with at most 4 layers to load
+(`KO_MISSING_AREA`): kept or preloaded areas, where 0 or 1 is left. Otherwise it keeps the area
+fade, as in 0.12.1; the log says `still has N layers to load - 0.25 s fades`. Seen in game (owner, Steam, `docs/validation/area-door-first-visit-fade-2026-11-12.log`): the first way in `still has 14 layers to load - 0.25 s fades`, the way out and the later ways in `no fade (1 to load)`.
+
 #### GOG, everything of this section (owner, 2026-11-12)
 
 GOG 3.5.0.26g, the same build and day (`docs/validation/gog-area-preload-2026-11-12.log`, DXVK, the Steam save copied over): the same round, loaded twice. Owner: all of it worked.
