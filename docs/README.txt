@@ -21,7 +21,8 @@ What it does:
   open doors show the real rooms, and a door takes a few hundredths of a
   second without a fade instead of ~2.2 s. The lighting blends over 1 s
   instead of jumping. Doors that change area (the gate into Flotsam) keep a
-  short fade. Behind a door between two whole areas (a cave and the land
+  short fade. Small areas behind an area's doors (a cave) load with the
+  area too. Behind a door between two whole areas (a cave and the land
   outside it) the area you left is taken out of the picture 30 m in, so a
   large interior does not pay for the land outside.
 - Display mode in Options > Graphics: full screen, borderless window or
@@ -143,8 +144,8 @@ Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [loading] release_kept=30      metres from a door between two areas after
                                  which the area left behind is hidden; 0 keeps
                                  it in the picture (hide_kept=0 unloads it)
-  [loading] preload_areas=0      experimental: 1 loads the small areas behind
-                                 an area's doors with it, hidden until used
+  [loading] preload_areas=1      0 loads the small areas behind an area's
+                                 doors (a cave) on their first visit instead
   [loading] preload_memory_mb=1280, area_memory_mb=1536, door_memory_mb=1024
                                  memory guard for the preloaded interiors,
                                  doors between whole areas and all doors

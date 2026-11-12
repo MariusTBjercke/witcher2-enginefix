@@ -189,7 +189,7 @@ static int cfg_keep_outdoors = 1; // [loading] keep_outdoors: house doors leave 
 static int cfg_skip_door_gc = 1; // [loading] skip_door_gc: no full object GC on a keep_outdoors house door
 static int cfg_release_kept = 30; // [loading] release_kept: metres from a door between two areas after which the area left behind is hidden or unloaded (0 = never)
 static int cfg_hide_kept = 1;   // [loading] hide_kept: with release_kept, hide them instead while area_memory_mb is free
-static int cfg_preload_areas;   // [loading] preload_areas: load the small areas behind an area's doors with it
+static int cfg_preload_areas = 1; // [loading] preload_areas: load the small areas behind an area's doors with it
 static int cfg_instant_doors = 1; // [loading] instant_doors: no fade on a house door known to load nothing
 static int cfg_indoor_outdoors = 1; // [loading] indoor_outdoors: keep drawing terrain/grass behind kept doors
 static int cfg_preload_interiors = 1; // [loading] preload_interiors: load every building interior with the area
@@ -553,7 +553,7 @@ static void load_config(void)
     cfg_release_kept = ini_int("loading", "release_kept", 30);
     if (cfg_release_kept < 0 || cfg_release_kept > 1000) cfg_release_kept = 30;
     cfg_hide_kept = ini_int("loading", "hide_kept", 1);
-    cfg_preload_areas = ini_int("loading", "preload_areas", 0);
+    cfg_preload_areas = ini_int("loading", "preload_areas", 1);
     if (!cfg_keep_outdoors || !cfg_preload_interiors) cfg_preload_areas = 0;   // they ride on the interiors' preload, and a door must keep them
     cfg_instant_doors = ini_int("loading", "instant_doors", 1);
     cfg_door_light_blend = ini_float("loading", "door_light_blend", 1.0f);

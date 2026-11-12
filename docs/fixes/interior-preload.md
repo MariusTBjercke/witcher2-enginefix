@@ -1027,7 +1027,7 @@ which belong to the area changes, see "The survey behind the new rules") could t
 like the fake rooms. GOG: same offsets (`+0x200`/`+0x214`, registration `005AFCC5`), class size
 `0x250`, vtable `00D7A394`.
 
-### `[loading] preload_areas` (default 0; third version, seen working in game once, Steam)
+### `[loading] preload_areas` (default 1 from 0.12.2; third version, seen in game on Steam and GOG in one cave)
 
 The small areas behind an area's doors load with the area, in its own job, and stay out of the
 world until their door is used.
