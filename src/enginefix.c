@@ -1551,9 +1551,21 @@ static void log_engine_storage(void)
           read_u8(ga(VA_CAPTURE_PENDING)), read_u8(ga(VA_CAPTURE_QUEUED)));
 }
 
+// The game ignores FileWrite's result (0052ADA5), so a save Steam refuses is lost without a
+// word: it never reaches the save list. Seen when the app's Steam Cloud folder held 1000 files
+// (502 saves with previews): every new ManualSave/AutoSave failed, QuickSave (an overwrite)
+// still worked. Always logged, trace or not.
+static LONG g_writeFails;
+
 static unsigned char __fastcall hook_FileWrite(void* self, void* edx, const char* name, const void* data, int size)
 {
     unsigned char ok = g_origFileWrite(self, edx, name, data, size);
+    if (!ok) {
+        LONG n = InterlockedIncrement(&g_writeFails);
+        logf_("saves: WARNING Steam refused to write \"%s\" (%d bytes) - it is not saved (%ld this session). "
+              "Steam Cloud for the game is probably full (file count or size quota): delete old saves "
+              "in the game's load menu", name ? name : "(null)", size, n);
+    }
     if (cfg_save_trace) {
         logf_("save-trace: Steam FileWrite \"%s\" %d bytes -> %u", name ? name : "(null)", size, ok);
         if (name && strstr(name, ".sav")) log_engine_storage();

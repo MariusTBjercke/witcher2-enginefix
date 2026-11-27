@@ -130,6 +130,15 @@ the textures on the graphics card.
    bin\dxvk.conf with the line: dxvk.enableDescriptorHeap = False
 Delete bin\d3d9.dll to go back to the game's own Direct3D 9.
 
+New saves missing from the Load list (Steam):
+Steam gives the game room for 1000 files or 1 GB, also with Steam Cloud off.
+Every save is two files, so at about 500 saves Steam refuses every new
+ManualSave and AutoSave, and only QuickSave still works. The game shows no
+error. The log then has "saves: WARNING Steam refused to write ...". Delete
+old saves to make room. If you delete the files yourself (in
+Steam\userdata\<id>\20920\remote; back them up first), restart Steam
+afterwards, or it still counts them.
+
 Settings: bin\witcher2_enginefix.ini (read at startup, documented inside).
   [presets] default=extreme      startup level
   [shadows] quality=vanilla      vanilla, high or ultra; enabled=0 removes it

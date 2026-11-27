@@ -64,13 +64,35 @@ the game's own streaming has to fit in what is left. This matches "crashes
 more and more as saves accumulate". **Not measured**: the real per-image cost
 and whether the registry is flushed on world load.
 
-## 4. Steam Cloud quota: silent save loss at ~500 saves (unverified)
+## 4. Steam Cloud quota: silent save loss at ~500 saves (seen 2026-11-27)
 
 The app's cloud quota (local `appinfo.vdf`) is 1 000 files / 1 GB. At two files
 per save that is 500 saves, or ~550 at late-game sizes by bytes. The game's
 writer (`0052AC6C`) **ignores the return value** of `FileWrite`, so a write over
-quota would leave no `.sav` and no error. Whether Steam enforces the quota when
-cloud sync is disabled for the app has not been checked.
+quota leaves no `.sav` and no error.
+
+Seen on the owner's Steam install on 2026-11-27, **with cloud sync off for the app**
+(`sharedconfig.vdf` `"cloudenabled" "0"`): `remote` held exactly 1000 files
+(502 saves with previews, ~1.29 GB). Several ManualSaves made that evening left no
+file and were missing from the load menu. `QuickSave.sav` was still written, because
+it overwrites an existing file. So Steam enforces the quota on the local folder even
+with sync off.
+
+Freeing it takes a Steam restart. 998 files were deleted from `remote` while the game ran.
+At the game's exit Steam logged `(ValidateCache) File '...' missing from disk, setting
+changes in cloud` for each one and rewrote `remotecache.vdf` (2 files left with
+`persiststate 0`, plus 262 `1` and 35 `2` rows from before). But the next session still got
+`ManualSave_0515` / `AutoSave_0515` refused, and the game, which numbers a new save
+max + 1 over the files Steam lists, still saw saves up to 0514. That Steam process had run
+for two days. After `steam.exe -shutdown` and a fresh start, the first ManualSave was written
+as `ManualSave_0142` (max + 1 over the 262 rows Steam still lists, up to 0141) and showed
+in the load menu. So with sync off, a deletion counts only after Steam restarts. Deleting through
+the game's own menu (`FileDelete`) was not tried.
+
+Since 0.12.3 the FileWrite hook logs every refused write as
+`saves: WARNING Steam refused to write "<name>" ...` (candidate D, log part only;
+there is no on-screen warning). It does not call any other `ISteamRemoteStorage`
+slot: the slot order past FileRead is not verified for interface 004.
 
 ## 5. W1 import scan (minor)
 
