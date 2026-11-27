@@ -1049,12 +1049,17 @@ lost to the check alone: `release_kept` took the object for a loading screen. No
 
 **Now** (`pa_*` in `src/enginefix.c`):
 
+* **Known before the load.** The game's own doors between whole areas ship with the DLL
+  (`k_areaDoors`, see "The shipped door table" below), so the first load of an area preloads
+  as well (since 0.12.3; up to 0.12.2 only the learned pairs below existed and the first load of
+  every area only learned).
 * **Learn, do not load.** After an area job (`hook_PartRun`, mode 1 or a door into another
   folder, job stage 5) `pa_learn` walks the loaded layers' entities (layer `+0x50`/`+0x54`) for
   the `CStreamingDoor` vtable and notes both partitions of each door. The other partitions of
   the same folder that are not houses (`kx_small`) are remembered as pairs (area, neighbour), in
   memory and in `<game>\bin\witcher2_enginefix_cache\area-doors.txt` (one `area<TAB>neighbour`
-  per line, UTF-8). Nothing is loaded at that point.
+  per line, UTF-8). Nothing is loaded at that point. A pair the table already has is not new and
+  is not written; what is left to learn is a door the table does not have (a mod's level).
 * **Load with the area, from its next load on.** `pa_plan` runs before the area's job: for every
   known neighbour of the target, the layers of its own groups that are not loaded (`ks_walk`: no
   sound, occluders, interior environment or fake rooms), 1 to 64 per area, go to the end of the
@@ -1079,9 +1084,11 @@ lost to the check alone: `release_kept` took the object for a loading screen. No
   (`pa_prune`); a stream switch, an area load or another world empties it (`pa_clear`).
 * Needs `interiors=2` (`keep_outdoors` and `preload_interiors`) and the visibility hook; without
   them it is off. GOG takes the same path (no new address beyond `hide_kept`'s).
-* Log: `preload: the doors of '<area>' lead to N partition(s): K whole area(s) in its folder (M
-  new - they load with this area from its next load on), ...`, `preload: K area(s) known behind
-  the doors of '<area>': N to load now, '<name>' (layers) ...`, `preload: X of Y layers of K
+* Log: `preload: N door(s) between areas from the shipped table, M more learned in earlier
+  sessions` (once, at the first area load), `preload: the doors of '<area>' lead to N
+  partition(s): K whole area(s) in its folder (M new - they load with this area from its next
+  load on), ...`, `preload: K area(s) known behind the doors of '<area>': N to load now,
+  '<name>' (layers) ... - S from the shipped table, L learned`, `preload: X of Y layers of K
   area(s) behind the doors loaded, hidden until their door`, `preload: N preloaded layer(s) of
   '<area>' joined the world at this switch (M stay hidden)`, `preload: only F MB of address space
   free (under 1536) - unloading the N preloaded area layers`.
@@ -1110,6 +1117,59 @@ Not explained: one of the 17 cave layers was no longer loaded after the first do
 joined`, `20 stay hidden` of 37); the door check of the hide test of 2026-11-11 also counted `1 to
 load` there on every later door. Not covered by a test yet: the memory drop (`area_memory_mb`
 above the free address space while the areas are loaded), and GOG.
+
+#### The shipped door table (2026-11-12; in 0.12.3, read in game, a preload from it alone not seen yet)
+
+Learning meant that every player's first load of every area only learned its doors, and the
+first visit behind them faded as before. The doors are in the level data, so the pairs are now
+read offline and compiled in: `tools/build-area-doors.py "<game>\CookedPC\pack0.dzip"` writes
+`src/area_doors.h` (`k_areaDoors`); `tools/check-repo.ps1 -Game` runs it with `--check`.
+
+* **Read from** every `.w2l` under each world's folder in `pack0.dzip`: each `CStreamingDoor`'s
+  `inside`/`outside` (`SDoorPartition.worldPartition`). The partition tree is the world's
+  embedded `CWorldPartitions` (format in `door-transitions.md`, "Reading the level data"; a
+  `layerGroups` array is `u32` count, `u16` element type, `u16 0xFFFF`, then the strings, and a
+  node's child count after its property list is a CR2W packed int).
+* **Kept** as `pa_learn` would keep it: both partitions in the tree, the same folder
+  (`ko_same_folder`), neither a house or small place (`kx_small`: an interior environment group
+  or at most 8 groups of its own). Both directions. The tool fails if a name of the table is a
+  partition of another world too, because the DLL matches names without the world (none is).
+* **Only `pack0.dzip`.** Every other archive of the Steam install (DLC, `arena.dzip`,
+  `ZZ_UPatch.dzip`, the summer/winter packs) was searched: none holds a world, and none of their
+  11 layers holds a door.
+* **Result**: 153 doors (the earlier survey's count), 98 partition pairs, 18 between whole
+  areas, 36 rows: Act 2 quarry / harpy lair / secret passage, old tower / its cave, assassins'
+  cave / ravine; Act 3 the seven doors between the `outdoor\` quarters and the camps, and two
+  under the Vran tower; the prologue `Basement` / `AfterBasement`. The earlier survey said 106
+  pairs and 21 area doors; its scripts were not kept, so the difference is not explained (it may
+  have counted a door's two directions or the empty partition names apart). One Act 3 door names
+  `vran_under_tower01` without its folder, which is no partition: left out, as the DLL would.
+* The quarry's rows are the two the game taught the DLL on 2026-11-12 (`common\harpy_lair`,
+  `common\secret_passage`).
+* `pa_known_read` puts the table into `g_paKnown` first (36 of `PA_KNOWN` 256), then the learned
+  file. Learning stays: it costs nothing and covers levels the table does not know.
+* Learning finds more than the table, and that is expected. `pa_learn` pairs the area just loaded
+  with both sides of **every** door in its loaded layers, also a door that does not lead out of
+  that area, and it does not check whether the loaded area is a house. On the owner's machine
+  (2026-11-27) `area-doors.txt` held 44 pairs, and 23 of them are not in the table: a house loaded
+  from a save to its street (`inn_interior`, `04_guards_marketplace`, `06_custom_house_pier` ->
+  `Flotsam`), Act 2 `field_campside` / `field_dwarfside` and the caves off them, and Act 3
+  quarters to `area_sewers` / `area_redania` / the camps. `pa_plan` still checks size and memory
+  for each of them, so a pair to a big area costs a log line (`too big`) and nothing else.
+* Act 3: `outdoor\area_center` has six area neighbours in the table. Each loads only with 1-64
+  missing layers and while `area_memory_mb` is free, as the learned pairs did from the second
+  load on in 0.12.2, so the table only moves that to the first load. Not seen in game.
+
+Test (not run yet): delete `bin\witcher2_enginefix_cache\area-doors.txt`, load the save in
+front of the cave once. Expected: `preload: 36 door(s) between areas from the shipped table,
+none learned in earlier sessions`, then `2 area(s) known behind the doors of 'common\quarry': 2
+to load now ... - 2 from the shipped table, 0 learned`, the hidden layers loaded on that first
+load, and the cave door `no fade (0 to load)`.
+
+Seen so far (owner, 2026-11-27, Steam): the table is read, `preload: 36 door(s) between areas from
+the shipped table, 23 more learned in earlier sessions`, on Act 1 and Act 2 loads. The Act 2 load
+(`common\field_dwarfside`) had only a learned neighbour, so a preload from the table has not run
+yet. The test above, with the learned file deleted, is still open.
 
 ### Quest markers inside buildings: Poker Face: Vergen (2026-11-12; the selection seen in game, the quest not)
 

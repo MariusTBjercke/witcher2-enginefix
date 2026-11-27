@@ -5,7 +5,8 @@
 .DESCRIPTION
   Every behaviour test needs the game, so this covers what can be checked here: skill copies,
   versions, the address table, the docs index, and what must not be in tracked files. With -Game
-  it also builds the offline harness and runs it against that install.
+  it also builds the offline harness and runs it against that install, and checks that
+  src/area_doors.h is what tools/build-area-doors.py makes from that install's pack0.dzip.
 
   Exits 1 if anything fails.
 
@@ -90,9 +91,12 @@ if ($Game) {
     $tests = @(& build\sptest.exe test --game $Game)
     $last = $tests | Select-Object -Last 1
     Report "sptest on $Game" $(if ($last -ne '0 failures') { $tests | Where-Object { $_ -notmatch '^PASS' } } else { @() })
+
+    $doors = @(& python -I tools/build-area-doors.py (Join-Path $Game 'CookedPC\pack0.dzip') --check 2>&1 | ForEach-Object { "$_" })
+    Report 'area door table matches pack0.dzip' $(if ($LASTEXITCODE -ne 0) { $doors } else { @() })
 }
 else {
-    Write-Output 'skip  sptest (no -Game)'
+    Write-Output 'skip  sptest, area door table (no -Game)'
 }
 
 if ($failures -gt 0) {
