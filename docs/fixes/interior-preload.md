@@ -1197,7 +1197,7 @@ Act 1's `\buildings\...\interior\`, the prologue's `_ints\` and `containers\...\
 | `dwarf_city\building09_dec`, `12`, `15`, `building_inn_dec` `\sq204_wp_inside.w2l` | one waypoint, `sq204_wp_inside_building` | `sq204_dice` (dice in Vergen) |
 | `dwarf_city\building_inn_dec\armwrestling.w2l` | the inn's arm wrestling spot, `sq205_armwrestling_spot_vergen_inn` | `sq205i_handwrestling` (it also knows `..._vergen_outdoor`) |
 | `village\buildings\02_anezka_village\interior\sq107_troll_head_zegota\sq107_troll_head.w2l` | the troll's head (in a group of its own) | `sq107_bridge_troll` |
-| `pier\buildings\06_custom_house_pier\interior\decorations.w2l` | the furniture of the customs tower, tagged per floor (`q110_tower_hay01_floor01` ...) | `q110_barge` (the burning tower; not looked into here) |
+| `pier\buildings\06_custom_house_pier\interior\decorations.w2l` | the furniture of the customs tower, tagged per floor (`q110_tower_hay01_floor01` ...) | `q110_barge` (the burning tower; its stand-in box is the next section) |
 | `dwarf_city\building14_dec\door_stream\door.w2l`, `dwarf_city\buildings.w2l` | doors and the town's shell | several; they are in the world in the game too |
 
 **Fix** (`kq_marker_name`, `kq_marker`, `kp_walk`, `ko_walk`, `hook_PartRun`): a layer inside a
@@ -1223,6 +1223,49 @@ Seen in game (owner, 2026-11-12, Steam, `docs/validation/quest-markers-2026-11-1
 Roche's path and cannot reach the dice players or those houses, so not seen: the dice player in
 the street playing, and house 09, 12 or 15 or the inn loading its marker at the door and the
 door out unloading it. GOG takes the same code; not run there with this change.
+
+### The burning customs tower: a stand-in box on the top floor (2026-11-27; seen in game on Steam)
+
+**Symptom** (a player on Nexus, then the owner on Iorveth's path, 0.12.2): at the end of Act 1
+(`q110_barge`), at the top of the last stairs of the burning tower, a box stands around part of
+the top floor. Its walls hide the rest of the captive women, and Geralt walks through them.
+
+**Cause.** The tower is `pier\buildings\06_custom_house_pier`, the house partition
+`Outdoor\global\landing_site\outside\06_custom_house_pier` (18 groups: the interior, its lights,
+`environments\interior_city`, the piers, town sound), with one door to `...\outside\Flotsam`. The
+group `pier\buildings\06_custom_house_pier\door_fog` holds one layer, `mesh.w2l`, with one mesh,
+`environment_levels\architecture\port_buildings\exterior\house_15a_hide.w2mesh`. Its bounding box
+is 4.4 x 4.9 x 3.0 m, 6.8 to 9.8 m up, inside the tower's own `house_15a.w2mesh` (-1.2 to 15.9
+m). Only `Flotsam` lists that group, so the game loads it in the street and unloads it at the
+tower door, the way it treats Act 1's `fake_interiors\flotsam\fake.w2l`. It is a fake room under
+another name. `ko_class` knew fake rooms only by the layer names `fake` and `windows_outside`, so
+this one was `LC_OTHER`. With `keep_outdoors`, a house door unloads only what each partition swaps,
+so the box stayed in the world inside the tower. It has no collision.
+
+Read offline from `pack0.dzip` (Steam 3.5.0.26):
+
+* It is the game's only `_hide` mesh, and `door_fog` is the only folder of that name, in all five
+  worlds. A survey of every layer whose meshes are named `*hide*`, `*fake*`, `*fog*`, `*black*` or
+  `*plane*` found no other stand-in that is not already `LC_FAKE` or `LC_SWAP`.
+* The quest's own layer switches are not the cause. `q110_barge.w2phase` has 22
+  `CQuestLayersHiderBlock`s. One of them shows `floor04a`, `floor04b` and `floor04c` (each one
+  burned-wall decal `house_15a_interior_burned_decal_floor04*.w2ent`) together on purpose
+  (comment `floor04_floor`). "Tower hide" takes away `door_fog`, `exterior`, `interior` and
+  `q110_tower_burning` once the tower has burned, and "tower burnt" shows
+  `burned_mytnik_exterior` and `q110_tower_burnt` instead. These are all groups of the root
+  partition `Outdoor` (or `Outdoor\All` / `landing_site\outside` for the exterior), not of the
+  tower's house partition, so the door rules do not touch them.
+
+**Fix** (`ko_class`): a layer under a `\door_fog\` folder is `LC_FAKE`. Like the other fake rooms,
+it is left out while every interior is loaded (the tower's interior is preloaded with Flotsam by
+folder name). If an interior could not load, it stays, and the door swaps it as the game does.
+Off with `interiors` below 2, as for every fake room. The area load's fake-room count for Flotsam
+goes from 1 to 2 (`KM_FAKE` is 16).
+
+Seen in game (owner, 2026-11-27, Steam, DXVK, a QuickSave inside the burning tower): no box at
+the top of the stairs, all the women in sight. House doors on the way logged `skipped 2 (fake
+rooms, low-poly)`. Not seen: the tower with too little memory to preload interiors (the box must
+then stand as in the game and go at the door), the tower from the street before q110, and GOG.
 
 ### Still to check in game
 

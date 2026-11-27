@@ -3595,7 +3595,12 @@ static void pt_job(const char* why, const void* job)
 //   FAKE      the area's flat "fake room" boxes behind doors and windows: Act 1's
 //             `fake_interiors\<area>\fake.w2l`, Vergen's
 //             `dwarf_city\windows_outside\windows_outside.w2l` (the only layers of the game's
-//             five worlds that hold `fake_inside*.w2mesh`, docs/fixes/interior-preload.md)
+//             five worlds that hold `fake_inside*.w2mesh`, docs/fixes/interior-preload.md),
+//             and the customs tower's `pier\buildings\06_custom_house_pier\door_fog\mesh.w2l`
+//             (`house_15a_hide.w2mesh`, the game's only `_hide` mesh: a box 6.8-9.8 m up that
+//             covers the empty tower from the street; only Flotsam's partition lists it). Kept
+//             inside the tower it stood around part of the top floor during q110 and hid the
+//             women behind its walls, which have no collision (a player on Nexus, 0.12.2)
 //   SWAP      what each partition swaps for its own and must not be kept: ambient sound
 //             (`\sounds\`), occluders (`occ` in the name, or any layer under an
 //             `\occluders\` folder: the prologue's `occluders\basement\basement.w2l`; outdoor
@@ -3668,7 +3673,8 @@ static int ko_class(const void* layer)
     if (!layer) return LC_OTHER;
     pt_text((const char*)layer + 0x78, name, 64);
     pt_text((const char*)layer + 0x68, path, 260);
-    if (!_wcsicmp(name, L"fake") || !_wcsicmp(name, L"windows_outside")) return LC_FAKE;
+    if (!_wcsicmp(name, L"fake") || !_wcsicmp(name, L"windows_outside") || wcsistr(path, L"\\door_fog\\"))
+        return LC_FAKE;
     if (wcsistr(path, L"\\sounds\\") || wcsistr(name, L"occ") || wcsistr(path, L"\\occluders\\") ||
         ko_env_interior(path) || wcsistr(path, L"\\windows_outside\\") || ko_stand_in(name, path))
         return LC_SWAP;
